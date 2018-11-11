@@ -28,7 +28,8 @@ obs = obs_db %>%
   collect()
 
 # Export data
-obs = select(obs, c(observation_id, tree_id, site_id, year, ring_width, first_year, time_unit))
+obs = select(obs, c(observation_id, tree_id, site_id, year, ring_width, first_year))
+obs$age = obs$year - obs$first_year
 write.csv(obs, file = paste0(wdir,spp,'_data.csv'), row.names = FALSE)
 
 
@@ -40,13 +41,13 @@ write.csv(obs, file = paste0(wdir,spp,'_data.csv'), row.names = FALSE)
 #   collect()
 # 
 # 
-# obs_db = tbl(conn, 'observations')
-# subset = obs_db %>% 
-#   filter(tree_id == 'WR16A') %>%
-#   filter(site_id == 'wr20') %>%
-#   arrange(desc(year))
-# 
-# obs = obs_db %>% collect()
+obs_db = tbl(conn, 'observations')
+subset = obs_db %>%
+  filter(tree_id == 'WR16A') %>%
+  filter(site_id == 'wr20') %>%
+  arrange(desc(year))
+
+obs = subset %>% collect()
 # 
 # species_db = tbl(conn, 'species')
 # spp = species_db %>%
