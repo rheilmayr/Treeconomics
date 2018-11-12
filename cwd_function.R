@@ -8,13 +8,14 @@
 # PACKAGES THAT MUST BE INSTALLED BEFORE RUNNING THE SCRIPT: data.table and geosphere
 
 # EXAMPLE SCRIPTS:
+franspath="C:/Users/fmoor/Box/Davis Stuff/Treeconomics"
 
 ###cwd_normal_data<-cwd_function(site=data$site,slope=data$slope,latitude=data$latitude,foldedaspect=data$foldedaspect,ppt=data$ppt,tmean=data$tmean,month=data$month,type="normal")
 library(dplyr)
 #example script with soil awc specified as one number across all sites:
 ### cwd_normal_data<-cwd_function(site=data$site,slope=data$slope,latitude=data$latitude,foldedaspect=data$foldedaspect,ppt=data$ppt,tmean=data$tmean,month=data$month,soilawc=300,type="normal")
 #example script where I have unique soil awc data for each site:
-data=read.csv("Data/181027- climate soil data.csv")
+data=read.csv(paste0(franspath,"/Data/181027- climate soil data.csv"))
 cols=c("pre","tmn","tmx","swc") #tmax, tmin and precip are in units of 1/10th of a degree / mm. swc is in units of mm and needs to be in units of cm
 for(i in 1:length(cols)){
   col=which(colnames(data)==cols[i])
@@ -90,6 +91,7 @@ for (i in 1:length(sites)){
   }
   mergedat<-cbind(site,year,month,packm)
   mergedata<-rbind(mergedata,mergedat)
+  print(paste0(i,"_1"))
 }
 mergedt<-as.data.table(mergedata)
 mergedt$year<-as.numeric(as.character(mergedt$year))
@@ -125,6 +127,7 @@ for (i in 1:length(sites)){
   }
   mergedat<-cbind(site,year,month,soilm)
   mergedata<-rbind(mergedata,mergedat)
+  print(paste0(i,"_2"))
 }
 mergedt<-as.data.table(mergedata)
 mergedt$year<-as.numeric(as.character(mergedt$year))
