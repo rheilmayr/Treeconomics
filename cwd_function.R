@@ -15,14 +15,19 @@ library(dplyr)
 #example script with soil awc specified as one number across all sites:
 ### cwd_normal_data<-cwd_function(site=data$site,slope=data$slope,latitude=data$latitude,foldedaspect=data$foldedaspect,ppt=data$ppt,tmean=data$tmean,month=data$month,soilawc=300,type="normal")
 #example script where I have unique soil awc data for each site:
-data=read.csv(paste0(franspath,"/Data/181027- climate soil data.csv"))
-cols=c("pre","tmn","tmx","swc") #tmax, tmin and precip are in units of 1/10th of a degree / mm. swc is in units of mm and needs to be in units of cm
+data=read.csv(paste0(franspath,"/Data/181116-climate_soil_data_with_corrections.csv"))
+#add corrections from World Clim to CWD to get downscaled variables
+data$pre_corrected=data$pre+data$pre_correction
+data$tmx_corrected=data$tmx+data$tmax_correction
+data$tmn_corrected=data$tmn+data$tmin_correction
+
+cols=c("pre_corrected","tmn_corrected","tmx_corrected","swc") #tmax, tmin and precip are in units of 1/10th of a degree / mm. swc is in units of mm and needs to be in units of cm
 for(i in 1:length(cols)){
   col=which(colnames(data)==cols[i])
   data[,col]=data[,col]/10
 }
-data$tmean=(data$tmn+data$tmx)/2
-cwd_data<-cwd_function(site=data$site_id,slope=data$slope,latitude=data$latitude,foldedaspect=data$aspect,ppt=data$pre,tmean=data$tmean,month=data$month,year=data$year,soilawc=data$swc,type="annual")
+data$tmean=(data$tmn_corrected+data$tmx_corrected)/2
+cwd_data<-cwd_function(site=data$site_id,slope=data$slope,latitude=data$latitude,foldedaspect=data$aspect,ppt=data$pre_corrected,tmean=data$tmean,month=data$month,year=data$year,soilawc=data$swc,type="annual")
 
 #cwd_normal_data<-cwd_function(site=data$site_id,slope=data$slope,latitude=data$latitude,foldedaspect=data$aspect,ppt=data$pre,tmean=data$tmean,month=data$month,soilawc=data$swc,type="normal")
 
@@ -146,3 +151,6 @@ data[,cwd:=petm-aet]
 ##### for 800 m normal data then we subset to get just the last simulation
 if (type == "normal"){data<-data[year==10,]}
 return(data)}
+
+write.csv(data,file=paste0(franspath,"/Data/cwd_data.csv"))
+write.csv(data[,c(1:9,23,27:29)],file=paste0(franspath,"/Data/essentialcwd_data.csv"))
