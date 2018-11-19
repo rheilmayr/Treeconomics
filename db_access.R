@@ -42,6 +42,8 @@ obs.join = obs %>%
   left_join(clim.join, by = c("site_id" = "site", "year" = "year"))
 
 # Export data
+obs.join = obs.join %>%
+  filter(year>1899)
 obs.join = select(obs.join, c(observation_id, tree_id, site_id, year, ring_width, first_year, cwd.an, aet.an))
 obs.join$age = obs.join$year - obs.join$first_year
 write.csv(obs.join, file = paste0(wdir,spp,'_data.csv'), row.names = FALSE)
