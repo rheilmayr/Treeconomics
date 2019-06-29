@@ -1,16 +1,14 @@
-install.packages("plm")
-install.packages("lfe")
-
 library(tidyverse)
 library(lfe)
 library(broom)
-
 library(ggiraphExtra)
+
 ### Define path
 wdir = 'D:/cloud/Google Drive/Treeconomics/Data/'
 #for Fran
 wdir="C:/Users/fmoor/Google Drive/Treeconomics/Data/"
 setwd(wdir)
+
 
 ### Read data
 spp <- "psme"
@@ -67,7 +65,8 @@ complete_df=complete_df%>%
 site_lm <- complete_df %>% 
   group_by(site_id) %>%
   do(fit_site = lm(ring_width ~ cwd.an+age+I(age^2)+I(age^3)+I(age^4)+tree_id, data = . ))
-SiteCoef=tidy(site_lm[[2]][[1]])%>%filter(term=="cwd.an")
+SiteCoef=tidy(site_lm[[2]][[1]]) %>%
+  filter(term=="cwd.an")
 for(i in 2:length(site_lm[[2]])){
   SiteCoef=rbind(SiteCoef,tidy(site_lm[[2]][[i]])%>%filter(term=="cwd.an"))
 }
@@ -85,3 +84,12 @@ plot(x,y[,1],type="l",xlab="Average Climatic Water Deficit",ylab="",las=1,lwd=2,
 polygon(c(x,rev(x)),c(y[,2],rev(y[,3])),col=rgb(t(col2rgb("#0dcfca")),max=255,alpha=70),border=NA)
 title(ylab="Effect of Water Deficit on Tree Growth", line=4)
 abline(h=0,lty=2,lwd=2)
+
+
+
+SiteCoef <- merge(x = SiteCoef, y = site_clim, by = "site_id", all.x = TRUE)
+x11()
+par(mar=c(5.1,5.1,4.1,2.1),cex=1.5)
+plot(SiteCoef$cwd.ave, SiteCoef$estimate,xlab="Average Climatic Water Deficit",ylab="Growth sensitivity to CWD",ylim=c(-11e-3,11e-3), xlim=c(1,1e3))
+
+ggplot(site_clim, aes(x=cwd.ave)) + geom_histogram()
