@@ -1,9 +1,10 @@
-install.packages("plm")
-install.packages("lfe")
+#install.packages("plm")
+#install.packages("lfe")
 
 library(tidyverse)
 library(lfe)
 library(broom)
+library(purr)
 
 library(ggiraphExtra)
 ### Define path
@@ -13,8 +14,10 @@ wdir="C:/Users/fmoor/Google Drive/Treeconomics/Data/"
 setwd(wdir)
 
 ### Read data
-spp <- "psme"
-df <- read.csv(paste0(wdir,spp,'_data.csv'))
+spp=c("psme","pipo","pisy","pcgl","pcab","pied")
+speciesnames=c("Douglas Fir","Ponderosa Pine","Scotch Pine","White Spruce","Norway Spruce","Colorado Pinyon")
+
+df <- read.csv(paste0(wdir,'topsixspecies_data.csv'))
 df <- df %>%
   mutate(tree_id = paste0(site_id, tree_id))
 
@@ -55,33 +58,76 @@ summary(mod_interact)
 mod_interact <- felm(deviation ~ aet.ave * aet.an + aet.ave * I(aet.an^2)-aet.ave|site_id|0|site_id, data = df )
 summary(mod_interact)
 
-complete_df <- df[which(complete.cases(df[,c(7,10)])),]
+#remove one site with negative ages
+df=df %>%
+  filter(age>0)
 
-ntrees=complete_df%>%
-  group_by(site_id)%>%
+#remove trees with a very short record (<5 years)
+treeobs=df %>%
+  group_by(tree_id) %>%
+  summarize(nyears=n())
+df=left_join(df,treeobs)
+df=df %>%
+  filter(nyears>5)
+
+#remove sites with few trees
+ntrees=df%>%
+  group_by(site_id,species)%>%
   summarize(ntrees=length(unique(tree_id)))
-complete_df=merge(complete_df,ntrees)
-complete_df=complete_df%>%
+df=left_join(df,ntrees)
+df=df%>%
   filter(ntrees>5)
 
-site_lm <- complete_df %>% 
-  group_by(site_id) %>%
-  do(fit_site = lm(ring_width ~ cwd.an+age+I(age^2)+I(age^3)+I(age^4)+tree_id, data = . ))
-SiteCoef=tidy(site_lm[[2]][[1]])%>%filter(term=="cwd.an")
-for(i in 2:length(site_lm[[2]])){
-  SiteCoef=rbind(SiteCoef,tidy(site_lm[[2]][[i]])%>%filter(term=="cwd.an"))
-}
-SiteCoef$site_id=site_lm$site_id
-siteCoef=merge(SiteCoef,unique(complete_df[,c(1,10,11)]),all.x=T,all.y=F)
-siteCoef$weights=1/siteCoef$std.error/(sum(1/siteCoef$std.error))
-grandmodel=lm(estimate~cwd.ave+I(cwd.ave^2),weights=weights,data=siteCoef)
+complete_df=df %>%
+  drop_na(c("cwd.an","ring_width"))
 
-# Explore regression results
-x = 0:1000
-y=predict(grandmodel,data.frame(cwd.ave=x),interval="prediction",level=0.95)
+site_lm <- complete_df %>% 
+  group_by(site_id,species) %>%
+  do(fit_site = felm(ring_width ~ cwd.an+age+I(age^2)+I(age^3)+I(age^4)|tree_id|0|0, data = . ))
+
+siteCoef=tidy(site_lm[[3]][[1]])%>%filter(term=="cwd.an")
+for(i in 2:length(site_lm[[3]])){
+  siteCoef=rbind(siteCoef,tidy(site_lm[[3]][[i]])%>%filter(term=="cwd.an"))
+}
+siteCoef$site_id=site_lm$site_id
+siteCoef$species=site_lm$species
+siteCoef=left_join(siteCoef,unique(complete_df[,which(colnames(complete_df)%in%c("site_id","species","cwd.ave"))]))
+#remove one super extreme outlier
+siteCoef_trimmed=siteCoef %>%
+  group_by(species) %>%
+  mutate(qhigh=quantile(estimate,0.99,na.rm=T)) %>%
+  mutate(qlow=quantile(estimate,0.01,na.rm=T))
+siteCoef_trimmed=siteCoef_trimmed %>%
+  filter(estimate>qlow&estimate<qhigh)
+siteCoef_trimmed$species=recode_factor(siteCoef_trimmed$species,psme="Douglas Fir",pipo="Ponderosa Pine",pisy="Scotch Pine",pcgl="White Spruce",pcab="Norway Spruce",pied="Colorado Pinyon")
+a=ggplot(siteCoef_trimmed,aes(x=cwd.ave,y=estimate,col=species))+theme_bw()+geom_point()+facet_wrap(~species)
+
+grandmodels=siteCoef_trimmed %>%
+  group_by(species) %>%
+  drop_na(std.error) %>%
+  mutate(errorweights=1/std.error/sum(1/std.error,na.rm=T)) %>%
+  do(speciesmod=lm(estimate~cwd.ave+I(cwd.ave^2),weights=errorweights,data= .)) 
+
+y=list()
+xlim=siteCoef_trimmed %>%
+  group_by(species) %>%
+  mutate(qhigh=quantile(cwd.ave,0.95)) %>%
+  mutate(qlow=quantile(cwd.ave,0.05)) %>%
+  select(species,qhigh,qlow) %>%
+  distinct()
+predictions=data.frame()
+for(i in 1:dim(grandmodels)[1]){
+  species=as.data.frame(grandmodels)[i,1]
+  x=seq(xlim$qlow[which(xlim$species==species)],xlim$qhigh[which(xlim$species==species)],length.out=1000)
+  predictions=rbind(predictions,cbind(predict(grandmodels[[2]][[i]],data.frame(cwd.ave=x),interval="prediction",level=0.90),x))
+}
+predictions$species=rep(as.data.frame(grandmodels)[,1],each=length(x))
 x11()
-par(mar=c(5.1,5.1,4.1,2.1),cex=1.5)
-plot(x,y[,1],type="l",xlab="Average Climatic Water Deficit",ylab="",las=1,lwd=2,col="#0dcfca",ylim=c(-11e-4,0))
-polygon(c(x,rev(x)),c(y[,2],rev(y[,3])),col=rgb(t(col2rgb("#0dcfca")),max=255,alpha=70),border=NA)
-title(ylab="Effect of Water Deficit on Tree Growth", line=4)
-abline(h=0,lty=2,lwd=2)
+par(mfrow=c(2,3),mar=c(5,5,4,2))
+for(i in 1:dim(xlim)[1]){
+  dat=predictions[which(predictions$species==xlim$species[i]),]
+  plot(dat$x,dat[,1],type="l",xlab="Average Climatic Water Deficit",ylab="",las=1,lwd=2,col="#0dcfca",ylim=c(min(dat$lwr),max(dat$upr)),main=dat$species[1])
+  polygon(c(dat$x,rev(dat$x)),c(dat[,2],rev(dat[,3])),col=rgb(t(col2rgb("#0dcfca")),max=255,alpha=70),border=NA)
+  title(ylab="Effect of Water Deficit on Tree Growth", line=4)
+  abline(h=0,lty=2,lwd=2)
+}
