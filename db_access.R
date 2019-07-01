@@ -6,6 +6,7 @@ library(RSQLite)
 wdir = 'C:/Users/rheil/Google Drive/Treeconomics/Data/'
 #for Fran
 wdir="C:/Users/fmoor/Google Drive/Treeconomics/Data/"
+wdir = 'D:/cloud/Google Drive/Treeconomics/Data/'
 tree_db = paste0(wdir, 'tree_ring_data_V2.db')
 cwd_csv = paste0(wdir, 'essentialcwd_data.csv')
 
@@ -22,6 +23,31 @@ speciesnames=c("Douglas Fir","Ponderosa Pine","Scotch Pine","White Spruce","Norw
 tree_db = as.data.frame(tbl(conn, 'trees'))
 tree_ids = tree_db %>%
   filter(species_id %in% spp) %>%
+
+  # Identify all trees of a given species
+# Hypotheses: 1) quercus, sugarpine, cedar, white fir, juniper, redwood would exhibit spoiled tree
+# High elevation tree species will exhibit less of an effect because high cwd is correlated with release from growth constraints 
+species_ids = tree_db %>%
+  select(species_id) %>%
+  collect() %>%
+  group_by(species_id) %>%
+  count() %>%
+  arrange(desc(n))
+
+spp = 'pipo' #Whitebark = pial; douglas fir = 'psme'; ponderosa = 'pipo'
+tree_db = tbl(conn, 'trees')
+
+tree_ids = tree_db %>%
+  filter(species_id == spp) %>%
+  select('tree_id') %>%
+  collect()
+
+# Pull observations of identified trees
+obs_db = tbl(conn, 'observations_new')
+obs_db = obs_db %>%
+  filter(tree_id %in% local(tree_ids$tree_id)) %>%
+  arrange(tree_id, desc(year))
+obs = obs_db %>%
   collect()
 
 # Load and join cwd data

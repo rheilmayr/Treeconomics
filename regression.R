@@ -101,7 +101,7 @@ siteCoef_trimmed=siteCoef_trimmed %>%
   filter(estimate>qlow&estimate<qhigh)
 siteCoef_trimmed$species=recode_factor(siteCoef_trimmed$species,psme="Douglas Fir",pipo="Ponderosa Pine",pisy="Scotch Pine",pcgl="White Spruce",pcab="Norway Spruce",pied="Colorado Pinyon")
 a=ggplot(siteCoef_trimmed,aes(x=cwd.ave,y=estimate,col=species))+theme_bw()+geom_point()+facet_wrap(~species)
-
+a=a+labs(x="Average Climatic Water Deficit",y="Marginal Effect of CWD")+scale_color_discrete(guide=FALSE)
 grandmodels=siteCoef_trimmed %>%
   group_by(species) %>%
   drop_na(std.error) %>%
