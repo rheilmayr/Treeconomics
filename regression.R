@@ -4,7 +4,7 @@
 library(tidyverse)
 library(lfe)
 library(broom)
-library(purr)
+library(purrr)
 
 library(ggiraphExtra)
 ### Define path
@@ -20,6 +20,8 @@ speciesnames=c("Douglas Fir","Ponderosa Pine","Scotch Pine","White Spruce","Norw
 df <- read.csv(paste0(wdir,'topsixspecies_data.csv'))
 df <- df %>%
   mutate(tree_id = paste0(site_id, tree_id))
+df <- df %>%
+  mutate(pet.an = cwd.an + aet.an)
 
 ### Calculate deviation in growth rate                     ## Alternative is polynomial (logitic) age control interacted with site in single stage regression
 find_deviation <- function(df) {
@@ -31,32 +33,32 @@ find_deviation <- function(df) {
 
 df$deviation <- find_deviation(df)
 
-df %>%                              ## Rewrite to run function by site
-  group_by(site_id) %>%
-  summarise(deviation = find_deviation(.))
-  do(site_dev = find_deviation(.))
+# df %>%                              ## Rewrite to run function by site
+#   group_by(site_id) %>%
+#   summarise(deviation = find_deviation(.)) 
+#   do(site_dev = find_deviation(.))
 
 ### Calculate site average aet and cwd
 site_clim <- df %>%
   filter(year < 1980) %>%                                                                      ## Switch to raw climate data rather than using tree dataframe
   group_by(site_id, year) %>%
-  summarize(cwd.an = max(cwd.an, na.rm = TRUE), aet.an = max(aet.an, na.rm = TRUE)) %>%
+  summarize(cwd.an = max(cwd.an, na.rm = TRUE), aet.an = max(aet.an, na.rm = TRUE), pet.an = max(pet.an, na.rm = TRUE)) %>%
   filter((cwd.an > -Inf) & (aet.an > -Inf)) %>%
   group_by(site_id) %>%
-  summarize(cwd.ave = mean(cwd.an, na.rm = TRUE), aet.ave = mean(aet.an, na.rm = TRUE))
+  summarize(cwd.ave = mean(cwd.an, na.rm = TRUE), aet.ave = mean(aet.an, na.rm = TRUE), pet.ave = mean(pet.an, na.rm = TRUE))
 
 df <- merge(x = df, y = site_clim, by = "site_id", all.x = TRUE)
 
-### CWD data binned                                            ## Probably not necessary since our CWD/AET variables are already integrals
-df <- cut(x, breaks = quantile(x, probs = seq(0, 1, 0.1)), 
-          labels = 1:10, include.lowest = TRUE)
-
-# Climate regressions
-mod_interact <- felm(ring_width ~ cwd.ave * cwd.an + cwd.ave * I(cwd.an^2)+age*site_id+I(age^2)*site_id+I(age^3)*site_id-site_id-cwd.ave|site_id|0|site_id, data = df )
-summary(mod_interact)
-
-mod_interact <- felm(deviation ~ aet.ave * aet.an + aet.ave * I(aet.an^2)-aet.ave|site_id|0|site_id, data = df )
-summary(mod_interact)
+# ### CWD data binned                                            ## Probably not necessary since our CWD/AET variables are already integrals
+# df <- cut(x, breaks = quantile(x, probs = seq(0, 1, 0.1)), 
+#           labels = 1:10, include.lowest = TRUE)
+# 
+# # Climate regressions
+# mod_interact <- felm(ring_width ~ cwd.ave * cwd.an + cwd.ave * I(cwd.an^2)+age*site_id+I(age^2)*site_id+I(age^3)*site_id-site_id-cwd.ave|site_id|0|site_id, data = df )
+# summary(mod_interact)
+# 
+# mod_interact <- felm(deviation ~ aet.ave * aet.an + aet.ave * I(aet.an^2)-aet.ave|site_id|0|site_id, data = df )
+# summary(mod_interact)
 
 #remove one site with negative ages
 df=df %>%
@@ -79,19 +81,19 @@ df=df%>%
   filter(ntrees>5)
 
 complete_df=df %>%
-  drop_na(c("cwd.an","ring_width"))
+  drop_na(c("cwd.an","pet.an","ring_width"))
 
 site_lm <- complete_df %>% 
   group_by(site_id,species) %>%
-  do(fit_site = felm(ring_width ~ cwd.an+age+I(age^2)+I(age^3)+I(age^4)|tree_id|0|0, data = . ))
+  do(fit_site = felm(ring_width ~ cwd.an+pet.an+age+I(age^2)+I(age^3)+I(age^4)|tree_id|0|0, data = . ))
 
-siteCoef=tidy(site_lm[[3]][[1]])%>%filter(term=="cwd.an")
+siteCoef=tidy(site_lm[[3]][[1]])%>%filter(term==c("cwd.an", "pet.an"))
 for(i in 2:length(site_lm[[3]])){
-  siteCoef=rbind(siteCoef,tidy(site_lm[[3]][[i]])%>%filter(term=="cwd.an"))
+  siteCoef=rbind(siteCoef,tidy(site_lm[[3]][[i]])%>%filter(term==c("cwd.an", "pet.an")))
 }
 siteCoef$site_id=site_lm$site_id
 siteCoef$species=site_lm$species
-siteCoef=left_join(siteCoef,unique(complete_df[,which(colnames(complete_df)%in%c("site_id","species","cwd.ave"))]))
+siteCoef=left_join(siteCoef,unique(complete_df[,which(colnames(complete_df)%in%c("site_id","species","cwd.ave", "pet.ave"))]))
 #remove one super extreme outlier
 siteCoef_trimmed=siteCoef %>%
   group_by(species) %>%
@@ -107,6 +109,10 @@ grandmodels=siteCoef_trimmed %>%
   drop_na(std.error) %>%
   mutate(errorweights=1/std.error/sum(1/std.error,na.rm=T)) %>%
   do(speciesmod=lm(estimate~cwd.ave+I(cwd.ave^2),weights=errorweights,data= .)) 
+  # do(speciesmod=lm(estimate~cwd.ave+I(cwd.ave^2) + pet.ave + I(pet.ave^2),weights=errorweights,data= .)) 
+
+# Review results
+grandmodels %>% filter(species=="Colorado Pinyon") %>% pull(speciesmod)
 
 y=list()
 xlim=siteCoef_trimmed %>%
