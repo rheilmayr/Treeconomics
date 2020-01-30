@@ -1,21 +1,28 @@
 #install.packages("plm")
 #install.packages("lfe")
 
+library(MASS)
 library(tidyverse)
 library(lfe)
 library(broom)
 library(purrr)
 library(ggiraphExtra)
+select <- dplyr::select
+
 
 ### Define path
 wdir = 'D:/cloud/Google Drive/Treeconomics/Data/'
 #for Fran
-wdir="C:/Users/fmoor/Google Drive/Treeconomics/Data/"
+# wdir="C:/Users/fmoor/Google Drive/Treeconomics/Data/"
 setwd(wdir)
 
-### Read data
+### Plotting parameters
+pal=colorRampPalette(c('white','blue','yellow','red','darkred'))
+
+### Read and prep data  ####
 spp=c("psme","pipo","pisy","pcgl","pcab","pied")
-speciesnames=c("Douglas Fir","Ponderosa Pine","Scotch Pine","White Spruce","Norway Spruce","Colorado Pinyon")
+speciesnames=c("Douglas Fir","Ponderosa Pine","Scotch Pine",
+               "White Spruce","Norway Spruce","Colorado Pinyon")
 
 df <- read.csv(paste0(wdir,'topsixspecies_data.csv'))
 df <- df %>%
@@ -23,14 +30,18 @@ df <- df %>%
 df <- df %>%
   mutate(pet.an = cwd.an + aet.an)
 
-### Calculate site average aet and cwd
+### Calculate site historic average aet, cwd and pet
 site_clim <- df %>%
   filter(year < 1980) %>%                                                                      ## Switch to raw climate data rather than using tree dataframe
   group_by(site_id, year) %>%
-  summarize(cwd.an = max(cwd.an, na.rm = TRUE), aet.an = max(aet.an, na.rm = TRUE), pet.an = max(pet.an, na.rm = TRUE)) %>%
+  summarize(cwd.an = max(cwd.an, na.rm = TRUE), 
+            aet.an = max(aet.an, na.rm = TRUE), 
+            pet.an = max(pet.an, na.rm = TRUE)) %>%
   filter((cwd.an > -Inf) & (aet.an > -Inf)) %>%
   group_by(site_id) %>%
-  summarize(cwd.ave = mean(cwd.an, na.rm = TRUE), aet.ave = mean(aet.an, na.rm = TRUE), pet.ave = mean(pet.an, na.rm = TRUE))
+  summarize(cwd.ave = mean(cwd.an, na.rm = TRUE), 
+            aet.ave = mean(aet.an, na.rm = TRUE), 
+            pet.ave = mean(pet.an, na.rm = TRUE))
 
 df <- merge(x = df, y = site_clim, by = "site_id", all.x = TRUE)
 
@@ -55,11 +66,19 @@ df=df%>%
   filter(ntrees>5)
 
 complete_df=df %>%
-  drop_na(c("cwd.an","pet.an","ring_width"))
+  drop_na(c("cwd.an","aet.an","ring_width"))
 
+site_summary <- complete_df %>% 
+  select("site_id", "species", "cwd.ave", "pet.ave", "aet.ave") %>%
+  distinct() %>%
+  as_tibble()
+
+site_summary$species = recode_factor(site_summary$species,psme="Douglas Fir",pipo="Ponderosa Pine",pisy="Scotch Pine",pcgl="White Spruce",pcab="Norway Spruce",pied="Colorado Pinyon")
+  
+#### Run first stage ####
 site_lm <- complete_df %>% 
   group_by(site_id,species) %>%
-  do(fit_site = felm(ring_width ~ cwd.an+pet.an+age+I(age^2)+I(age^3)+I(age^4)|tree_id|0|0, data = . ))
+  do(fit_site = felm(ring_width ~ cwd.an*aet.an+age+I(age^2)+I(age^3)+I(age^4)|tree_id|0|0, data = . ))
 
 siteCoef=tidy(site_lm[[3]][[1]])%>%filter(term==c("cwd.an", "pet.an"))
 for(i in 2:length(site_lm[[3]])){
@@ -67,7 +86,7 @@ for(i in 2:length(site_lm[[3]])){
 }
 siteCoef$site_id=site_lm$site_id
 siteCoef$species=site_lm$species
-siteCoef=left_join(siteCoef,unique(complete_df[,which(colnames(complete_df)%in%c("site_id","species","cwd.ave", "pet.ave"))]))
+siteCoef=left_join(siteCoef,unique(complete_df[,which(colnames(complete_df)%in%c("site_id","species","cwd.ave", "pet.ave", "aet.ave"))]))
 #remove one super extreme outlier
 siteCoef_trimmed=siteCoef %>%
   group_by(species) %>%
@@ -76,21 +95,79 @@ siteCoef_trimmed=siteCoef %>%
 siteCoef_trimmed=siteCoef_trimmed %>%
   filter(estimate>qlow&estimate<qhigh)
 siteCoef_trimmed$species=recode_factor(siteCoef_trimmed$species,psme="Douglas Fir",pipo="Ponderosa Pine",pisy="Scotch Pine",pcgl="White Spruce",pcab="Norway Spruce",pied="Colorado Pinyon")
-a=ggplot(siteCoef_trimmed,aes(x=cwd.ave,y=estimate,col=species))+theme_bw()+geom_point()+facet_wrap(~species)
-a=a+labs(x="Average Climatic Water Deficit",y="Marginal Effect of CWD")+scale_color_discrete(guide=FALSE)
+
+# Calculate limits for each species
+xlim.sp=site_summary %>%
+  group_by(species) %>%
+  mutate(cwd.qhigh = quantile(cwd.ave,0.95),
+         cwd.qlow = quantile(cwd.ave,0.05),
+         cwd.qmed = quantile(cwd.ave,0.5),
+         pet.qhigh = quantile(pet.ave, 0.95), 
+         pet.qlow = quantile(pet.ave, 0.05),
+         pet.qmed = quantile(pet.ave,0.5),
+         aet.qhigh = quantile(aet.ave, 0.95), 
+         aet.qlow = quantile(aet.ave, 0.05),
+         aet.qmed = quantile(aet.ave,0.5)) %>%
+  select(species,cwd.qhigh,cwd.qlow,cwd.qmed,pet.qhigh,pet.qlow,pet.qmed) %>%
+  distinct()
+
+xlim.all <- site_summary %>%
+  summarize(cwd.qhigh = quantile(cwd.ave,0.95),
+            cwd.qlow = quantile(cwd.ave,0.05),
+            cwd.qmed = quantile(cwd.ave,0.5),
+            pet.qhigh = quantile(pet.ave, 0.95), 
+            pet.qlow = quantile(pet.ave, 0.05),
+            pet.qmed = quantile(pet.ave,0.5),
+            aet.qhigh = quantile(aet.ave, 0.95), 
+            aet.qlow = quantile(aet.ave, 0.05),
+            aet.qmed = quantile(aet.ave,0.5))
+
+### Generate summary plots of sample distributions  ####
+# a=ggplot(siteCoef_trimmed,aes(x=cwd.ave,y=estimate,col=species))+theme_bw()+geom_point()+facet_wrap(~species)
+# a=a+labs(x="Average Climatic Water Deficit",y="Marginal Effect of CWD")+scale_color_discrete(guide=FALSE)
+
+kd <- kde2d(x = site_summary$cwd.ave, y = site_summary$aet.ave, n = 25, lims = c(c(0,750),c(100, 600)))
+filled.contour(kd, color.palette = pal)
 
 x11()
 par(mfrow=c(2,3),mar=c(5,5,4,2))
-for(i in 1:dim(xlim)[1]){
-  spec_id = xlim$species[i]
-  dat=siteCoef_trimmed %>% filter(species==spec_id)
-  lim = xlim %>% filter(species==spec_id)
+for(i in 1:dim(xlim.sp)[1]){
+  spec_id = xlim.sp$species[i]
+  dat = siteCoef_trimmed %>% filter(species==spec_id)
+  lim = xlim.sp %>% filter(species==spec_id)
   # kd <- kde2d(x = dat$cwd.ave, y = dat$pet.ave, n = 25, lims = c(c(lim$cwd.qlow, lim$cwd.qhigh), c(lim$pet.qlow, lim$pet.qhigh)))
   kd <- kde2d(x = dat$cwd.ave, y = dat$pet.ave, n = 25, lims = c(c(0,750),c(100, 1000)))
-  contour(kd)
+  contour(kd, color.palette = palette)
   # kde2d(x, y, h, n = 25, lims = c(range(x), range(y)))
 }
 
+#### Run second stage of model  ####
+dat = siteCoef_trimmed %>% 
+  ungroup() %>%
+  drop_na(std.error) %>%
+  mutate(errorweights=1/std.error/sum(1/std.error,na.rm=T)) 
+grandmodel <- lm(estimate~cwd.ave+I(cwd.ave^2) + aet.ave + I(aet.ave^2),weights=errorweights,data= dat)
+grandmodel <- lm(estimate~cwd.ave+I(cwd.ave^2), weights=errorweights,data= dat)
+
+cwd.x <- seq(xlim.all$cwd.qlow, xlim.all$cwd.qhigh, length.out=1000)
+aet.med <- xlim.all$aet.qmed
+
+pred <- predict(grandmodel,data.frame(cwd.ave=cwd.x, aet.ave = aet.med),interval="prediction",level=0.90)
+pred <- cbind(pred,cwd.x)
+pred <- pred %>% as_tibble()
+plot(cwd.x, pred$fit, type="l",xlab="Historic CWD",ylab="Estimated effect of CWD",las=1,lwd=2,col="#0dcfca",
+     ylim = c(pred$lwr %>% min(), pred$upr %>% max()))
+polygon(c(cwd.x,rev(cwd.x)),c(pred$lwr,rev(pred$upr)),col=rgb(t(col2rgb("#0dcfca")),max=255,alpha=70),border=NA)
+
+# aet.x <- seq(xlim.all$aet.qlow, xlim.all$aet.qhigh, length.out=1000)
+# cwd.med <- xlim.all$cwd.qmed
+# pred <- predict(grandmodel,data.frame(cwd.ave=cwd.med, aet.ave = aet.x),interval="prediction",level=0.90)
+# pred <- cbind(pred,aet.x)
+# pred <- pred %>% as_tibble()
+# plot(aet.x, pred$fit, type="l",xlab="Historic AET",ylab="Marginal effect of AET",las=1,lwd=2,col="#0dcfca")
+
+
+#### Run species specific second stage ####
 grandmodels=siteCoef_trimmed %>%
   group_by(species) %>%
   drop_na(std.error) %>%
@@ -102,16 +179,6 @@ grandmodels=siteCoef_trimmed %>%
 grandmodels %>% filter(species=="Colorado Pinyon") %>% pull(speciesmod)
 
 y=list()
-xlim=siteCoef_trimmed %>%
-  group_by(species) %>%
-  mutate(cwd.qhigh=quantile(cwd.ave,0.95),
-         cwd.qlow=quantile(cwd.ave,0.05),
-         cwd.qmed=quantile(cwd.ave,0.5),
-         pet.qhigh = quantile(pet.ave, 0.95), 
-         pet.qlow = quantile(pet.ave, 0.05),
-         pet.qmed = quantile(pet.ave,0.5)) %>%
-  select(species,cwd.qhigh,cwd.qlow,cwd.qmed,pet.qhigh,pet.qlow,pet.qmed) %>%
-  distinct()
 predictions=data.frame()
 for(i in 1:dim(grandmodels)[1]){
   species=as.data.frame(grandmodels)[i,1]
