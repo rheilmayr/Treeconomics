@@ -5,8 +5,8 @@ library(tidyverse)
 library(lfe)
 library(broom)
 library(purrr)
-
 library(ggiraphExtra)
+
 ### Define path
 wdir = 'D:/cloud/Google Drive/Treeconomics/Data/'
 #for Fran
@@ -23,21 +23,6 @@ df <- df %>%
 df <- df %>%
   mutate(pet.an = cwd.an + aet.an)
 
-### Calculate deviation in growth rate                     ## Alternative is polynomial (logitic) age control interacted with site in single stage regression
-find_deviation <- function(df) {
-  fit <- lm(ring_width ~ age, data = df)                   ## Replace with logistic growth function
-  df$predict <- fit %>% predict(type = "response")
-  df$deviation <- df$ring_width - df$predict 
-  return(df$deviation)
-  }
-
-df$deviation <- find_deviation(df)
-
-# df %>%                              ## Rewrite to run function by site
-#   group_by(site_id) %>%
-#   summarise(deviation = find_deviation(.)) 
-#   do(site_dev = find_deviation(.))
-
 ### Calculate site average aet and cwd
 site_clim <- df %>%
   filter(year < 1980) %>%                                                                      ## Switch to raw climate data rather than using tree dataframe
@@ -48,17 +33,6 @@ site_clim <- df %>%
   summarize(cwd.ave = mean(cwd.an, na.rm = TRUE), aet.ave = mean(aet.an, na.rm = TRUE), pet.ave = mean(pet.an, na.rm = TRUE))
 
 df <- merge(x = df, y = site_clim, by = "site_id", all.x = TRUE)
-
-# ### CWD data binned                                            ## Probably not necessary since our CWD/AET variables are already integrals
-# df <- cut(x, breaks = quantile(x, probs = seq(0, 1, 0.1)), 
-#           labels = 1:10, include.lowest = TRUE)
-# 
-# # Climate regressions
-# mod_interact <- felm(ring_width ~ cwd.ave * cwd.an + cwd.ave * I(cwd.an^2)+age*site_id+I(age^2)*site_id+I(age^3)*site_id-site_id-cwd.ave|site_id|0|site_id, data = df )
-# summary(mod_interact)
-# 
-# mod_interact <- felm(deviation ~ aet.ave * aet.an + aet.ave * I(aet.an^2)-aet.ave|site_id|0|site_id, data = df )
-# summary(mod_interact)
 
 #remove one site with negative ages
 df=df %>%
@@ -104,12 +78,25 @@ siteCoef_trimmed=siteCoef_trimmed %>%
 siteCoef_trimmed$species=recode_factor(siteCoef_trimmed$species,psme="Douglas Fir",pipo="Ponderosa Pine",pisy="Scotch Pine",pcgl="White Spruce",pcab="Norway Spruce",pied="Colorado Pinyon")
 a=ggplot(siteCoef_trimmed,aes(x=cwd.ave,y=estimate,col=species))+theme_bw()+geom_point()+facet_wrap(~species)
 a=a+labs(x="Average Climatic Water Deficit",y="Marginal Effect of CWD")+scale_color_discrete(guide=FALSE)
+
+x11()
+par(mfrow=c(2,3),mar=c(5,5,4,2))
+for(i in 1:dim(xlim)[1]){
+  spec_id = xlim$species[i]
+  dat=siteCoef_trimmed %>% filter(species==spec_id)
+  lim = xlim %>% filter(species==spec_id)
+  # kd <- kde2d(x = dat$cwd.ave, y = dat$pet.ave, n = 25, lims = c(c(lim$cwd.qlow, lim$cwd.qhigh), c(lim$pet.qlow, lim$pet.qhigh)))
+  kd <- kde2d(x = dat$cwd.ave, y = dat$pet.ave, n = 25, lims = c(c(0,750),c(100, 1000)))
+  contour(kd)
+  # kde2d(x, y, h, n = 25, lims = c(range(x), range(y)))
+}
+
 grandmodels=siteCoef_trimmed %>%
   group_by(species) %>%
   drop_na(std.error) %>%
   mutate(errorweights=1/std.error/sum(1/std.error,na.rm=T)) %>%
-  do(speciesmod=lm(estimate~cwd.ave+I(cwd.ave^2),weights=errorweights,data= .)) 
-  # do(speciesmod=lm(estimate~cwd.ave+I(cwd.ave^2) + pet.ave + I(pet.ave^2),weights=errorweights,data= .)) 
+  # do(speciesmod=lm(estimate~cwd.ave+I(cwd.ave^2),weights=errorweights,data= .)) 
+  do(speciesmod=lm(estimate~cwd.ave+I(cwd.ave^2) + pet.ave + I(pet.ave^2),weights=errorweights,data= .))
 
 # Review results
 grandmodels %>% filter(species=="Colorado Pinyon") %>% pull(speciesmod)
@@ -117,23 +104,33 @@ grandmodels %>% filter(species=="Colorado Pinyon") %>% pull(speciesmod)
 y=list()
 xlim=siteCoef_trimmed %>%
   group_by(species) %>%
-  mutate(qhigh=quantile(cwd.ave,0.95)) %>%
-  mutate(qlow=quantile(cwd.ave,0.05)) %>%
-  select(species,qhigh,qlow) %>%
+  mutate(cwd.qhigh=quantile(cwd.ave,0.95),
+         cwd.qlow=quantile(cwd.ave,0.05),
+         cwd.qmed=quantile(cwd.ave,0.5),
+         pet.qhigh = quantile(pet.ave, 0.95), 
+         pet.qlow = quantile(pet.ave, 0.05),
+         pet.qmed = quantile(pet.ave,0.5)) %>%
+  select(species,cwd.qhigh,cwd.qlow,cwd.qmed,pet.qhigh,pet.qlow,pet.qmed) %>%
   distinct()
 predictions=data.frame()
 for(i in 1:dim(grandmodels)[1]){
   species=as.data.frame(grandmodels)[i,1]
-  x=seq(xlim$qlow[which(xlim$species==species)],xlim$qhigh[which(xlim$species==species)],length.out=1000)
-  predictions=rbind(predictions,cbind(predict(grandmodels[[2]][[i]],data.frame(cwd.ave=x),interval="prediction",level=0.90),x))
+  cwd.x=seq(xlim$cwd.qlow[which(xlim$species==species)],xlim$cwd.qhigh[which(xlim$species==species)],length.out=1000)
+  pet.x=seq(xlim$pet.qlow[which(xlim$species==species)],xlim$pet.qhigh[which(xlim$species==species)],length.out=1000)
+  # predictions=rbind(predictions,cbind(predict(grandmodels[[2]][[i]],data.frame(cwd.ave=xlim$cwd.qmed[which(xlim$species==species)], pet.ave=pet.x),interval="prediction",level=0.90),cwd.x,pet.x))
+  predictions=rbind(predictions,cbind(predict(grandmodels[[2]][[i]],data.frame(cwd.ave=cwd.x, pet.ave=xlim$pet.qmed[which(xlim$species==species)]),interval="prediction",level=0.90),cwd.x,pet.x))
+  # predictions=rbind(predictions,cbind(predict(grandmodels[[2]][[i]],data.frame(cwd.ave=cwd.x, pet.ave=pet.x),interval="prediction",level=0.90),cwd.x,pet.x))
 }
 predictions$species=rep(as.data.frame(grandmodels)[,1],each=length(x))
 x11()
 par(mfrow=c(2,3),mar=c(5,5,4,2))
 for(i in 1:dim(xlim)[1]){
   dat=predictions[which(predictions$species==xlim$species[i]),]
-  plot(dat$x,dat[,1],type="l",xlab="Average Climatic Water Deficit",ylab="",las=1,lwd=2,col="#0dcfca",ylim=c(min(dat$lwr),max(dat$upr)),main=dat$species[1])
-  polygon(c(dat$x,rev(dat$x)),c(dat[,2],rev(dat[,3])),col=rgb(t(col2rgb("#0dcfca")),max=255,alpha=70),border=NA)
+  # plot(dat$pet.x,dat[,1],type="l",xlab="Average Climatic Water Deficit",ylab="",las=1,lwd=2,col="#0dcfca",ylim=c(min(dat$lwr),max(dat$upr)),main=dat$species[1])
+  # polygon(c(dat$pet.x,rev(dat$pet.x)),c(dat[,2],rev(dat[,3])),col=rgb(t(col2rgb("#0dcfca")),max=255,alpha=70),border=NA)
+  plot(dat$cwd.x,dat[,1],type="l",xlab="Average Climatic Water Deficit",ylab="",las=1,lwd=2,col="#0dcfca",ylim=c(min(dat$lwr),max(dat$upr)),main=dat$species[1])
+  polygon(c(dat$cwd.x,rev(dat$cwd.x)),c(dat[,2],rev(dat[,3])),col=rgb(t(col2rgb("#0dcfca")),max=255,alpha=70),border=NA)
   title(ylab="Effect of Water Deficit on Tree Growth", line=4)
   abline(h=0,lty=2,lwd=2)
 }
+
