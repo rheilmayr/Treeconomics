@@ -78,11 +78,11 @@ site_summary$species = recode_factor(site_summary$species,psme="Douglas Fir",pip
 #### Run first stage ####
 site_lm <- complete_df %>% 
   group_by(site_id,species) %>%
-  do(fit_site = felm(ring_width ~ cwd.an*aet.an+age+I(age^2)+I(age^3)+I(age^4)|tree_id|0|0, data = . ))
+  do(fit_site = felm(ring_width ~ cwd.an +aet.an+age+I(age^2)+I(age^3)+I(age^4)|tree_id|0|0, data = . ))
 
-siteCoef=tidy(site_lm[[3]][[1]])%>%filter(term==c("cwd.an", "pet.an"))
+siteCoef=tidy(site_lm[[3]][[1]])%>%filter(term=="cwd.an")
 for(i in 2:length(site_lm[[3]])){
-  siteCoef=rbind(siteCoef,tidy(site_lm[[3]][[i]])%>%filter(term==c("cwd.an", "pet.an")))
+  siteCoef=rbind(siteCoef,tidy(site_lm[[3]][[i]])%>%filter(term=="cwd.an"))
 }
 siteCoef$site_id=site_lm$site_id
 siteCoef$species=site_lm$species
@@ -108,7 +108,7 @@ xlim.sp=site_summary %>%
          aet.qhigh = quantile(aet.ave, 0.95), 
          aet.qlow = quantile(aet.ave, 0.05),
          aet.qmed = quantile(aet.ave,0.5)) %>%
-  select(species,cwd.qhigh,cwd.qlow,cwd.qmed,pet.qhigh,pet.qlow,pet.qmed) %>%
+  select(species,cwd.qhigh,cwd.qlow,cwd.qmed,pet.qhigh,pet.qlow,pet.qmed, aet.qhigh, aet.qlow, aet.qmed) %>%
   distinct()
 
 xlim.all <- site_summary %>%
@@ -173,7 +173,7 @@ grandmodels=siteCoef_trimmed %>%
   drop_na(std.error) %>%
   mutate(errorweights=1/std.error/sum(1/std.error,na.rm=T)) %>%
   # do(speciesmod=lm(estimate~cwd.ave+I(cwd.ave^2),weights=errorweights,data= .)) 
-  do(speciesmod=lm(estimate~cwd.ave+I(cwd.ave^2) + pet.ave + I(pet.ave^2),weights=errorweights,data= .))
+  do(speciesmod=lm(estimate~cwd.ave + I(cwd.ave^2) + aet.ave + I(aet.ave^2),weights=errorweights,data= .))
 
 # Review results
 grandmodels %>% filter(species=="Colorado Pinyon") %>% pull(speciesmod)
@@ -182,20 +182,21 @@ y=list()
 predictions=data.frame()
 for(i in 1:dim(grandmodels)[1]){
   species=as.data.frame(grandmodels)[i,1]
-  cwd.x=seq(xlim$cwd.qlow[which(xlim$species==species)],xlim$cwd.qhigh[which(xlim$species==species)],length.out=1000)
-  pet.x=seq(xlim$pet.qlow[which(xlim$species==species)],xlim$pet.qhigh[which(xlim$species==species)],length.out=1000)
+  cwd.x=seq(xlim.sp$cwd.qlow[which(xlim.sp$species==species)],xlim.sp$cwd.qhigh[which(xlim.sp$species==species)],length.out=1000)
+  aet.x=seq(xlim.sp$aet.qlow[which(xlim.sp$species==species)],xlim.sp$aet.qhigh[which(xlim.sp$species==species)],length.out=1000)
   # predictions=rbind(predictions,cbind(predict(grandmodels[[2]][[i]],data.frame(cwd.ave=xlim$cwd.qmed[which(xlim$species==species)], pet.ave=pet.x),interval="prediction",level=0.90),cwd.x,pet.x))
-  predictions=rbind(predictions,cbind(predict(grandmodels[[2]][[i]],data.frame(cwd.ave=cwd.x, pet.ave=xlim$pet.qmed[which(xlim$species==species)]),interval="prediction",level=0.90),cwd.x,pet.x))
+  predictions=rbind(predictions,cbind(predict(grandmodels[[2]][[i]],data.frame(cwd.ave=cwd.x, aet.ave=xlim.sp$aet.qmed[which(xlim.sp$species==species)]),interval="prediction",level=0.90),cwd.x,aet.x))
   # predictions=rbind(predictions,cbind(predict(grandmodels[[2]][[i]],data.frame(cwd.ave=cwd.x, pet.ave=pet.x),interval="prediction",level=0.90),cwd.x,pet.x))
 }
-predictions$species=rep(as.data.frame(grandmodels)[,1],each=length(x))
+predictions$species=rep(as.data.frame(grandmodels)[,1],each=length(cwd.x))
 x11()
 par(mfrow=c(2,3),mar=c(5,5,4,2))
-for(i in 1:dim(xlim)[1]){
-  dat=predictions[which(predictions$species==xlim$species[i]),]
+for(i in 1:dim(xlim.sp)[1]){
+  dat=predictions[which(predictions$species==xlim.sp$species[i]),]
   # plot(dat$pet.x,dat[,1],type="l",xlab="Average Climatic Water Deficit",ylab="",las=1,lwd=2,col="#0dcfca",ylim=c(min(dat$lwr),max(dat$upr)),main=dat$species[1])
   # polygon(c(dat$pet.x,rev(dat$pet.x)),c(dat[,2],rev(dat[,3])),col=rgb(t(col2rgb("#0dcfca")),max=255,alpha=70),border=NA)
-  plot(dat$cwd.x,dat[,1],type="l",xlab="Average Climatic Water Deficit",ylab="",las=1,lwd=2,col="#0dcfca",ylim=c(min(dat$lwr),max(dat$upr)),main=dat$species[1])
+  plot(dat$cwd.x,dat[,1],type="l",xlab="Average Climatic Water Deficit",ylab="",las=1,lwd=2,col="#0dcfca",xlim=c(xlim.all$cwd.qlow, xlim.all$cwd.qhigh), ylim = c(-2e-3, 1e-3),main=dat$species[1])
+  # ylim=c(min(dat$lwr),max(dat$upr))
   polygon(c(dat$cwd.x,rev(dat$cwd.x)),c(dat[,2],rev(dat[,3])),col=rgb(t(col2rgb("#0dcfca")),max=255,alpha=70),border=NA)
   title(ylab="Effect of Water Deficit on Tree Growth", line=4)
   abline(h=0,lty=2,lwd=2)
