@@ -1,23 +1,16 @@
 # TODO:
 #   Bootstrap first stage
 #   Look at temperature and latitude in second stage regression (pure cwd in first stage)
-#   Add measure of species distance from cwd mean - standardized metric of cwd.ave
 #   add lagged climate data maybe up to 2 years
-#   Hardwood vs softwood
 #   Do you get snow?
-#   PET in first stage (keep this separate from cwd model)
-#   Try out single-stage approach - panel model with non-linear terms  
-  
 
-
-#install.packages("plm")
-#install.packages("lfe")
 
 library(MASS)
 library(tidyverse)
 library(lfe)
 library(broom)
 library(purrr)
+library(patchwork)
 library(ggiraphExtra)
 select <- dplyr::select
 
@@ -145,136 +138,7 @@ siteCoef_trimmed <- siteCoef_trimmed %>%
   mutate(errorweights = nobs / sum(nobs)) 
 
 
-### Explore first stage ####
-ss_mod <- function(d) {
-  d <- d %>% mutate(errorweights = nobs / sum(nobs)) 
-  lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights=errorweights, data=d)
-}
-
-ss_lm <- siteCoef_trimmed %>% 
-  group_by(biome) %>%
-  nest() %>%
-  mutate(mod = map(data, ss_mod),
-         mod = map(mod, tidy)) %>%
-  unnest(mod) %>%
-  filter(term %in% c('cwd.spstd'))
-
-mod_dat <- siteCoef_trimmed
-cwd.mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights=errorweights, data= mod_dat)
-cwd.mod %>% summary()
-
-pet.mod <- lm(estimate_pet.an ~ cwd.spstd + pet.spstd, weights=errorweights, data= siteCoef_trimmed)
-pet.mod %>% summary()
-
-cwd.x <- seq(-2, 2, length.out=50)
-pet.x <- seq(-2, 2, length.out=50)
-grid.x <- expand.grid(cwd.x, pet.x)
-
-pred <- predict(cwd.mod,data.frame(cwd.spstd=grid.x$Var1, pet.spstd = grid.x$Var2),interval="prediction",level=0.90)
-pred <- cbind(pred,grid.x)
-
-p <- pred %>% ggplot(aes(x = Var1, y = Var2, fill = fit)) +
-  geom_tile()
-p
-
-pred <- pred %>% as_tibble()
-plot(cwd.x, pred$fit, type="l",xlab="Historic CWD",ylab="Estimated effect of CWD",las=1,lwd=2,col="#0dcfca",
-     ylim = c(pred$lwr %>% min(), pred$upr %>% max()))
-points(siteCoef_trimmed$cwd.spstd,siteCoef_trimmed$estimate_cwd.an,col = 'gray', pch=18)
-polygon(c(cwd.x,rev(cwd.x)),c(pred$lwr,rev(pred$upr)),col=rgb(t(col2rgb("#0dcfca")),max=255,alpha=70),border=NA)
-
-
-plot_dat <- siteCoef_trimmed %>%
-  filter(family == "Pinaceae") %>%
-  mutate(cwd.q = as.factor(ntile(cwd.spstd, 5)))
-p <- plot_dat %>% ggplot(aes(x=cwd.q, y=estimate_cwd.an)) + 
-  geom_boxplot()
-p
-
-
-
-siteCoef_trimmed <- siteCoef_trimmed %>%
-  group_by("species_id") %>%
-  mutate(cwd.q = ntile(cwd.ave, 5),
-         pet.q = ntile(pet.ave, 5),
-         cwd.high = ntile(cwd.ave, 2)-1,
-         pet.high = ntile(pet.ave, 2)-1,
-         climate = paste0('cwd', cwd.high, '_pet', pet.high)) %>%
-  ungroup()
-siteCoef_trimmed <- siteCoef_trimmed %>%
-  mutate(cwd.q = as.factor(ntile(cwd.spstd, 7)),
-         pet.q = as.factor(ntile(pet.spstd, 7)),
-         cwd.high = as.factor(ntile(cwd.spstd, 2)-1),
-         pet.high = as.factor(ntile(pet.spstd, 2)-1),
-         climate = paste0('cwd', cwd.high, '_pet', pet.high))
-plotCoef <- siteCoef_trimmed %>%
-  filter(family == "Pinaceae") %>%
-  mutate(cwd.q = as.factor(ntile(cwd.spstd, 5)),
-         pet.q = as.factor(ntile(pet.spstd, 5)),
-         aet.q = as.factor(ntile(aet.spstd, 5)),
-         cwd.high = as.factor(ntile(cwd.spstd, 2)-1),
-         pet.high = as.factor(ntile(pet.spstd, 2)-1),
-         climate = paste0('cwd', cwd.high, '_pet', pet.high))
-
-p1 <- plotCoef %>% ggplot(aes(x=climate, y=estimate_cwd.an)) +
-  geom_boxplot()
-p2 <- plotCoef %>% ggplot(aes(x=climate, y=estimate_pet.an)) +
-  geom_boxplot()
-p1 / p2
-
-
-p1 <- plotCoef %>% ggplot(aes(x=cwd.q, y=estimate_cwd.an)) +
-  geom_boxplot()
-p2 <- plotCoef %>% ggplot(aes(x=cwd.q, y=estimate_pet.an)) +
-  geom_boxplot()
-p3 <- plotCoef %>% ggplot(aes(x=pet.q, y=estimate_cwd.an)) +
-  geom_boxplot()
-p4 <- plotCoef %>% ggplot(aes(x=pet.q, y=estimate_pet.an)) +
-  geom_boxplot()
-
-(p1 | p2) / (p3 | p4)
-
-
-p <- plotCoef %>% ggplot(aes(x=cwd.spstd, y=pet.spstd, colour = estimate_cwd.an)) +
-  geom_point() +
-  xlim(c(-2,2)) +
-  ylim(c(-2,2))
-p
-
-p <- plotCoef %>% ggplot(aes(x=cwd.spstd, y=pet.spstd, colour = estimate_pet.an)) +
-  geom_point() +
-  xlim(c(-2,2)) +
-  ylim(c(-2,2))
-p
-
-
-p <- plotCoef %>% ggplot(aes(x=aet.ave, y=cwd.ave, colour = estimate_cwd.an)) +
-  geom_point() + scale_color_manual(values="greys")
-p
-
-+ scale_colour_brewer(palette = "Greens")
-
-lm(estimate_cwd.an ~ cwd.spstd + I(cwd.spstd),weights=errorweights,data= .)
-
-
-
-
 # Calculate limits
-xlim.sp=site_summary %>%
-  group_by(species_name) %>%
-  mutate(cwd.qhigh = quantile(cwd.ave,0.95),
-         cwd.qlow = quantile(cwd.ave,0.05),
-         cwd.qmed = quantile(cwd.ave,0.5),
-         pet.qhigh = quantile(pet.ave, 0.95), 
-         pet.qlow = quantile(pet.ave, 0.05),
-         pet.qmed = quantile(pet.ave,0.5),
-         aet.qhigh = quantile(aet.ave, 0.95), 
-         aet.qlow = quantile(aet.ave, 0.05),
-         aet.qmed = quantile(aet.ave,0.5)) %>%
-  select(species_name,cwd.qhigh,cwd.qlow,cwd.qmed,pet.qhigh,pet.qlow,pet.qmed, aet.qhigh, aet.qlow, aet.qmed) %>%
-  distinct() %>%
-  ungroup()
-
 xlim.all <- site_summary %>%
   ungroup() %>%
   summarize(cwd.qhigh = quantile(cwd.ave,0.95),
@@ -287,119 +151,97 @@ xlim.all <- site_summary %>%
             aet.qlow = quantile(aet.ave, 0.05),
             aet.qmed = quantile(aet.ave,0.5))
 
-### Generate summary plots of sample distributions  ####
-# a=ggplot(siteCoef_trimmed,aes(x=cwd.ave,y=estimate,col=species))+theme_bw()+geom_point()+facet_wrap(~species)
-# a=a+labs(x="Average Climatic Water Deficit",y="Marginal Effect of CWD")+scale_color_discrete(guide=FALSE)
-
-kd <- kde2d(x = site_summary$cwd.spstd, y = site_summary$pet.spstd, 
-            n = 25, lims = c(c(-2.5,2.5),c(-2.5, 2.5)))
-filled.contour(kd, color.palette = pal)
-# points(site_summary$cwd.spstd, site_summary$pet.spstd)
-
-x11()
-par(mfrow=c(4,5),mar=c(5,5,4,2))
-for(i in 1:dim(xlim.sp)[1]){
-  spec_name = xlim.sp$species_name[i]
-  dat = siteCoef_trimmed %>% filter(species_name==spec_name)
-  lim = xlim.sp %>% filter(species_name==spec_name)
-  # kd <- kde2d(x = dat$cwd.ave, y = dat$pet.ave, n = 25, lims = c(c(lim$cwd.qlow, lim$cwd.qhigh), c(lim$pet.qlow, lim$pet.qhigh)))
-  kd <- kde2d(x = dat$cwd.ave, y = dat$aet.ave, n = 25, 
-              lims = c(c(xlim.all$cwd.qlow,xlim.all$cwd.qhigh),c(xlim.all$aet.qlow, xlim.all$aet.qhigh)))
-  filled.contour(kd, color.palette = pal)
-  title(paste0(spec_name, dim(dat)[1]))
-  # kde2d(x, y, h, n = 25, lims = c(range(x), range(y)))
-}
 
 #### Run second stage of model  ####
-dat = siteCoef_trimmed %>% 
-  ungroup() %>%
-  drop_na(std.error_cwd.an) %>%
-  mutate(errorweights=1/std.error_cwd.an/sum(1/std.error_cwd.an,na.rm=T)) 
-grandmodel <- lm(estimate_cwd.an~cwd.ave + I(cwd.ave^2),weights=errorweights,data= dat)
-# grandmodel <- lm(estimate~cwd.ave+I(cwd.ave^2), weights=errorweights,data= dat)
+cwd.mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights=errorweights, data= siteCoef_trimmed)
+cwd.mod %>% summary()
 
-cwd.x <- seq(xlim.all$cwd.qlow, xlim.all$cwd.qhigh, length.out=1000)
-aet.med <- xlim.all$aet.qmed
-pet.med <- xlim.all$pet.qmed
+pet.mod <- lm(estimate_pet.an ~ cwd.spstd + pet.spstd, weights=errorweights, data= siteCoef_trimmed)
+pet.mod %>% summary()
 
-pred <- predict(grandmodel,data.frame(cwd.ave=cwd.x, pet.ave = pet.med),interval="prediction",level=0.90)
-pred <- cbind(pred,cwd.x)
-pred <- pred %>% as_tibble()
-plot(cwd.x, pred$fit, type="l",xlab="Historic CWD",ylab="Estimated effect of CWD",las=1,lwd=2,col="#0dcfca",
+
+## Run second stage by subgroup
+ss_mod <- function(d) {
+  d <- d %>% mutate(errorweights = nobs / sum(nobs)) 
+  lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights=errorweights, data=d)
+}
+
+ss_lm <- siteCoef_trimmed %>% 
+  group_by(biome) %>%    ### NOTE: can change this to run model by family, genus, biome, conifer_broad, gymno_angio
+  nest() %>%
+  mutate(mod = map(data, ss_mod),
+         mod = map(mod, tidy)) %>%
+  unnest(mod) %>%
+  filter(term %in% c('(Intercept)', 'cwd.spstd'))
+
+
+#### Generate plots  ####
+## Summary plot of sample distribution
+hex <- site_summary %>% ggplot(aes(x = cwd.spstd, y = pet.spstd, weight = nobs)) +
+  geom_hex()
+hex
+
+## Plot estimates by historic cwd / pet - would be awesome to combine these and make prettier
+plot_dat <- siteCoef_trimmed
+coef_plot1 <- plot_dat %>% ggplot(aes(x = cwd.spstd, y = pet.spstd, z = estimate_pet.an, weight = nobs)) +
+  stat_summary_hex() +
+  xlim(c(-1.5, 1.5)) +
+  ylim(c(-1.5, 1.5))
+coef_plot1 
+
+coef_plot2 <- plot_dat %>% ggplot(aes(x = cwd.spstd, y = estimate_cwd.an, weight = nobs)) +
+  stat_summary_bin(bins = 20)
+coef_plot2
+
+coef_plot3 <- plot_dat %>% ggplot(aes(x = pet.spstd, y = estimate_cwd.an, weight = nobs)) +
+  stat_summary_bin(bins = 20)
+coef_plot3
+
+
+## Plot prediction along one axis
+cwd.x <- seq(-2, 2, length.out=1000)
+pred <- predict(cwd.mod, data.frame(cwd.spstd=cwd.x, pet.spstd = 0),
+                interval="prediction",level=0.90)
+pred <- cbind(pred, cwd.x) %>%
+  as_tibble()
+plot(cwd.x, pred$fit, type="l", xlab="Historic CWD",ylab="Estimated effect of CWD",las=1,lwd=2,col="#0dcfca",
      ylim = c(pred$lwr %>% min(), pred$upr %>% max()))
-points(dat$cwd.ave,dat$estimate,col=dat$species_id,pch=18)
+points(siteCoef_trimmed$cwd.spstd,siteCoef_trimmed$estimate_cwd.an,col = 'gray', pch=18)
 polygon(c(cwd.x,rev(cwd.x)),c(pred$lwr,rev(pred$upr)),col=rgb(t(col2rgb("#0dcfca")),max=255,alpha=70),border=NA)
 
 
-pet.x <- seq(xlim.all$pet.qlow, xlim.all$pet.qhigh, length.out=1000)
-cwd.med <- xlim.all$cwd.qmed
+## Plot prediction along two axes
+cwd.x <- seq(-2, 2, length.out=50)
+pet.x <- seq(-2, 2, length.out=50)
+grid.x <- expand.grid(cwd.x, pet.x)
 
-pred <- predict(grandmodel,data.frame(cwd.ave=cwd.med, pet.ave = pet.x),interval="prediction",level=0.90)
-pred <- cbind(pred,pet.x)
-pred <- pred %>% as_tibble()
-plot(pet.x, pred$fit, type="l",xlab="Historic PET",ylab="Marginal effect of CWD",las=1,lwd=2,col="#0dcfca")
-points(dat$pet.ave,dat$estimate,add=T)
-polygon(c(pet.x,rev(pet.x)),c(pred$lwr,rev(pred$upr)),col=rgb(t(col2rgb("#0dcfca")),max=255,alpha=70),border=NA)
+pred <- predict(cwd.mod,data.frame(cwd.spstd=grid.x$Var1, pet.spstd = grid.x$Var2),
+                interval="prediction",level=0.90)
+pred <- cbind(pred,grid.x) %>% 
+  as_tibble()
 
-
-#### Run species specific second stage ####
-grandmodels=siteCoef_trimmed %>%
-  group_by(species_name) %>%
-  drop_na(std.error) %>%
-  mutate(errorweights=1/std.error/sum(1/std.error,na.rm=T)) %>% ## LETS RECONSIDER THIS 
-  # do(speciesmod=lm(estimate~cwd.ave+I(cwd.ave^2)+I(cwd.ave^3),weights=errorweights,data= .))
-  do(speciesmod=lm(estimate~cwd.ave + I(cwd.ave^2) + pet.ave + I(pet.ave^2),weights=errorweights,data= .))
-
-# Review results
-grandmodels %>% filter(species_name=="blue oak") %>% pull(speciesmod)
-
-y=list()
-predictions=data.frame()
-for(i in 1:dim(grandmodels)[1]){
-  species=as.data.frame(grandmodels)[i,1]
-  cwd.x=seq(xlim.sp$cwd.qlow[which(xlim.sp$species_name==species)],xlim.sp$cwd.qhigh[which(xlim.sp$species_name==species)],length.out=1000)
-  pet.x=seq(xlim.sp$pet.qlow[which(xlim.sp$species_name==species)],xlim.sp$pet.qhigh[which(xlim.sp$species_name==species)],length.out=1000)
-  prd=predict(grandmodels[[2]][[i]],data.frame(cwd.ave=cwd.x, pet.ave = xlim.sp$aet.qmed[which(xlim.sp$species_name==species)]),interval="prediction",level=0.90)
-  # prd=predict(grandmodels[[2]][[i]],data.frame(cwd.ave=cwd.x, aet.ave=xlim.sp$aet.qmed[which(xlim.sp$species_name==species)]),interval="prediction",level=0.90)
-  # prd=predict(grandmodels[[2]][[i]],data.frame(cwd.ave=xlim.sp$cwd.qmed[which(xlim.sp$species_name==species)], aet.ave=aet.x),interval="prediction",level=0.90)
-  predictions=rbind(predictions,cbind(prd,cwd.x,pet.x))
-}
-predictions$species=rep(as.data.frame(grandmodels)[,1],each=length(cwd.x))
-# x11()
-# par(mfrow=c(5,4),mar=c(5,5,4,2))
-for(i in 1:dim(xlim.sp)[1]){
-  dat=predictions[which(predictions$species==xlim.sp$species_name[i]),]
-  # plot(dat$pet.x,dat[,1],type="l",xlab="Average Climatic Water Deficit",ylab="",las=1,lwd=2,col="#0dcfca",ylim=c(min(dat$lwr),max(dat$upr)),main=dat$species[1])
-  # polygon(c(dat$pet.x,rev(dat$pet.x)),c(dat[,2],rev(dat[,3])),col=rgb(t(col2rgb("#0dcfca")),max=255,alpha=70),border=NA)
-  plot(dat$cwd.x,dat[,1],type="l",xlab="Average Climatic Water Deficit",ylab="",las=1,lwd=2,col="#0dcfca",xlim=c(xlim.all$cwd.qlow, xlim.all$cwd.qhigh), ylim = c(-2e-3, 1e-3),main=dat$species[1])
-  # ylim=c(min(dat$lwr),max(dat$upr))
-  polygon(c(dat$cwd.x,rev(dat$cwd.x)),c(dat[,2],rev(dat[,3])),col=rgb(t(col2rgb("#0dcfca")),max=255,alpha=70),border=NA)
-  title(ylab="Effect of Water Deficit on Tree Growth", line=4)
-  abline(h=0,lty=2,lwd=2)
-}
+p <- pred %>% ggplot(aes(x = Var1, y = Var2, fill = fit)) +
+  geom_tile()
+p
 
 
+## Boxplots of effects by cwd / pet bins
+plot_dat <- siteCoef_trimmed %>%
+  group_by("species_id") %>%
+  mutate(cwd.q = as.factor(ntile(cwd.ave, 5)),
+         pet.q = as.factor(ntile(pet.ave, 5)),
+         cwd.high = as.factor(ntile(cwd.ave, 2)-1),
+         pet.high = as.factor(ntile(pet.ave, 2)-1),
+         climate = paste0('cwd', cwd.high, '_pet', pet.high)) %>%
+  ungroup()
 
+p1 <- plot_dat %>% ggplot(aes(x=cwd.q, y=estimate_cwd.an)) +
+  geom_boxplot()
+p2 <- plot_dat %>% ggplot(aes(x=cwd.q, y=estimate_pet.an)) +
+  geom_boxplot()
+p3 <- plot_dat %>% ggplot(aes(x=pet.q, y=estimate_cwd.an)) +
+  geom_boxplot()
+p4 <- plot_dat %>% ggplot(aes(x=pet.q, y=estimate_pet.an)) +
+  geom_boxplot()
 
-
-##### 
-#### Single-stage panel model #####
-low <- complete_df %>% filter(cwd.dev<=-0.1)
-mod_low <- felm(ring_width ~ cwd.an + I(cwd.an^2) + age + 
-                  I(age^2) + I(age^3) + I(age^4) | site_id + year, 
-                data = low)
-
-med <- complete_df %>% filter((cwd.dev<0.1) & (cwd.dev>-0.1))
-mod_med <- felm(ring_width ~ cwd.an + I(cwd.an^2) + age + 
-                  I(age^2) + I(age^3) + I(age^4) | tree_id + year, 
-                data = med)
-
-
-high <- complete_df %>% filter(cwd.dev>=0.1)
-mod_high <- felm(ring_width ~ cwd.an + I(cwd.an^2) + age + 
-                   I(age^2) + I(age^3) + I(age^4) | site_id + year, 
-                 data = high)
-
-mod <- felm(ring_width ~ cwd.an + aet.an + 
-              age + I(age^2) + I(age^3) + I(age^4) | tree_id + year, 
-            data = high)
+(p1 | p2) / (p3 | p4)
