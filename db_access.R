@@ -18,7 +18,7 @@ tables = dbListTables(conn)
 tree_db = as.data.frame(tbl(conn, 'trees'))
 spp_db = as.data.frame(tbl(conn,'species'))
 
-# Pull all tree records for top 6 species
+# Pull all tree records for top 20 species
 #collect trees from identified species
 count_spp <- tree_db %>% 
   group_by(species_id) %>%
