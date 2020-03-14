@@ -153,12 +153,11 @@ xlim.all <- site_summary %>%
 
 
 #### Run second stage of model  ####
-cwd.mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights=errorweights, data= siteCoef_trimmed)
+cwd.mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd + factor(species_id), weights=errorweights, data= siteCoef_trimmed)
 cwd.mod %>% summary()
 
-pet.mod <- lm(estimate_pet.an ~ cwd.spstd + pet.spstd, weights=errorweights, data= siteCoef_trimmed)
+pet.mod <- lm(estimate_pet.an ~ cwd.spstd + pet.spstd + factor(species_id), weights=errorweights, data= siteCoef_trimmed)
 pet.mod %>% summary()
-
 
 ## Run second stage by subgroup
 ss_mod <- function(d) {
@@ -206,7 +205,6 @@ pred <- cbind(pred, cwd.x) %>%
   as_tibble()
 plot(cwd.x, pred$fit, type="l", xlab="Historic CWD",ylab="Estimated effect of CWD",las=1,lwd=2,col="#0dcfca",
      ylim = c(pred$lwr %>% min(), pred$upr %>% max()))
-points(siteCoef_trimmed$cwd.spstd,siteCoef_trimmed$estimate_cwd.an,col = 'gray', pch=18)
 polygon(c(cwd.x,rev(cwd.x)),c(pred$lwr,rev(pred$upr)),col=rgb(t(col2rgb("#0dcfca")),max=255,alpha=70),border=NA)
 
 
