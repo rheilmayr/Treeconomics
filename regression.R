@@ -42,6 +42,8 @@ df <- df %>%
 df <- df %>%
   mutate(pet.an = cwd.an + aet.an)
 
+sp_details <- read.csv(paste0(wdir, 'species_list_jd.csv'))
+
 ### Calculate site historic average aet, cwd and pet
 site_clim <- df %>%
   filter(year < 1980) %>%                                                                      ## Switch to raw climate data rather than using tree dataframe
@@ -81,10 +83,20 @@ df_trim=df_trim%>%
 complete_df <- df_trim %>%
   drop_na(c("cwd.an","aet.an","pet.an", "ring_width"))
 
+
 site_summary <- complete_df %>% 
   select("site_id", "species_id", "species_name", "cwd.ave", "pet.ave", "aet.ave") %>%
   distinct() %>%
   as_tibble()
+
+nobs <- complete_df %>%
+  group_by(site_id, species_id) %>%
+  summarise(nobs = n())
+            # ntrees = n_distinct(tree_id))
+
+site_summary <- site_summary %>%
+  merge(nobs, by = c('site_id', 'species_id'), all.x = TRUE) %>%
+  merge(sp_details, by = 'species_id', all.x = TRUE)
 
 #### Calculate standardized climate variables for each species ####
 site_summary <- site_summary %>%
@@ -122,22 +134,60 @@ siteCoef_trimmed <- siteCoef %>%
   mutate(cwd.qhigh=quantile(estimate_cwd.an,0.99,na.rm=T),
          cwd.qlow=quantile(estimate_cwd.an,0.01,na.rm=T),
          pet.qhigh=quantile(estimate_pet.an,0.99,na.rm=T),
-         pet.qlow=quantile(estimate_pet.an,0.01,na.rm=T))
+         pet.qlow=quantile(estimate_pet.an,0.01,na.rm=T)) %>%
+  ungroup()
 siteCoef_trimmed=siteCoef_trimmed %>%
   filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
          estimate_pet.an>pet.qlow & estimate_pet.an<pet.qhigh)
 
+# Add weighting variable
+siteCoef_trimmed <- siteCoef_trimmed %>%
+  mutate(errorweights = nobs / sum(nobs)) 
+
 
 ### Explore first stage ####
-mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, data= siteCoef)
-mod %>% summary()
-mod <- lm(estimate_pet.an ~ cwd.spstd + pet.spstd, data= siteCoef)
-mod %>% summary()
+ss_mod <- function(d) {
+  d <- d %>% mutate(errorweights = nobs / sum(nobs)) 
+  lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights=errorweights, data=d)
+}
 
-siteCoef <- siteCoef %>%
-  group_by("species_id") %>%
-  mutate(cwd.q = ntile(cwd.ave, 5))
-p <- siteCoef_trimmed %>% ggplot(aes(group=cwd.q, y=estimate_cwd.an)) + 
+ss_lm <- siteCoef_trimmed %>% 
+  group_by(biome) %>%
+  nest() %>%
+  mutate(mod = map(data, ss_mod),
+         mod = map(mod, tidy)) %>%
+  unnest(mod) %>%
+  filter(term %in% c('cwd.spstd'))
+
+mod_dat <- siteCoef_trimmed
+cwd.mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights=errorweights, data= mod_dat)
+cwd.mod %>% summary()
+
+pet.mod <- lm(estimate_pet.an ~ cwd.spstd + pet.spstd, weights=errorweights, data= siteCoef_trimmed)
+pet.mod %>% summary()
+
+cwd.x <- seq(-2, 2, length.out=50)
+pet.x <- seq(-2, 2, length.out=50)
+grid.x <- expand.grid(cwd.x, pet.x)
+
+pred <- predict(cwd.mod,data.frame(cwd.spstd=grid.x$Var1, pet.spstd = grid.x$Var2),interval="prediction",level=0.90)
+pred <- cbind(pred,grid.x)
+
+p <- pred %>% ggplot(aes(x = Var1, y = Var2, fill = fit)) +
+  geom_tile()
+p
+
+pred <- pred %>% as_tibble()
+plot(cwd.x, pred$fit, type="l",xlab="Historic CWD",ylab="Estimated effect of CWD",las=1,lwd=2,col="#0dcfca",
+     ylim = c(pred$lwr %>% min(), pred$upr %>% max()))
+points(siteCoef_trimmed$cwd.spstd,siteCoef_trimmed$estimate_cwd.an,col = 'gray', pch=18)
+polygon(c(cwd.x,rev(cwd.x)),c(pred$lwr,rev(pred$upr)),col=rgb(t(col2rgb("#0dcfca")),max=255,alpha=70),border=NA)
+
+
+plot_dat <- siteCoef_trimmed %>%
+  filter(family == "Pinaceae") %>%
+  mutate(cwd.q = as.factor(ntile(cwd.spstd, 5)))
+p <- plot_dat %>% ggplot(aes(x=cwd.q, y=estimate_cwd.an)) + 
   geom_boxplot()
 p
 
@@ -158,8 +208,8 @@ siteCoef_trimmed <- siteCoef_trimmed %>%
          pet.high = as.factor(ntile(pet.spstd, 2)-1),
          climate = paste0('cwd', cwd.high, '_pet', pet.high))
 plotCoef <- siteCoef_trimmed %>%
-  filter(species_id == "pcgl") %>%
-    mutate(cwd.q = as.factor(ntile(cwd.spstd, 5)),
+  filter(family == "Pinaceae") %>%
+  mutate(cwd.q = as.factor(ntile(cwd.spstd, 5)),
          pet.q = as.factor(ntile(pet.spstd, 5)),
          aet.q = as.factor(ntile(aet.spstd, 5)),
          cwd.high = as.factor(ntile(cwd.spstd, 2)-1),
@@ -199,7 +249,7 @@ p
 
 
 p <- plotCoef %>% ggplot(aes(x=aet.ave, y=cwd.ave, colour = estimate_cwd.an)) +
-  geom_point() 
+  geom_point() + scale_color_manual(values="greys")
 p
 
 + scale_colour_brewer(palette = "Greens")
@@ -209,10 +259,7 @@ lm(estimate_cwd.an ~ cwd.spstd + I(cwd.spstd),weights=errorweights,data= .)
 
 
 
-# ### TEMP - KEEP ALL TO KEEP JUNIPER
-# siteCoef_trimmed <- siteCoef
-
-# Calculate limits for each species
+# Calculate limits
 xlim.sp=site_summary %>%
   group_by(species_name) %>%
   mutate(cwd.qhigh = quantile(cwd.ave,0.95),
