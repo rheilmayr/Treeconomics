@@ -16,9 +16,11 @@ select <- dplyr::select
 
 
 ### Define path
-wdir = 'D:/cloud/Google Drive/Treeconomics/Data/'
+#wdir = 'D:/cloud/Google Drive/Treeconomics/Data/'
 #for Fran
 # wdir="C:/Users/fmoor/Google Drive/Treeconomics/Data/"
+#for Joan
+wdir = "~/Google Drive/Treeconomics/Data/"
 setwd(wdir)
 
 ### Plotting parameters
@@ -29,7 +31,7 @@ pal=colorRampPalette(c('white','blue','yellow','red','darkred'))
 # speciesnames=c("Douglas Fir","Ponderosa Pine","Scotch Pine",
 #                "White Spruce","Norway Spruce","Colorado Pinyon")
 
-df <- read.csv(paste0(wdir,'species_data.csv'))
+df <- read_csv(paste0(wdir,'species_data.csv'))
 df <- df %>%
   mutate(tree_id = paste0(site_id, tree_id))
 df <- df %>%
@@ -183,19 +185,51 @@ hex
 
 ## Plot estimates by historic cwd / pet - would be awesome to combine these and make prettier
 plot_dat <- siteCoef_trimmed
-coef_plot1 <- plot_dat %>% ggplot(aes(x = cwd.spstd, y = pet.spstd, z = estimate_pet.an, weight = nobs)) +
+coef_plot1 <- 
+  plot_dat %>% 
+  ggplot(aes(x = cwd.spstd, y = pet.spstd, 
+             z = estimate_pet.an, weight = nobs)) +
   stat_summary_hex() +
-  xlim(c(-1.5, 1.5)) +
-  ylim(c(-1.5, 1.5))
+  xlim(c(-3, 4)) +
+  #ylim(c(-1.5, 1.5))+
+  scale_fill_gradientn (colours = c("darkblue","lightblue", "lightgrey")) +
+  theme_bw()+
+  ylab("Deviation from mean PET")+
+  xlab("Deviation from mean CWD")+
+  theme(legend.title = element_blank(),
+        legend.position = "bottom")
+
 coef_plot1 
 
 coef_plot2 <- plot_dat %>% ggplot(aes(x = cwd.spstd, y = estimate_cwd.an, weight = nobs)) +
-  stat_summary_bin(bins = 20)
+  stat_summary_bin(bins = 20)+
+  theme_bw()+
+  xlim(-3, 4)+
+  ylab("Estimate CWD")+
+  xlab("Deviation from mean CWD")
+
+
 coef_plot2
 
 coef_plot3 <- plot_dat %>% ggplot(aes(x = pet.spstd, y = estimate_cwd.an, weight = nobs)) +
-  stat_summary_bin(bins = 20)
+  stat_summary_bin(bins = 20)+
+  xlim(-3,4)+
+  xlab("Deviation from mean PET")+
+  ylab("Estimate CWD")+
+  theme_bw()+
+  rotate()
+  
 coef_plot3
+coef_plot1/coef_plot2
+
+library(ggpubr)
+
+ggarrange(coef_plot2, NULL,coef_plot1, coef_plot3, 
+          ncol = 2, nrow = 2,  align = "hv", 
+          widths = c(2, 1), heights = c(1, 2),
+          common.legend = T)
+
+
 
 
 ## Plot prediction along one axis
