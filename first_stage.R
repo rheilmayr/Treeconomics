@@ -156,40 +156,4 @@ for (i in 1:length(sp_list)) {
 }
 
 full_df = bind_rows(df_list)
-
-
-
-##### Illustrate second stage
-# Remove extreme outliers
-siteCoef_trimmed <- full_df %>%
-  group_by(species_id) %>%
-  mutate(cwd.qhigh=quantile(estimate_cwd.an,0.99,na.rm=T),
-         cwd.qlow=quantile(estimate_cwd.an,0.01,na.rm=T),
-         pet.qhigh=quantile(estimate_pet.an,0.99,na.rm=T),
-         pet.qlow=quantile(estimate_pet.an,0.01,na.rm=T)) %>%
-  ungroup()
-siteCoef_trimmed=siteCoef_trimmed %>%
-  filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
-         estimate_pet.an>pet.qlow & estimate_pet.an<pet.qhigh)
-
-# Define model
-ss_mod <- function(d) {
-  d <- d %>% mutate(errorweights = nobs / sum(nobs)) 
-  mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd + factor(species_id), weights=errorweights, data=d)
-  return(mod)
-}
-
-# Subset to species with sufficient plots to characterize climate niche
-sp_count <- full_df %>%
-  group_by(species_id) %>%
-  summarise(sites_per_sp = n_distinct(site_id))
-keep_sp <- sp_count %>%
-  filter(sites_per_sp > 40) %>%
-  pull(species_id)
-
-# Run model
-mod_dat <- siteCoef_trimmed %>%
-  filter(species_id %in% keep_sp)
-cwd.mod <- mod_dat %>% ss_mod()
-cwd.mod %>% summary()
-
+write.csv(full_df, paste0(wdir, "first_stage.csv"))
