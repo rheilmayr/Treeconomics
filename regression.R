@@ -37,7 +37,7 @@ df <- df %>%
 
 sp_details <- read.csv(paste0(wdir, 'species_list_jd.csv'))
 
-### Calculate site historic average aet, cwd and pet
+### Calculate site historic average aet, cwd and pet  - NOTE - IS THIS WEIGHTING BY NUMBER OF OBS?
 site_clim <- df %>%
   filter(year < 1980) %>%                                                                      ## Switch to raw climate data rather than using tree dataframe
   group_by(site_id, year) %>%
