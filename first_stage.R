@@ -1,3 +1,5 @@
+#devtools::install_github("tidyverse/tidyr") #if necessary for pivot_wider function
+library(tidyr)
 library(tidyverse)
 library(dbplyr)
 library(RSQLite)
@@ -13,7 +15,7 @@ library(purrr)
 # Define path
 wdir = 'D:/cloud/Google Drive/Treeconomics/Data/'
 # #for Fran
-# wdir="C:/Users/fmoor/Google Drive/Treeconomics/Data/"
+wdir="C:/Users/fmoore/Google Drive/Treeconomics/Data/"
 tree_db = paste0(wdir, 'tree_ring_data_V2.db')
 cwd_csv = paste0(wdir, 'essentialcwd_data.csv')
 
@@ -30,7 +32,10 @@ obs_db = tbl(conn, 'observations_new')
 
 # Define regression model for first stage
 fit_mod <- function(d) {
-  felm(ring_width ~ cwd.an + pet.an + age+I(age^2)+I(age^3)+I(age^4)|tree_id|0|0, data = d )
+  felm(ring_width ~ cwd.an + pet.an + age+I(age^2)+I(age^3)+I(age^4)|tree_id|0|tree_id+year, data = d )
+}
+getcov <- function(m){
+  return(m$vcv[2,1])
 }
 
 # Load site climate data
@@ -88,9 +93,10 @@ for (i in 1:length(sp_list)) {
     mutate(tree_id = paste0(site_id, tree_id))
   
   # Remove trees with negative ages
-  print(paste0(sp_id, " - dropping observations due to invalid age: ",(df_trim$age <=0) %>% sum()))
   df_trim <- obs %>%
     filter(age>0)
+  print(paste0(sp_id, " - dropping observations due to invalid age: ",(df_trim$age <=0) %>% sum()))
+  
   
   # Remove trees with a very short record (<5 years)
   treeobs=df_trim %>%
@@ -129,8 +135,9 @@ for (i in 1:length(sp_list)) {
     group_by(site_id, species_id) %>%
     nest() %>%
     mutate(mod = map(data, fit_mod),
+           cwd.pet.cov = map(mod, getcov),
            mod = map(mod, tidy)) %>%
-    unnest(mod) %>%
+    unnest(mod,cwd.pet.cov) %>%
     filter(term %in% c('cwd.an', 'pet.an'))
   
   siteCoef <- site_lm %>%

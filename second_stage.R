@@ -6,13 +6,14 @@ library(purrr)
 library(patchwork)
 library(ggpubr)
 library(ggiraphExtra)
+library(hexbin)
 select <- dplyr::select
 
 
 ### Define path
 wdir = 'D:/cloud/Google Drive/Treeconomics/Data/'
 #for Fran
-# wdir="C:/Users/fmoor/Google Drive/Treeconomics/Data/"
+# wdir="C:/Users/fmoore/Google Drive/Treeconomics/Data/"
 #for Joan
 # wdir = "~/Google Drive/Treeconomics/Data/"
 setwd(wdir)
@@ -58,14 +59,14 @@ cwd.mod %>% summary()
 
 
 #### Generate plots  ####
-site_summary <- siteCoef_trimmed
+site_summary <- trim_df
 ## Summary plot of sample distribution
 hex <- site_summary %>% ggplot(aes(x = cwd.spstd, y = pet.spstd, weight = nobs)) +
   geom_hex()
 hex
 
 ## Plot estimates by historic cwd / pet - would be awesome to combine these and make prettier
-plot_dat <- siteCoef_trimmed
+plot_dat <- trim_df
 coef_plot1 <- 
   plot_dat %>% 
   ggplot(aes(x = cwd.spstd, y = pet.spstd, 
@@ -139,7 +140,7 @@ p
 
 
 ## Boxplots of effects by cwd / pet bins
-plot_dat <- siteCoef_trimmed %>%
+plot_dat <- trim_df %>%
   group_by("species_id") %>%
   mutate(cwd.q = as.factor(ntile(cwd.ave, 5)),
          pet.q = as.factor(ntile(pet.ave, 5)),
