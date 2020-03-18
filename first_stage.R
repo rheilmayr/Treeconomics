@@ -48,18 +48,22 @@ clim_df = cwd_df %>%
   group_by(site_id, year) %>%
   summarise(aet.an = sum(aet),
             cwd.an = sum(cwd),
-            pet.an = sum(petm))
+            pet.an = sum(petm),
+            temp.an = mean(tmean),
+            ppt.an = sum(ppt))
 hist_clim_df <- clim_df %>%
   group_by(site_id) %>%
   filter(year<1980) %>%
   summarise(aet.ave = mean(aet.an),
             cwd.ave = mean(cwd.an),
-            pet.ave = mean(pet.an))
+            pet.ave = mean(pet.an),
+            temp.ave = mean(temp.an),
+            ppt.ave = mean(ppt.an))
 
 # Create list of species
 sp_list <- spp_db %>%
   pull(species_id)
-sp_id <- sp_list[1]
+sp_id <- "psme"
 
 df_list = list()
 for (i in 1:length(sp_list)) {
@@ -157,7 +161,9 @@ for (i in 1:length(sp_list)) {
   site_df <- site_df %>%
     mutate(cwd.spstd = scale(cwd.ave)[,1],
            aet.spstd = scale(aet.ave)[,1],
-           pet.spstd = scale(pet.ave)[,1])
+           pet.spstd = scale(pet.ave)[,1],
+           ppt.spstd = scale(ppt.ave)[,1],
+           temp.spstd = scale(temp.ave)[,1])
 
   df_list[[i]] <- site_df
 }
