@@ -6,13 +6,16 @@ library(RSQLite)
 library(lfe)
 library(broom)
 library(purrr)
+library(future)
+library(furrr)
 library(dplR)
 
+future::plan(multiprocess)
 
 # Define path
 wdir = 'D:/cloud/Google Drive/Treeconomics/Data/'
 # #for Fran
-wdir="C:/Users/fmoore/Google Drive/Treeconomics/Data/"
+# wdir="C:/Users/fmoore/Google Drive/Treeconomics/Data/"
 tree_db = paste0(wdir, 'tree_ring_data_V2.db')
 cwd_csv = paste0(wdir, 'essentialcwd_data.csv')
 
@@ -27,175 +30,295 @@ spp_db = as.data.frame(tbl(conn,'species'))
 site_db = as.data.frame(tbl(conn, "sites"))
 obs_db = tbl(conn, 'observations_new')
 
-# Define regression model for first stage
-fit_mod <- function(d) {
-  felm(ring_width ~ cwd.an + pet.an + age+I(age^2)+I(age^3)+I(age^4)|tree_id|0|tree_id+year, data = d )
-}
-
-getcov <- function(m){
-  return(m$vcv[2,1])
-}
+# Create index of site-species combinations
+sites <- tree_db %>%
+  select(species_id, site_id) %>%
+  distinct() %>%
+  collect()
 
 
-fit_mod <- function(d) {
-  felm(crn ~ cwd.an + pet.an |0|0|year, data = d )
-}
+### DATA QUALITY NOTES:
+### Several sites incorrectly parsed. Part of early year year variable has been added to tree_id
+sites <- sites %>%
+  # filter(!site_id %in% c("101 1", "kr", "rm0std", "gm0", "l18", "nl", "yks"))
 
 
+pull_rwl <- function(s_id, sp_id){
+  # Identify trees in site / species combination
+  tree_ids = tree_db %>%
+    filter(species_id == sp_id,
+           site_id == s_id) %>%
+    select('tree_id')
+  
+  # Pull observations of identified trees
+  obs = obs_db %>%
+    filter(site_id == s_id,
+           tree_id %in% local(tree_ids$tree_id)) %>%
+    arrange(tree_id, desc(year)) %>%
+    collect()
 
-# Test traditional dendro de-trending
-create_crn <- function(site_dat) {
-  site_dat <- site_dat %>%
+  obs <- obs %>%  ### TODO: ADD CHECK FOR WIDTHS >1000
     arrange(year) %>%
     mutate(year = as.character(year)) %>%
     select(tree_id, year, ring_width) 
-  any_duplicates <- site_dat %>%
+  
+  # Check for invalid duplicates in site-species-year
+  any_duplicates <- obs %>%
     select(tree_id, year) %>%
     duplicated() %>%
     any()
   if (any_duplicates) {
-    # sid <- site_dat %>% pull(site_id) %>% nth(1)
-    # print(paste0("Duplicate site-year combinations; skipping site: ", sid))
+    print(paste0("Duplicate site-species-year combinations; skipping site-species: ", s_id, " - ", sp_id))
     return(NaN)
   } else {
-    site_dat <- site_dat %>%
+    obs <- obs %>%
       pivot_wider(names_from = tree_id, values_from = ring_width) %>%
       column_to_rownames("year")
-    rwl_dat <- site_dat %>% as.rwl()
-    rwl_dat %>% rwl.report()
-    rwi_dat <- rwl_dat %>%
-      detrend(method = "Spline")
-    crn_dat <- rwi_dat %>% 
-      chron(prefix = "CRN")
-    return(crn_dat)
-  }
-}
-
-
-# Load site climate data
-cwd_df <- read.csv(cwd_csv, sep=',')
-cwd_df <- cwd_df %>% 
-  mutate("site_id" = as.character(site)) %>%
-  select(-site)
-
-clim_df = cwd_df %>%
-  group_by(site_id, year) %>%
-  summarise(aet.an = sum(aet),
-            cwd.an = sum(cwd),
-            pet.an = sum(petm),
-            temp.an = mean(tmean),
-            ppt.an = sum(ppt))
-hist_clim_df <- clim_df %>%
-  group_by(site_id) %>%
-  filter(year<1980) %>%
-  summarise(aet.ave = mean(aet.an),
-            cwd.ave = mean(cwd.an),
-            pet.ave = mean(pet.an),
-            temp.ave = mean(temp.an),
-            ppt.ave = mean(ppt.an))
-
-# Create list of species
-sp_list <- spp_db %>%
-  pull(species_id)
-sp_id <- "psme"
-
-df_list = list()
-for (i in 1:length(sp_list)) {
-  sp_id = sp_list[i]
-
-  # ID trees from selected species
-  tree_ids = tree_db %>%
-    filter(species_id == sp_id) %>%
-    select('tree_id') %>%
-    collect()
-  
-  # Pull observations of identified trees
-  obs = obs_db %>%
-    filter(tree_id %in% local(tree_ids$tree_id)) %>%
-    arrange(tree_id, desc(year)) %>%
-    collect()
-  
-  obs_crn <- obs %>%
-    group_by(site_id) %>%
-    nest() %>%
-    summarise(crn = map(data, possibly(create_crn, otherwise = NaN))) ### NOTE: Several sites can't generate chronologies because of lack of observations, or interrupted time series
-  
-  # crn_dat %>% plot(add.spline=TRUE, nyrs=20)
-  
-  crn_list <- list()
-  n_dropped = 0
-  for (i in 1:dim(obs_crn)[1]){
-    sid <- obs_crn$site_id[[i]]
-    crn_df <- obs_crn %>% 
-      pull(crn) %>% 
-      nth(i)
-    if (!crn_df %>% is.list()){
-      n_dropped <- n_dropped + 1
-      print(paste0(sid, ": site dropped due to unprocessed chronology"))
-    } else {
-      crn_df <- crn_df %>%
-        select(crn = CRNstd) %>%
-        rownames_to_column("year") %>%
-        mutate(year = as.integer(year),
-               "site_id" = sid)
-      crn_df <- crn_df %>%
-        inner_join(clim_df, by = c("site_id", "year"))
-      crn_list[[i]] <- crn_df
-    }
-  }
-  print(paste0("Total sites dropped due to unprocessed chronology: ", n_dropped))
-  crn_df <- bind_rows(crn_list)
-
-  if (dim(crn_df)[1]==0) {
-    print(paste0("No valid sites for: ", sp_id))
-    next
-  }
-  
-  site_lm <- crn_df %>%
-    group_by(site_id) %>%
-    nest() %>%
-    mutate(mod = map(data, possibly(fit_mod, otherwise = NaN))) %>%
-    filter(!is.na(mod)) %>% 
-    mutate(cwd.pet.cov = map(mod, possibly(getcov, otherwise = NaN)),
-           mod = map(mod, tidy)) %>%
-    unnest(mod,cwd.pet.cov) %>%
-    filter(term %in% c('cwd.an', 'pet.an'))
-
-  if (dim(site_lm)[1]==0) {
-    print(paste0("No valid sites for: ", sp_id))
-    next
-  }
     
-  siteCoef <- site_lm %>%
-    pivot_wider(names_from = "term", values_from = c("estimate", "std.error", "statistic", "p.value")) %>%
-    select(-data)
+    tryCatch(
+      expr = {
+        rwl_dat <- obs %>% as.rwl()
+      },
+      error = function(e){ 
+        message("Returned error on site ", s_id)
+        print(e)
+        return(NaN)
+      }
+    )
   
-  # Attach climate, nobs and ntrees for each site
-  site_df <- obs %>%
-    select(c("site_id")) %>%
-    distinct() %>%
-    left_join(hist_clim_df, by = c("site_id")) %>%
-    left_join(siteCoef, by = c("site_id")) 
-  # %>%
-    # left_join(nobs, by = c("site_id", "species_id")) %>%
-    # left_join(ntrees, by = c("site_id", "species_id"))
-
-  site_df$species_id <- sp_id
-  
-  # Calculate standardized historic climate relative to species mean / std
-  site_df <- site_df %>%
-    mutate(cwd.spstd = scale(cwd.ave)[,1],
-           aet.spstd = scale(aet.ave)[,1],
-           pet.spstd = scale(pet.ave)[,1],
-           ppt.spstd = scale(ppt.ave)[,1],
-           temp.spstd = scale(temp.ave)[,1])
-
-  df_list[[i]] <- site_df
+    tryCatch(
+      expr = {
+        rwl_report <- rwl.report(rwl_dat)
+        internal_na <- rwl.report(rwl_dat)
+        internal_na <- internal_na[14][1]$internalNAs
+      },
+      error = function(e){ 
+        message("Warning on site ", s_id)
+        print(e)
+        return(NaN)
+      }
+    )
+    print(paste0(s_id, " - ", sp_id))    
+    # For series with internal NAs, drop old observations prior to NA
+    if (length(internal_na)>0){
+      na_trees <- internal_na %>% names()
+      for (t in 1:length(na_trees)) {
+        na_tree <- na_trees[t]
+        last_na <- max(unlist(internal_na[t]))
+        na_years <- (rwl_dat %>% row.names()) <= last_na
+        rwl_dat <- rwl_dat %>%
+          mutate(!!na_tree := na_if(na_years, na_tree))
+      }
+      rwl_dat <- rwl_dat %>% as.rwl()
+    }
+  return(rwl_dat)
+  }
 }
 
-full_df = bind_rows(df_list)
-write.csv(full_df, paste0(wdir, "first_stage.csv"))
+detrend_rwl <- function(rwl_dat) {
+  rwi_dat <- rwl_dat %>%
+    detrend(method = "Spline", make.plot = FALSE, verbose = FALSE) # uses a spline that is 0.67 the series length
+  return(rwi_dat)
+}
+
+create_crn <- function(rwi_dat){
+  crn_dat <- rwi_dat %>% 
+    chron(prefix = "CRN", prewhiten = TRUE) %>%
+    select(CRNres) %>%
+    rownames_to_column("year") %>%
+    as_tibble()
+  return(crn_dat)
+}
+
+process_dendro <- function(s_id, sp_id) {
+  rwl_dat <- pull_rwl(s_id, sp_id)
+  if (rwl_dat %>% is.na()) {
+    return(NaN)
+  } else{
+    rwi_dat <- rwl_dat %>% detrend_rwl()
+    crn_dat <- rwi_dat %>% create_crn()
+    # Diagnostic plots
+    # rwl_dat %>% rwl.report()
+    # rwl_dat %>% plot.rwl()
+    # crn_dat %>% plot()
+    # print(paste0("Successfully processed chronology for: ", s_id, sp_id))
+    return(crn_dat)  
+  }
+}
+
+sites$crn <- map2(sites$site_id, sites$species_id, process_dendro) 
+valid_sites <- sites %>% 
+  filter(!crn %>% is.na())
 
 
-mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, data=full_df)
-mod %>% summary()
+
+# s_id <- sites %>% pull(site_id) %>% nth(i)
+# sp_id <- sites %>% pull(species_id) %>% nth(i)
+# crn_dat <- process_dendro(s_id, sp_id)
+# 
+# sites <- sites %>%
+#   filter(!site_id %in% c("101 1", "kr", "rm0std", "gm0", "l18", "nl", "cibola", "rah", "yks", 
+#                          "obb", "q 3qr0"))
+
+
+
+# test_sites <- sites[1:100,]
+crn_list <- list()
+for (i in 1:dim(sites)[1]){
+  s_id <- sites %>% pull(site_id) %>% nth(i)
+  sp_id <- sites %>% pull(species_id) %>% nth(i)
+  rwl_dat <- pull_rwl(s_id, sp_id)
+  if (rwl_dat %>% is.na()) {
+    sites[i,3] <- NaN
+  } else{
+    rwi_dat <- rwl_dat %>% detrend_rwl()
+    crn_dat <- rwi_dat %>% create_crn()
+    crn_list <- cbind(crn_list, crn_dat)
+    }
+  print(i)
+}
+
+
+# test_sites$crn <- future_map2(test_sites$site_id, test_sites$species_id, 
+#                               process_dendro)
+
+# 
+#   # check for sufficient trees
+#   n_trees <- tree_ids %>% n_distinct
+#   if (n_trees<5){
+#     print(paste0("Too few trees for site-species combination: ", s_id, sp_id))
+#     next
+#   }
+#   
+#   # check for 
+#   
+# }
+#   
+# 
+# }  
+#   ,
+#               crn = map(data, possibly(create_crn, otherwise = NaN))) ### NOTE: Several sites can't generate chronologies because of lack of observations, or interrupted time series
+#   
+#   # crn_dat %>% plot(add.spline=TRUE, nyrs=20)
+#   if (dim(obs_crn)[1]==0) {
+#     print(paste0("No valid sites for: ", sp_id))
+#     next
+#   }
+# 
+# 
+# # Define regression model for first stage
+# fit_mod <- function(d) {
+#   felm(ring_width ~ cwd.an + pet.an + age+I(age^2)+I(age^3)+I(age^4)|tree_id|0|tree_id+year, data = d )
+# }
+# 
+# getcov <- function(m){
+#   return(m$vcv[2,1])
+# }
+# 
+# 
+# fit_mod <- function(d) {
+#   felm(crn ~ cwd.an + pet.an |0|0|year, data = d )
+# }
+# 
+# 
+# # Load site climate data
+# cwd_df <- read.csv(cwd_csv, sep=',')
+# cwd_df <- cwd_df %>% 
+#   mutate("site_id" = as.character(site)) %>%
+#   select(-site)
+# 
+# clim_df = cwd_df %>%
+#   group_by(site_id, year) %>%
+#   summarise(aet.an = sum(aet),
+#             cwd.an = sum(cwd),
+#             pet.an = sum(petm),
+#             temp.an = mean(tmean),
+#             ppt.an = sum(ppt))
+# hist_clim_df <- clim_df %>%
+#   group_by(site_id) %>%
+#   filter(year<1980) %>%
+#   summarise(aet.ave = mean(aet.an),
+#             cwd.ave = mean(cwd.an),
+#             pet.ave = mean(pet.an),
+#             temp.ave = mean(temp.an),
+#             ppt.ave = mean(ppt.an))
+# 
+# 
+#   
+#   crn_list <- list()
+#   n_dropped = 0
+#   for (i in 1:dim(obs_crn)[1]){
+#     sid <- obs_crn$site_id[[i]]
+#     crn_df <- obs_crn %>% 
+#       pull(crn) %>% 
+#       nth(i)
+#     if (!crn_df %>% is.list()){
+#       n_dropped <- n_dropped + 1
+#       print(paste0(sid, ": site dropped due to unprocessed chronology"))
+#     } else {
+#       crn_df <- crn_df %>%
+#         select(crn = CRNstd) %>%
+#         rownames_to_column("year") %>%
+#         mutate(year = as.integer(year),
+#                "site_id" = sid)
+#       crn_df <- crn_df %>%
+#         inner_join(clim_df, by = c("site_id", "year"))
+#       crn_list[[i]] <- crn_df
+#     }
+#   }
+#   print(paste0("Total sites dropped due to unprocessed chronology: ", n_dropped))
+#   crn_df <- bind_rows(crn_list)
+# 
+#   if (dim(crn_df)[1]==0) {
+#     print(paste0("No valid sites for: ", sp_id))
+#     next
+#   }
+#   
+#   site_lm <- crn_df %>%
+#     group_by(site_id) %>%
+#     nest() %>%
+#     mutate(mod = map(data, possibly(fit_mod, otherwise = NaN))) %>%
+#     filter(!is.na(mod)) %>% 
+#     mutate(cwd.pet.cov = map(mod, possibly(getcov, otherwise = NaN)),
+#            mod = map(mod, tidy)) %>%
+#     unnest(mod,cwd.pet.cov) %>%
+#     filter(term %in% c('cwd.an', 'pet.an'))
+# 
+#   if (dim(site_lm)[1]==0) {
+#     print(paste0("No valid sites for: ", sp_id))
+#     next
+#   }
+#     
+#   siteCoef <- site_lm %>%
+#     pivot_wider(names_from = "term", values_from = c("estimate", "std.error", "statistic", "p.value")) %>%
+#     select(-data)
+#   
+#   # Attach climate, nobs and ntrees for each site
+#   site_df <- obs %>%
+#     select(c("site_id")) %>%
+#     distinct() %>%
+#     left_join(hist_clim_df, by = c("site_id")) %>%
+#     left_join(siteCoef, by = c("site_id")) 
+#   # %>%
+#     # left_join(nobs, by = c("site_id", "species_id")) %>%
+#     # left_join(ntrees, by = c("site_id", "species_id"))
+# 
+#   site_df$species_id <- sp_id
+#   
+#   # Calculate standardized historic climate relative to species mean / std
+#   site_df <- site_df %>%
+#     mutate(cwd.spstd = scale(cwd.ave)[,1],
+#            aet.spstd = scale(aet.ave)[,1],
+#            pet.spstd = scale(pet.ave)[,1],
+#            ppt.spstd = scale(ppt.ave)[,1],
+#            temp.spstd = scale(temp.ave)[,1])
+# 
+#   df_list[[i]] <- site_df
+# }
+# 
+# full_df = bind_rows(df_list)
+# write.csv(full_df, paste0(wdir, "first_stage.csv"))
+# 
+# full_df
+# mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, data=full_df)
+# mod %>% summary()
