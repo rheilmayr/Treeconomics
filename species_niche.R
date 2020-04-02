@@ -6,7 +6,7 @@ library(rnaturalearth)
 library(rnaturalearthdata)
 library(sf)
 library(rgeos)
-library(stringi)
+library(stringr)
 
 # Define path
 wdir = 'D:/cloud/Google Drive/Treeconomics/Data/'
@@ -27,13 +27,15 @@ tree_db = as.data.frame(tbl(conn, 'trees'))
 site_db = as.data.frame(tbl(conn, "sites"))
 obs_df$geom <- st_sfc(obs_df$decimalLatitude, obs_df$decimalLongitude)
 
+# Explore itrdb species frequency
 spp_lookup <- read.csv(paste0(wdir, "itrdb_species_list.csv"))
 spp_lookup <- spp_lookup %>%
   mutate(spp = paste0(genus, " ", species),
-         code = str_replace_all(code, "*", "")) %>%
-  arrange(spp)
+         code = tolower(str_replace_all(code, "[*]", "")),
+         ncode = nchar(code)) %>%
+  arrange(spp) %>%
+  as_tibble()
 
-# Explore itrdb species frequency
 itrdb_species <- species_db %>%
   arrange(species_id)
 
@@ -42,6 +44,10 @@ site_count <- tree_db %>%
   distinct() %>%
   count(species_id) %>%
   arrange(desc(n))
+
+site_count <- site_count %>%
+  left_join(spp_lookup, by = c("species_id" = "code"))
+# write_csv(site_count, paste0(wdir, "spp_site_count.csv"))
 
 # Define species
 spp <- "Pseudotsuga menziesii"
