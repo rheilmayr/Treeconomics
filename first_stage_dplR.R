@@ -43,7 +43,6 @@ sites_select <- sites[1:20,]
 # ### Several sites incorrectly parsed. Part of early year year variable has been added to tree_id
 # sites <- sites %>%
 #   filter(site_id %in% c("101 1", "kr", "rm0std", "gm0", "l18", "nl", "yks"))
-#   # filter(!site_id %in% c("101 1", "kr", "rm0std", "gm0", "l18", "nl", "yks"))
 # 
 # s_id <- "101 1"
 # tree_db %>% filter(site_id == s_id)
@@ -149,6 +148,8 @@ pull_rwl <- function(s_id, sp_id){
     pivot_wider(names_from = tree_id, values_from = ring_width) %>%
     column_to_rownames("year")
   
+  failed <- F
+  
   # Check for invalid data that can't be converted to rwl
   tryCatch(
     expr = {
@@ -157,10 +158,10 @@ pull_rwl <- function(s_id, sp_id){
     error = function(e){ 
       message("Returned error on site ", s_id)
       print(e)
-      rwl_dat <- NaN
+      failed <<- T
     }
   )
-  if (is.na(rwl_dat)){
+  if (failed){
     return(NaN)
   }
   
@@ -174,10 +175,10 @@ pull_rwl <- function(s_id, sp_id){
     error = function(e){
       message("Warning on site ", s_id)
       print(e)
-      rwl_report <- NaN
+      failed <<- T
     }
   )
-  if (all(is.na(rwl_report))){
+  if (failed){
     return(NaN)
   }
   
