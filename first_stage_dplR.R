@@ -6,9 +6,10 @@ library(RSQLite)
 library(lfe)
 library(broom)
 library(purrr)
-library(future)
-library(furrr)
 library(dplR)
+# library(future)
+# library(furrr)
+# library("tidylog", warn.conflicts = FALSE)
 
 future::plan(multiprocess)
 
@@ -36,14 +37,85 @@ sites <- tree_db %>%
   distinct() %>%
   collect()
 
+sites_select <- sites[1:20,]
 
-### DATA QUALITY NOTES:
-### Several sites incorrectly parsed. Part of early year year variable has been added to tree_id
-sites <- sites %>%
-  # filter(!site_id %in% c("101 1", "kr", "rm0std", "gm0", "l18", "nl", "yks"))
+# ### DATA QUALITY NOTES:
+# ### Several sites incorrectly parsed. Part of early year year variable has been added to tree_id
+# sites <- sites %>%
+#   filter(site_id %in% c("101 1", "kr", "rm0std", "gm0", "l18", "nl", "yks"))
+#   # filter(!site_id %in% c("101 1", "kr", "rm0std", "gm0", "l18", "nl", "yks"))
+# 
+# s_id <- "101 1"
+# tree_db %>% filter(site_id == s_id)
+# sp_id <- "abal"
+# obs <- pull_obs(s_id, sp_id)
+# 
+# 
+# #### Deal with incorrect parsing of year / tree_id (101 1)
+# tree_err <- function(x) {}
+#   (" 190" %in% x)
+# 
+# str_to_shift = " 190"
+# obs$errors <- lapply(obs$tree_id, function(x) str_detect(x, str_to_shift))
+# obs <- obs %>% 
+#   mutate(tree_id = if_else(errors==TRUE, str_replace(tree_id, " 190", ""), tree_id),
+#          tree_id = str_trim(tree_id, "both"),
+#          year = if_else(errors==TRUE, paste0("190", year), year))
+# ## Check if tree_ids don't match tree_db
+# db_trees <- tree_db %>%
+#   filter(site_id == s_id, species_id == sp_id) %>%
+#   distinct() %>%
+#   pull(tree_id)
+# n_obs <- dim(obs)[1]
+# obs_trees <- obs %>%
+#   distinct(tree_id) %>%
+#   pull(tree_id)
+# all(unlist(lapply(obs_trees, function(x) x %in% db_trees)))
+# 
+# 
+# pull_obs <- function(s_id, sp_id){
+#   # Identify trees in site / species combination
+#   tree_ids = tree_db %>%
+#     filter(species_id == sp_id,
+#            site_id == s_id) %>%
+#     select('tree_id')
+#   
+#   # Pull observations of identified trees
+#   obs = obs_db %>%
+#     filter(site_id == s_id,
+#            tree_id %in% local(tree_ids$tree_id)) %>%
+#     arrange(tree_id, desc(year)) %>%
+#     collect()
+#   
+#   obs <- obs %>%  
+#     arrange(year) %>%
+#     mutate(year = as.character(year)) %>%
+#     select(tree_id, year, ring_width) 
+# }
+# 
+# check_obs <- function(obs, s_id, sp_id){
+#   ## Check duplicates
+#   any_duplicates <- obs %>%
+#     select(tree_id, year) %>%
+#     duplicated() %>%
+#     any()
+#   if (any_duplicates) {
+#     return(NaN, "Error: Multiple obs for single tree_id / year combination")
+#   }
+#   
+#   ## Check for unusual ring widths
+#   if (any(obs$ring_width >100)) {
+#     return(NaN, "Error: Ring widths unusually large")
+#   }
+# 
+#   if (any(obs$ring_width <- 0.001)) {
+#     return(NaN, "Error: Ring widths unusually large")
+#   }  
+# }
 
 
 pull_rwl <- function(s_id, sp_id){
+  print(paste0(s_id, " - ", sp_id))    
   # Identify trees in site / species combination
   tree_ids = tree_db %>%
     filter(species_id == sp_id,
@@ -57,7 +129,7 @@ pull_rwl <- function(s_id, sp_id){
     arrange(tree_id, desc(year)) %>%
     collect()
 
-  obs <- obs %>%  ### TODO: ADD CHECK FOR WIDTHS >1000
+  obs <- obs %>%  
     arrange(year) %>%
     mutate(year = as.character(year)) %>%
     select(tree_id, year, ring_width) 
@@ -68,51 +140,60 @@ pull_rwl <- function(s_id, sp_id){
     duplicated() %>%
     any()
   if (any_duplicates) {
-    print(paste0("Duplicate site-species-year combinations; skipping site-species: ", s_id, " - ", sp_id))
+    print(paste0("Duplicate tree-year combinations; skipping site-species: ", s_id, " - ", sp_id))
+    e = "Duplicate tree-year observations"
     return(NaN)
-  } else {
-    obs <- obs %>%
-      pivot_wider(names_from = tree_id, values_from = ring_width) %>%
-      column_to_rownames("year")
-    
-    tryCatch(
-      expr = {
-        rwl_dat <- obs %>% as.rwl()
-      },
-      error = function(e){ 
-        message("Returned error on site ", s_id)
-        print(e)
-        return(NaN)
-      }
-    )
-  
-    tryCatch(
-      expr = {
-        rwl_report <- rwl.report(rwl_dat)
-        internal_na <- rwl.report(rwl_dat)
-        internal_na <- internal_na[14][1]$internalNAs
-      },
-      error = function(e){ 
-        message("Warning on site ", s_id)
-        print(e)
-        return(NaN)
-      }
-    )
-    print(paste0(s_id, " - ", sp_id))    
-    # For series with internal NAs, drop old observations prior to NA
-    if (length(internal_na)>0){
-      na_trees <- internal_na %>% names()
-      for (t in 1:length(na_trees)) {
-        na_tree <- na_trees[t]
-        last_na <- max(unlist(internal_na[t]))
-        na_years <- (rwl_dat %>% row.names()) <= last_na
-        rwl_dat <- rwl_dat %>%
-          mutate(!!na_tree := na_if(na_years, na_tree))
-      }
-      rwl_dat <- rwl_dat %>% as.rwl()
-    }
-  return(rwl_dat)
   }
+
+  obs <- obs %>%
+    pivot_wider(names_from = tree_id, values_from = ring_width) %>%
+    column_to_rownames("year")
+  
+  # Check for invalid data that can't be converted to rwl
+  tryCatch(
+    expr = {
+      rwl_dat <- obs %>% as.rwl()
+    },
+    error = function(e){ 
+      message("Returned error on site ", s_id)
+      print(e)
+      rwl_dat <- NaN
+    }
+  )
+  if (is.na(rwl_dat)){
+    return(NaN)
+  }
+  
+  # Check for invalid data that doesn't allow for rwl report
+  tryCatch(
+    expr = {
+      rwl_report <- rwl.report(rwl_dat)
+      internal_na <- rwl.report(rwl_dat)
+      internal_na <- internal_na[14][1]$internalNAs
+    },
+    error = function(e){
+      message("Warning on site ", s_id)
+      print(e)
+      rwl_report <- NaN
+    }
+  )
+  if (all(is.na(rwl_report))){
+    return(NaN)
+  }
+  
+  # For series with internal NAs, drop old observations prior to NA
+  if (length(internal_na)>0){
+    na_trees <- internal_na %>% names()
+    for (t in 1:length(na_trees)) {
+      na_tree <- na_trees[t]
+      last_na <- max(unlist(internal_na[t]))
+      na_years <- (rwl_dat %>% row.names()) <= last_na
+      rwl_dat <- rwl_dat %>%
+        mutate(!!na_tree := na_if(na_years, na_tree))
+    }
+    rwl_dat <- rwl_dat %>% as.rwl()
+  }
+  return(rwl_dat)
 }
 
 detrend_rwl <- function(rwl_dat) {
@@ -131,6 +212,7 @@ create_crn <- function(rwi_dat){
 }
 
 process_dendro <- function(s_id, sp_id) {
+  pb$tick()$print()
   rwl_dat <- pull_rwl(s_id, sp_id)
   if (rwl_dat %>% is.na()) {
     return(NaN)
@@ -146,10 +228,18 @@ process_dendro <- function(s_id, sp_id) {
   }
 }
 
+pb <- progress_estimated(dim(sites)[1])
 sites$crn <- map2(sites$site_id, sites$species_id, process_dendro) 
-valid_sites <- sites %>% 
-  filter(!crn %>% is.na())
+invalid_sites <- sites %>%
+  filter(crn%>% is.na()) %>%
+  as_tibble()
 
+valid_sites <- sites %>% 
+  filter(!crn %>% is.na()) %>%
+  as_tibble()
+
+valid_data <- valid_sites %>%
+  unnest()
 
 
 # s_id <- sites %>% pull(site_id) %>% nth(i)
