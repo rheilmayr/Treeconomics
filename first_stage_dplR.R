@@ -37,7 +37,7 @@ sites <- tree_db %>%
   distinct() %>%
   collect()
 
-sites_select <- sites[1:20,]
+# sites <- sites[1:20,]
 
 # ### DATA QUALITY NOTES:
 # ### Several sites incorrectly parsed. Part of early year year variable has been added to tree_id
@@ -240,8 +240,10 @@ valid_sites <- sites %>%
   as_tibble()
 
 valid_data <- valid_sites %>%
-  unnest()
+  unnest() %>%
+  drop_na()
 
+write.csv(valid_data, paste0(wdir, "clean_crn.csv"))
 
 # s_id <- sites %>% pull(site_id) %>% nth(i)
 # sp_id <- sites %>% pull(species_id) %>% nth(i)
@@ -250,26 +252,6 @@ valid_data <- valid_sites %>%
 # sites <- sites %>%
 #   filter(!site_id %in% c("101 1", "kr", "rm0std", "gm0", "l18", "nl", "cibola", "rah", "yks", 
 #                          "obb", "q 3qr0"))
-
-
-
-# test_sites <- sites[1:100,]
-crn_list <- list()
-for (i in 1:dim(sites)[1]){
-  s_id <- sites %>% pull(site_id) %>% nth(i)
-  sp_id <- sites %>% pull(species_id) %>% nth(i)
-  rwl_dat <- pull_rwl(s_id, sp_id)
-  if (rwl_dat %>% is.na()) {
-    sites[i,3] <- NaN
-  } else{
-    rwi_dat <- rwl_dat %>% detrend_rwl()
-    crn_dat <- rwi_dat %>% create_crn()
-    crn_list <- cbind(crn_list, crn_dat)
-    }
-  print(i)
-}
-
-
 # test_sites$crn <- future_map2(test_sites$site_id, test_sites$species_id, 
 #                               process_dendro)
 
