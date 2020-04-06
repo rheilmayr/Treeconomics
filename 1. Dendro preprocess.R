@@ -206,7 +206,7 @@ detrend_rwl <- function(rwl_dat) {
 create_crn <- function(rwi_dat){
   crn_dat <- rwi_dat %>% 
     chron(prefix = "CRN", prewhiten = TRUE) %>%
-    select(CRNstd, CRNres) %>%
+    # select(CRNstd, CRNres) %>%
     rownames_to_column("year") %>%
     as_tibble()
   return(crn_dat)
@@ -242,7 +242,7 @@ valid_data <- valid_sites %>%
   unnest() %>%
   drop_na()
 
-write.csv(valid_data, paste0(wdir, "clean_crn_nowhiten.csv"))
+write.csv(valid_data, paste0(wdir, "clean_crn.csv"))
 
 # s_id <- sites %>% pull(site_id) %>% nth(i)
 # sp_id <- sites %>% pull(species_id) %>% nth(i)
