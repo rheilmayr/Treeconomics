@@ -15,9 +15,10 @@ library(purrr)
 # Define path
 wdir = 'D:/cloud/Google Drive/Treeconomics/Data/'
 # #for Fran
-wdir="C:/Users/fmoore/Google Drive/Treeconomics/Data/"
+# wdir="C:/Users/fmoore/Google Drive/Treeconomics/Data/"
 tree_db = paste0(wdir, 'tree_ring_data_V2.db')
 cwd_csv = paste0(wdir, 'essentialcwd_data.csv')
+crn_csv = paste0(wdir, 'clean_crn.csv')
 
 # Connect to database
 sqlite <- dbDriver("SQLite")
@@ -28,11 +29,14 @@ tables = dbListTables(conn)
 tree_db = as.data.frame(tbl(conn, 'trees'))
 spp_db = as.data.frame(tbl(conn,'species'))
 site_db = as.data.frame(tbl(conn, "sites"))
-obs_db = tbl(conn, 'observations_new')
+# obs_db = tbl(conn, 'observations_new')
+crn_df <- read.csv(crn_csv, sep=',') %>%
+  select(-X)
+
 
 # Define regression model for first stage
 fit_mod <- function(d) {
-  felm(ring_width ~ cwd.an + pet.an + age+I(age^2)+I(age^3)+I(age^4)|tree_id|0|tree_id+year, data = d )
+  lm(CRNres ~ cwd.an + pet.an, data = d)
 }
 getcov <- function(m){
   return(m$vcv[2,1])
@@ -59,6 +63,54 @@ hist_clim_df <- clim_df %>%
             pet.ave = mean(pet.an),
             temp.ave = mean(temp.an),
             ppt.ave = mean(ppt.an))
+
+# Add climate data
+crn_df <- crn_df %>%
+  inner_join(clim_df, by = c("site_id", "year")) #note that we loose a few sites because we are missing CWD data - probably becaue they are on the coast and more sites because we don't have cwd data before 1900
+crn_df <- crn_df %>%
+  left_join(hist_clim_df, by = c("site_id"))
+
+# Log transform crn
+crn_df <- crn_df %>%
+  mutate(lcrn = log(CRNstd))
+
+# Add number of trees
+n_trees <- tree_db %>%
+  group_by(site_id, species_id) %>%
+  summarise(n_trees = n_distinct(tree_id))
+
+# Create error weight based on sample depth of chronology
+crn_df <- crn_df %>%
+  left_join(n_trees, by = c("site_id", "species_id")) %>%
+  mutate(errorweights = samp.depth / sum(samp.depth))
+
+# Run first stage regression
+mod <- felm(lcrn ~ cwd.an + pet.an + temp.an + ppt.an |site_id|0|site_id+year, weights = crn_df$errorweights, data = crn_df)
+mod <- felm(lcrn ~ cwd.an + cwd.an : cwd.ave |site_id|0|site_id+year, data = crn_df)
+summary(mod)
+
+
+
+site_lm <- crn_df %>%
+  group_by(species_id, site_id) %>%
+  nest() %>%
+  mutate(mod = map(data, fit_mod),
+         cwd.pet.cov = map(mod, getcov),
+         mod = map(mod, tidy)) %>%
+  unnest(mod,cwd.pet.cov) %>%
+  filter(term %in% c('cwd.an', 'pet.an'))
+
+siteCoef <- site_lm %>%
+  pivot_wider(names_from = "term", values_from = c("estimate", "std.error", "statistic", "p.value")) %>%
+  select(-data)
+
+s_id <- "bb"
+sp_id <- "abal"
+dat <- crn_df %>%
+  filter(species_id == sp_id, site_id == s_id)
+mod <- dat %>% fit_mod()
+summary(mod)
+
 
 # Create list of species
 sp_list <- spp_db %>%
