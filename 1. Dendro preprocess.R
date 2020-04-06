@@ -206,7 +206,7 @@ detrend_rwl <- function(rwl_dat) {
 create_crn <- function(rwi_dat){
   crn_dat <- rwi_dat %>% 
     chron(prefix = "CRN", prewhiten = TRUE) %>%
-    select(CRNres) %>%
+    select(CRNstd, CRNres) %>%
     rownames_to_column("year") %>%
     as_tibble()
   return(crn_dat)
@@ -217,16 +217,15 @@ process_dendro <- function(s_id, sp_id) {
   rwl_dat <- pull_rwl(s_id, sp_id)
   if (rwl_dat %>% is.na()) {
     return(NaN)
-  } else{
-    rwi_dat <- rwl_dat %>% detrend_rwl()
-    crn_dat <- rwi_dat %>% create_crn()
-    # Diagnostic plots
-    # rwl_dat %>% rwl.report()
-    # rwl_dat %>% plot.rwl()
-    # crn_dat %>% plot()
-    # print(paste0("Successfully processed chronology for: ", s_id, sp_id))
-    return(crn_dat)  
   }
+  rwi_dat <- rwl_dat %>% detrend_rwl()
+  crn_dat <- rwi_dat %>% create_crn()
+  # Diagnostic plots
+  # rwl_dat %>% rwl.report()
+  # rwl_dat %>% plot.rwl()
+  # crn_dat %>% plot()
+  # print(paste0("Successfully processed chronology for: ", s_id, sp_id))
+  return(crn_dat)  
 }
 
 pb <- progress_estimated(dim(sites)[1])
@@ -243,7 +242,7 @@ valid_data <- valid_sites %>%
   unnest() %>%
   drop_na()
 
-write.csv(valid_data, paste0(wdir, "clean_crn.csv"))
+write.csv(valid_data, paste0(wdir, "clean_crn_nowhiten.csv"))
 
 # s_id <- sites %>% pull(site_id) %>% nth(i)
 # sp_id <- sites %>% pull(species_id) %>% nth(i)
