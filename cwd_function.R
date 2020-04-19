@@ -8,7 +8,7 @@
 # PACKAGES THAT MUST BE INSTALLED BEFORE RUNNING THE SCRIPT: data.table and geosphere
 
 # EXAMPLE SCRIPTS:
-franspath="C:/Users/fmoor/Box/Davis Stuff/Treeconomics"
+franspath="C:/Users/fmoore/Box/Davis Stuff/Treeconomics"
 
 ###cwd_normal_data<-cwd_function(site=data$site,slope=data$slope,latitude=data$latitude,foldedaspect=data$foldedaspect,ppt=data$ppt,tmean=data$tmean,month=data$month,type="normal")
 library(dplyr)
