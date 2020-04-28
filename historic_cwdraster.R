@@ -44,6 +44,12 @@ terrainraster=crop(terrainraster,extent(swc))
 #convert slope and aspect to degrees
 terrainraster=terrainraster*180/pi
 
+#melt permanent site data down into a long data frame for cwd function
+sitedata=cbind(as.data.frame(terrainraster),as.data.frame(swc))
+sitedata=cbind(sitedata,coordinates(swc))
+colnames(sitedata)=c("slope","aspect","swc","lon","lat")
+sitedata$site=1:dim(sitedata)[1]
+
 sitedata$slope[which(sitedata$slope<0)]=0 # fix a few suprious slope values
 
 #crop temp and precip data to swc extent
@@ -66,8 +72,30 @@ dat=dat[complete.cases(dat),]
 test=cwd_function(site=as.factor(dat$site),slope=dat$slope,latitude=dat$lat,foldedaspect=dat$aspect,ppt=dat$precip,tmean=dat$temp,month=dat$month,soilawc=dat$swc,year=NULL,type="normal")
 fwrite(test,file=paste0(franspath,"/Data/griddedbaselinecwddata.csv"))
 
+#merge in lat longs from site data
+sitecrosswalk=data.frame(site_grid=unique(dat$site),site=1:length(unique(dat$site)))
+test=merge(test,sitecrosswalk)
 
+test$site_grid=as.numeric(test$site_grid)
+test=merge(test[,c(3,28,29,30)],sitedata[,c(4:6)],by.x="site_grid",by.y="site")
+test$cells=cellFromXY(cwd_historic,test[,c(5,6)])
 
+testmonths=split(test,test$month)
+
+cwd_historic=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
+aet_historic=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
+
+cwd_historic[testmonths[[1]]$cells]=testmonths[[1]]$cwd
+aet_historic[testmonths[[1]]$cells]=testmonths[[1]]$aet
+
+for(j in 2:12){
+  cwdtemp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc));aettemp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
+  cwdtemp[testmonths[[j]]$cells]=testmonths[[j]]$cwd
+  aettemp[testmonths[[j]]$cells]=testmonths[[j]]$aet
+  cwd_historic=stack(cwd_historic,cwdtemp);aet_historic=stack(aet_historic,aettemp)
+}
+
+save(cwd_historic,aet_historic,file=paste0(franspath,"/Data/HistoricCWD_AETGrids.Rdat"))
 
 cwd_function <- function(site,slope,latitude,foldedaspect,ppt,tmean,month,soilawc=200,year=NULL,type=c('normal','annual')) {
   
