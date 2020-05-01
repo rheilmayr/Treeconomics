@@ -32,7 +32,7 @@ load_shp <- function(sp_name){
   return(sp_sf)
 }
 
-sp_sf_list <- lapply(species_list[1:15], load_shp)
+sp_sf_list <- lapply(species_list, load_shp)
 merged_sf <- do.call(rbind, sp_sf_list)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
