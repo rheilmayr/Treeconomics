@@ -1,5 +1,6 @@
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Author: Robert Heilmayr, Frances Moore, Joan Dudney
+# Research support: Melanie Leung
 # Project: Treeconomics
 # Date: 4/29/19
 # Purpose: Collate individual species range maps
