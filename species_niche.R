@@ -90,7 +90,7 @@ write.csv2(site_count, paste0(wdir, "species_summary.csv"))
 # Map overlap between ITRDB and range ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define species
-spp_code <- 'pilo'
+spp_code <- 'psme'
 
 # Pull relevant ITRDB sites
 site_list <- tree_db %>%
@@ -132,10 +132,24 @@ cwd_vals <- raster::extract(cwd_historic, sp_range) %>%
 mean_cwd <- mean(cwd_vals)
 sd_cwd <- sd(cwd_vals)
 
-aet_vals <_ raster::extract(aet_historic, sp_range) %>% 
+aet_vals <- raster::extract(aet_historic, sp_range) %>% 
   unlist()
-mean_aet <- mean(aet_vales)
-sd_aet <_ sd(aet_vals)
+mean_aet <- mean(aet_vals)
+sd_aet <- sd(aet_vals)
 
-ggplot(data = cwd_vals %>% as.data.frame(), aes(x=.)) +
+ggplot(data = aet_vals %>% as.data.frame(), aes(x=.)) +
   geom_histogram()
+
+ggplot(data = cwd_historic %>% as.data.frame(), aes(x=layer))+
+  geom_histogram()
+
+ggplot(data = aet_historic %>% as.data.frame(), aes(x=layer))+
+  geom_histogram()
+
+ggplot(data = pet_historic %>% as.data.frame(), aes(x=layer))+
+  geom_histogram()
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Plot climate overlap of observations and species range -----------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
