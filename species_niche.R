@@ -1,8 +1,12 @@
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Author: Robert Heilmayr, Frances Moore, Joan Dudney
 # Project: Treeconomics
-# Date: 4/29/19
+# Date: 5/1/20
 # Purpose: Characterize climate niche for different species
+#
+# Todo ideas:
+# - Could use both spatial and annual variation in CWD / AET to characterize niche
+#
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -26,6 +30,64 @@ select <- dplyr::select
 # Define path
 wdir <- 'remote\\'
 
+# 1. Historic climate raster
+clim_file <- paste0(wdir, 'HistoricCWD_AETGrids.Rdat')
+load(clim_file)
+cwd_historic <- sum(cwd_historic)
+aet_historic <- sum(aet_historic)
+pet_historic <- aet_historic + cwd_historic
+
+# 2. Species range maps
+range_file <- paste0(wdir, 'range_maps//merged_ranges.shp')
+range_sf <- st_read(range_file)
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Summarize species niches -----------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Pull and organize climate distribution for species
+pull_clim <- function(spp_code){
+  # Pull relevant range map
+  sp_range <- range_sf %>%
+    filter(sp_code == spp_code)
+  
+  # Pull cwd and aet values
+  cwd_vals <- raster::extract(cwd_historic, sp_range) %>% 
+    unlist()
+  aet_vals <- raster::extract(aet_historic, sp_range) %>% 
+    unlist()
+  
+  # Combine into tibble
+  clim_vals <- data.frame(cwd_vals, aet_vals)
+  names(clim_vals) <- c('cwd', 'aet')
+  clim_vals <- clim_vals %>% 
+    mutate(pet = aet+cwd) %>% 
+    as_tibble()
+  return(clim_vals)
+}
+
+clim_df <- range_sf %>%
+  pull(sp_code) %>% 
+  unique() %>% 
+  enframe(name = NULL) %>% 
+  rename(sp_code = value)
+
+clim_df$clim_vals <- map(clim_df$sp_code, pull_clim)
+
+clim_df <- clim_df %>% 
+  unnest()
+
+write.csv(clim_df, paste0(wdir, "clim_niche.csv"))
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# CODE BELOW THIS POINT SHOULD BE MOVED TO DIFFERENT SCRIPT ------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Summarize ITRDB species frequencies ------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
 # 1. ITRDB data
 # obs_df <- read_delim(paste0(wdir,'gbif_pinopsida.csv'), delim = '\t')
 # obs_df$geom <- st_sfc(obs_df$decimalLatitude, obs_df$decimalLongitude)
@@ -37,20 +99,8 @@ species_db = as.data.frame(tbl(conn, 'species'))
 tree_db = as.data.frame(tbl(conn, 'trees'))
 site_db = as.data.frame(tbl(conn, "sites"))
 
-# 2. Historic climate raster
-clim_file <- paste0(wdir, 'HistoricCWD_AETGrids.Rdat')
-load(clim_file)
-cwd_historic <- sum(cwd_historic)
-aet_historic <- sum(aet_historic)
-pet_historic <- aet_historic + cwd_historic
 
-# 3. Species range maps
-range_file <- paste0(wdir, 'range_maps//merged_ranges.shp')
-range_sf <- st_read(range_file)
 
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Summarize ITRDB species frequencies ------------------------------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 spp_lookup <- read.csv(paste0(wdir, "itrdb_species_list.csv"))
 spp_lookup <- spp_lookup %>%
   mutate(spp = paste0(genus, " ", species),
@@ -86,6 +136,9 @@ site_count <- site_count %>%
 write.csv2(site_count, paste0(wdir, "species_summary.csv"))
 
 
+
+
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Map overlap between ITRDB and range ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -104,52 +157,31 @@ sites <- site_db %>%
   drop_na() %>%
   st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
 
-# Pull relevant range map
-sp_range <- range_sf %>%
-  filter(sp_code == spp_code)
 
 # Plot species ranges
 world <- ne_coastline(scale = "medium", returnclass = "sf")
 ggplot() +
   geom_sf(data = world) +
   geom_sf(data = sp_range, fill = 'blue', alpha = .9) +
-  geom_sf(data = sites, color = 'red', fill = 'red', alpha = .5) +
-  # coord_sf(crs = st_crs(54019), expand = FALSE)
-  coord_sf(xlim = c(-125, -110), ylim = c(30, 45), expand = FALSE) ## Western US
- # coord_sf(xlim = c(-10, 60), ylim = c(30, 55), expand = FALSE) ## Europe
+  geom_sf(data = sites, color = 'red', fill = 'red', alpha = .2)
+# coord_sf(crs = st_crs(54019), expand = FALSE)
+# coord_sf(xlim = c(-125, -110), ylim = c(30, 45), expand = FALSE) ## Western US
+# coord_sf(xlim = c(-10, 60), ylim = c(30, 55), expand = FALSE) ## Europe
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Summarize species niches -----------------------------------------------
+# Plot climate overlap of observations and species range -----------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 plot(cwd_historic)
 plot(pet_historic)
 plot(aet_historic)
 
-cwd_crop <- crop(cwd_historic, sp_range)
-
-cwd_vals <- raster::extract(cwd_historic, sp_range) %>% 
-  unlist()
-mean_cwd <- mean(cwd_vals)
-sd_cwd <- sd(cwd_vals)
-
-aet_vals <- raster::extract(aet_historic, sp_range) %>% 
-  unlist()
-mean_aet <- mean(aet_vals)
-sd_aet <- sd(aet_vals)
 
 ggplot(data = aet_vals %>% as.data.frame(), aes(x=.)) +
   geom_histogram()
-
-ggplot(data = cwd_historic %>% as.data.frame(), aes(x=layer))+
+ggplot(data = cwd_vals %>% as.data.frame(), aes(x=.)) +
   geom_histogram()
 
-ggplot(data = aet_historic %>% as.data.frame(), aes(x=layer))+
-  geom_histogram()
-
-ggplot(data = pet_historic %>% as.data.frame(), aes(x=layer))+
-  geom_histogram()
-
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Plot climate overlap of observations and species range -----------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+hex <- clim_df %>% 
+  ggplot(aes(x = cwd, y = aet)) +
+  geom_hex()
+hex
