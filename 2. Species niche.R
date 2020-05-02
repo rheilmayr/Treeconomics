@@ -1,8 +1,13 @@
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Author: Robert Heilmayr, Frances Moore, Joan Dudney
+# Authors: Robert Heilmayr, Frances Moore, Joan Dudney
 # Project: Treeconomics
 # Date: 5/1/20
 # Purpose: Characterize climate niche for different species
+#
+# Input files:
+# - HistoricCWD_AETGrids.Rdat: Rasters describing historic CWD and AET
+#     Generated using historic_cwdraster.R
+# - 
 #
 # Todo ideas:
 # - Could use both spatial and annual variation in CWD / AET to characterize niche

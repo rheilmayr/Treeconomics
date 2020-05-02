@@ -1,4 +1,25 @@
-#devtools::install_github("tidyverse/tidyr") #if necessary for pivot_wider function
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Authors: Robert Heilmayr, Frances Moore, Joan Dudney
+# Project: Treeconomics
+# Date: 5/1/20
+# Purpose: Combine species niche and dendro data to assess climate responsiveness
+#
+# Input files:
+# - clim_niche.csv: Data documenting historic climate across each species range
+#     Generated using species_niche.R
+# - tree_ring_data_V2.db: Compiled database of ITRDB observations 
+# - essentialcwd_data.csv: File detailing plot-level weather history
+#
+# ToDo:
+# - add nobs
+# - fix joins to prevent duplicate species_id
+#
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Package imports --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 library(tidyr)
 library(tidyverse)
 library(dbplyr)
@@ -7,47 +28,47 @@ library(lfe)
 library(broom)
 library(purrr)
 
-
-# add nobs
-# fix joins to prevent duplicate species_id
-
-
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Import data --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define path
-wdir = 'D:/cloud/Google Drive/Treeconomics/Data/'
+wdir <- 'remote\\'
 # #for Fran
 # wdir="C:/Users/fmoore/Google Drive/Treeconomics/Data/"
-tree_db = paste0(wdir, 'tree_ring_data_V2.db')
-cwd_csv = paste0(wdir, 'essentialcwd_data.csv')
-crn_csv = paste0(wdir, 'clean_crn.csv')
 
-# Connect to database
+# 1. Historic species niche data
+niche_csv <- paste0(wdir, 'clim_niche.csv')
+niche_df <- read_csv(niche_csv) %>% 
+  select(-X1) %>% 
+  drop_na()
+
+# 2. ITRDB data
+tree_db = paste0(wdir, 'tree_ring_data_V2.db')
 sqlite <- dbDriver("SQLite")
 conn <- dbConnect(sqlite, tree_db)
 tables = dbListTables(conn)
-
-# Open tables
 tree_db = as.data.frame(tbl(conn, 'trees'))
 spp_db = as.data.frame(tbl(conn,'species'))
 site_db = as.data.frame(tbl(conn, "sites"))
 # obs_db = tbl(conn, 'observations_new')
+
+# 3. Dendrochronologies
+crn_csv = paste0(wdir, 'clean_crn.csv')
 crn_df <- read.csv(crn_csv, sep=',') %>%
   select(-X)
 
-
-# Define regression model for first stage
-fit_mod <- function(d) {
-  lm(CRNres ~ cwd.an + pet.an, data = d)
-}
-getcov <- function(m){
-  return(m$vcv[2,1])
-}
-
-# Load site climate data
+# 4. Site-specific weather history
+cwd_csv = paste0(wdir, 'essentialcwd_data.csv')
 cwd_df <- read.csv(cwd_csv, sep=',')
 cwd_df <- cwd_df %>% 
   mutate("site_id" = as.character(site)) %>%
   select(-site)
 
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Summarize and merge site historic climate ------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Calculate site-level annual climate
 clim_df = cwd_df %>%
   group_by(site_id, year) %>%
   summarise(aet.an = sum(aet),
@@ -55,6 +76,8 @@ clim_df = cwd_df %>%
             pet.an = sum(petm),
             temp.an = mean(tmean),
             ppt.an = sum(ppt))
+
+# Calculate site-level historic climate
 hist_clim_df <- clim_df %>%
   group_by(site_id) %>%
   filter(year<1980) %>%
@@ -64,12 +87,39 @@ hist_clim_df <- clim_df %>%
             temp.ave = mean(temp.an),
             ppt.ave = mean(ppt.an))
 
-# Add climate data
+# Merge chronology and site-level climate data
 crn_df <- crn_df %>%
   inner_join(clim_df, by = c("site_id", "year")) #note that we loose a few sites because we are missing CWD data - probably becaue they are on the coast and more sites because we don't have cwd data before 1900
 crn_df <- crn_df %>%
   left_join(hist_clim_df, by = c("site_id"))
 
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Summarize species historic climate -------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+niche_smry <- niche_df %>% 
+  group_by(sp_code) %>% 
+  summarize(sp_cwd_mean = mean(cwd),
+            sp_cwd_sd = sd(cwd),
+            sp_aet_mean = mean(aet),
+            sp_aet_sd = sd(aet),
+            sp_pet_mean = mean(pet),
+            sp_pet_sd = sd(pet)) %>% 
+  ungroup()
+
+# Merge chronology and species climate niche data
+crn_df <- crn_df %>%
+  inner_join(niche_smry, by = c("species_id" = "sp_code")) #note: currently losing a bunch of observations because we don't yet have range maps
+
+# Calculate species-niche standardized climate
+crn_df <- crn_df %>% 
+  mutate(aet.spstd = (aet.ave - sp_aet_mean) / sp_aet_sd,
+         pet.spstd = (pet.ave - sp_pet_mean) / sp_pet_sd,
+         cwd.spstd = (cwd.ave - sp_cwd_mean) / sp_cwd_sd)
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Prep site-level data --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Log transform crn
 crn_df <- crn_df %>%
   mutate(lcrn = log(CRNstd))
@@ -86,7 +136,7 @@ crn_df <- crn_df %>%
 
 # Run first stage regression
 mod <- felm(lcrn ~ cwd.an + pet.an + temp.an + ppt.an |site_id|0|site_id+year, weights = crn_df$errorweights, data = crn_df)
-mod <- felm(lcrn ~ cwd.an + cwd.an : cwd.ave |site_id|0|site_id+year, data = crn_df)
+mod <- felm(lcrn ~ cwd.an + cwd.an : cwd.spstd |site_id|0|site_id+year, data = crn_df)
 summary(mod)
 
 
