@@ -8,6 +8,8 @@ library(ncdf4)
 library(foreach)
 library(parallel)
 library(doParallel)
+library(data.table)
+library(tidyverse)
 
 franspath="C:/Users/fmoore/Box/Davis Stuff/Treeconomics"
 
@@ -266,3 +268,47 @@ cwd_function <- function(site,slope,latitude,foldedaspect,ppt,tmean,month,soilaw
   ##### for 800 m normal data then we subset to get just the last simulation
   if (type == "normal"){data<-data[year==10,]}
   return(data)}
+
+### --------Put CWD / AET Data into grids ----------------
+
+cwddir="C:/Users/fmoore/Desktop/treeconomics_cwd/cwd calcs/"
+cwdfiles=list.files(cwddir)
+
+load(file="C:/Users/fmoore/Desktop/sitedata_climatologycorrection.Rdat")
+
+climdat=as.data.frame(tas_correction[[1]][[1]])
+climdat$site=1:dim(climdat)[1]
+sitedata=merge(sitedata,climdat) 
+sitedata=sitedata[complete.cases(sitedata),]
+
+sitecrosswalk=data.frame(site_grid=unique(sitedata$site),site=1:length(unique(sitedata$site)))
+
+period=c("start","mid","end")
+
+for(i in 1:length(period)){
+  periodfiles=cwdfiles[grep(period[i],cwdfiles)]
+  for(j in 1:length(periodfiles)){
+    cwd_raster_temp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
+    aet_raster_temp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
+    
+    cwddat=fread(paste0(cwddir,period[i],"_",j,".csv"))
+    cwddat=cwddat%>%
+      select(site,month,aet,cwd)%>%
+      group_by(site)%>%
+      summarize(aet=sum(aet),cwd=sum(cwd))
+    
+    cwddat=merge(cwddat,sitecrosswalk)
+    cwddat=merge(cwddat,sitedata[,c(1,5,6)],by.x="site_grid",by.y="site")
+    cwddat$cells=cellFromXY(cwd_raster_temp,cwddat[,c(5,6)])
+    
+    cwd_raster_temp[cwddat$cells]=cwddat$cwd;aet_raster_temp[cwddat$cells]=cwddat$aet
+    if(j==1){cwd_raster=cwd_raster_temp;aet_raster=aet_raster_temp}
+    if(j>1){
+      cwd_raster=stack(cwd_raster,cwd_raster_temp)
+      aet_raster=stack(aet_raster,aet_raster_temp)
+    }
+  }
+  print(period[i])
+  save(aet_raster,cwd_raster,file=paste0("C:/Users/fmoore/Desktop/treeconomics_cwd/cmip5_cwdaet_",period[i],".Rdat"))
+}
+
