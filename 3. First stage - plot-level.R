@@ -36,33 +36,14 @@ library(purrr)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define path
 wdir <- 'remote\\'
-# #for Fran
-# wdir="C:/Users/fmoore/Google Drive/Treeconomics/Data/"
 
-# 1. Historic species niche data
-niche_csv <- paste0(wdir, 'clim_niche.csv')
-niche_df <- read_csv(niche_csv) %>% 
-  select(-X1) %>% 
-  drop_na()
-
-# 2. ITRDB data
-tree_db <- paste0(wdir, 'tree_ring_data_V2.db')
-sqlite <- dbDriver("SQLite")
-conn <- dbConnect(sqlite, tree_db)
-tables <- dbListTables(conn)
-tree_db <- as.data.frame(tbl(conn, 'trees'))
-spp_db <- as.data.frame(tbl(conn,'species'))
-site_db <- as.data.frame(tbl(conn, "sites"))
-# obs_db <- tbl(conn, 'observations_new')
-
-# 3. Dendrochronologies
+# 1. Dendrochronologies
 dendro_dir <- paste0(wdir, "rwi_data\\")
 dendro_sites <- read.csv(paste0(dendro_dir, "2_valid_sites.csv")) %>% 
   select(-X) %>% 
   mutate(file_name = paste0('sid-', site_id, '_spid-', species_id, '.csv'))
 
-
-# 4. Site-specific weather history
+# 2. Site-specific weather history
 cwd_csv <- paste0(wdir, 'essentialcwd_data.csv')
 cwd_df <- read.csv(cwd_csv, sep=',')
 cwd_df <- cwd_df %>% 
@@ -83,57 +64,9 @@ clim_df = cwd_df %>%
             ppt.an = sum(ppt))
 
 
-# # Calculate site-level historic climate
-# hist_clim_df <- clim_df %>%
-#   group_by(site_id) %>%
-#   filter(year<1980) %>%
-#   summarise(aet.ave = mean(aet.an),
-#             cwd.ave = mean(cwd.an),
-#             pet.ave = mean(pet.an),
-#             temp.ave = mean(temp.an),
-#             ppt.ave = mean(ppt.an))
-# 
-# # Merge chronology and site-level climate data
-# crn_df <- crn_df %>%
-#   inner_join(clim_df, by = c("site_id", "year")) #note that we loose a few sites because we are missing CWD data - probably becaue they are on the coast and more sites because we don't have cwd data before 1900
-# 
-# crn_df <- crn_df %>%
-#   left_join(hist_clim_df, by = c("site_id"))
-# 
-# 
-# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# # Summarize species historic climate -------------------------------------
-# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# niche_smry <- niche_df %>% 
-#   group_by(sp_code) %>% 
-#   summarize(sp_cwd_mean = mean(cwd),
-#             sp_cwd_sd = sd(cwd),
-#             sp_aet_mean = mean(aet),
-#             sp_aet_sd = sd(aet),
-#             sp_pet_mean = mean(pet),
-#             sp_pet_sd = sd(pet)) %>% 
-#   ungroup()
-# 
-# # Merge chronology and species climate niche data
-# crn_df <- crn_df %>%
-#   inner_join(niche_smry, by = c("species_id" = "sp_code")) #note: currently losing a bunch of observations because we don't yet have range maps
-# 
-# # Calculate species-niche standardized climate
-# crn_df <- crn_df %>% 
-#   mutate(aet.spstd = (aet.ave - sp_aet_mean) / sp_aet_sd,
-#          pet.spstd = (pet.ave - sp_pet_mean) / sp_pet_sd,
-#          cwd.spstd = (cwd.ave - sp_cwd_mean) / sp_cwd_sd)
-
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Prep site-level data --------------------------------------------------------
+# Define regression model and helper funcs -------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-i = 1
-s_id <- dendro_sites[i,] %>% 
-  pull(site_id)
-sp_id <- dendro_sites[i,] %>% 
-  pull(species_id)
-
-
 dendro_lm <- function(s_id, sp_id){
   print(s_id)
   dendro_file <- paste0('sid-', s_id, '_spid-', sp_id, '.csv')
@@ -146,7 +79,9 @@ dendro_lm <- function(s_id, sp_id){
   # Try to run felm. Typically fails if missing cwd / aet data 
   tryCatch(
     expr = {
-      mod <- felm(rwi ~ cwd.an + pet.an |tree_id|0|tree_id+year, data = dendro_dat)
+      dendro_dat <- dendro_dat %>%
+        mutate(ln_rwi = log(rwi))
+      mod <- felm(ln_rwi ~ cwd.an + pet.an |tree_id|0|tree_id+year, data = dendro_dat)
     },
     error = function(e){ 
       message("Returned error on site ", s_id)
@@ -182,22 +117,50 @@ getcov <- function(felm_mod){
 }
 
 
-sites <- dendro_sites[1:10,]
+getnobs <- function(felm_mod){
+  failed <- F
+  tryCatch(
+    expr = {
+      nobs <- felm_mod$N
+    },
+    error = function(e){
+      failed <<- T
+    }
+  )
+  if (failed){
+    return(NULL)
+  }
+  return(nobs)
+}
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Run site-level regressions --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# i = 1
+# s_id <- dendro_sites[i,] %>% 
+#   pull(site_id)
+# sp_id <- dendro_sites[i,] %>% 
+#   pull(species_id)
+# sites <- dendro_sites[1:10,]
+
+
 site_lm <- dendro_sites %>% 
   group_by(site_id, species_id) %>% 
   nest() %>% 
   mutate(mod = map2(site_id, species_id, dendro_lm),
          pet_cwd_cov = map(mod, getcov),
+         nobs = map(mod, getnobs),
          mod = map(mod, tidy))
 site_lm <- site_lm %>% 
   select(-data) %>% 
-  unnest(c(mod, pet_cwd_cov)) %>%
+  unnest(c(mod, pet_cwd_cov, nobs)) %>%
   filter(term %in% c('cwd.an', 'pet.an'))
 
 siteCoef <- site_lm %>%
   pivot_wider(names_from = "term", values_from = c("estimate", "std.error", "statistic", "p.value"))
 
-siteCoef %>% write.csv(paste0(wdir, 'first_stage\\', 'lm_cwd_pet2.csv'))
+siteCoef %>% write.csv(paste0(wdir, 'first_stage\\', 'log_cwd_pet.csv'))
 
 
 
