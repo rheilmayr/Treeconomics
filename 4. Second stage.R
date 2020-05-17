@@ -1,8 +1,8 @@
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Authors: Robert Heilmayr, Joan Dudney, Frances Moore
 # Project: Treeconomics
-# Date: 5/1/20
-# Purpose: Combine species niche and dendro data to assess climate responsiveness
+# Date: 5/17/20
+# Purpose: Run regressions to explore impact of historical climate on weather sensitivity
 #
 # Input files:
 # - clim_niche.csv: Data documenting historic climate across each species range
@@ -33,31 +33,111 @@ library(ggiraphExtra)
 library(hexbin)
 select <- dplyr::select
 
-
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Import data --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ### Define path
 wdir <- 'remote\\'
 
-# Read data
-full_df <- read_csv(paste0(wdir, 'first_stage\\lm_cwd_pet2.csv')) %>%
+# 1. Historic species niche data
+niche_csv <- paste0(wdir, 'clim_niche.csv')
+niche_df <- read_csv(niche_csv) %>% 
+  select(-X1) %>% 
+  drop_na()
+
+# 2. Site-level regressions
+flm_df <- read_csv(paste0(wdir, 'first_stage\\lm_cwd_pet.csv')) %>%
   select(-X1)
 
 # Remove extreme outliers
-trim_df <- full_df %>%
+flm_df <- flm_df %>%
   group_by(species_id) %>%
   mutate(cwd.qhigh=quantile(estimate_cwd.an,0.99,na.rm=T),
          cwd.qlow=quantile(estimate_cwd.an,0.01,na.rm=T),
          pet.qhigh=quantile(estimate_pet.an,0.99,na.rm=T),
          pet.qlow=quantile(estimate_pet.an,0.01,na.rm=T)) %>%
   ungroup()
-trim_df <- trim_df %>%
+flm_df <- trim_df %>%
   filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
          estimate_pet.an>pet.qlow & estimate_pet.an<pet.qhigh)
+
+
+# 2. Site-specific weather history
+cwd_csv <- paste0(wdir, 'essentialcwd_data.csv')
+cwd_df <- read.csv(cwd_csv, sep=',')
+cwd_df <- cwd_df %>% 
+  mutate("site_id" = as.character(site)) %>%
+  select(-site)
+
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Characterize site-level climate in relation to species range -------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Calculate site-level annual climate
+clim_df = cwd_df %>%
+  group_by(site_id, year) %>%
+  summarise(aet.an = sum(aet),
+            cwd.an = sum(cwd),
+            pet.an = sum(petm),
+            temp.an = mean(tmean),
+            ppt.an = sum(ppt))
+
+
+# Calculate site-level historic climate
+hist_clim_df <- clim_df %>%
+  group_by(site_id) %>%
+  filter(year<1980) %>%
+  summarise(aet.ave = mean(aet.an),
+            cwd.ave = mean(cwd.an),
+            pet.ave = mean(pet.an),
+            temp.ave = mean(temp.an),
+            ppt.ave = mean(ppt.an))
+
+
+# Merge historic climate to flm data
+flm_df <- flm_df %>% 
+  inner_join(hist_clim_df, by = c("site_id"))
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Summarize species historic climate -------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+niche_smry <- niche_df %>%
+  group_by(sp_code) %>%
+  summarize(sp_cwd_mean = mean(cwd),
+            sp_cwd_sd = sd(cwd),
+            sp_aet_mean = mean(aet),
+            sp_aet_sd = sd(aet),
+            sp_pet_mean = mean(pet),
+            sp_pet_sd = sd(pet)) %>%
+  ungroup()
+
+# Merge chronology and species climate niche data
+flm_df <- flm_df %>%
+  inner_join(niche_smry, by = c("species_id" = "sp_code")) #note: currently losing a bunch of observations because we don't yet have range maps
+
+# Calculate species-niche standardized climate
+flm_df <- flm_df %>%
+  mutate(aet.spstd = (aet.ave - sp_aet_mean) / sp_aet_sd,
+         pet.spstd = (pet.ave - sp_pet_mean) / sp_pet_sd,
+         cwd.spstd = (cwd.ave - sp_cwd_mean) / sp_cwd_sd)
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Run second stage model --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, data = flm_df)
+summary(mod)
+
+mod <- lm(estimate_pet.an ~ cwd.spstd + pet.spstd, data = flm_df)
+summary(mod)
 
 
 ##### Run second stage model #####
 # Define model
 ss_mod <- function(d) {
-  d <- d %>% mutate(errorweights = nobs / sum(nobs)) 
+  d <- d %>% mutate(errorweights = nobs / sum(nobs))
   mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights=errorweights, data=d)
   return(mod)
 }
