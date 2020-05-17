@@ -5,7 +5,7 @@
 # Purpose: Process dendrochronologies to output plot-level growth deviations
 #
 # Input files:
-# - tree_db: Compiled database of ITRDB observations 
+# - tree_ring_data_V2.db: Compiled database of ITRDB observations 
 # - cwd_csv: File detailing plot-level weather history
 #
 # ToDo: 
@@ -60,6 +60,11 @@ sites <- tree_db %>%
   distinct() %>%
   collect()
 
+# Create unique tree ids that incorporate site id
+tree_db <- tree_db %>% 
+  mutate(tree_id = paste0("s", site_id, "_t", tree_id))
+obs_db <- obs_db %>% 
+  mutate(tree_id = paste0("s", site_id, "_t", tree_id))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -87,11 +92,10 @@ pull_rwl <- function(s_id, sp_id){
   
   # Pull observations of identified trees
   obs = obs_db %>%
-    filter(site_id == s_id,
-           tree_id %in% local(tree_ids$tree_id)) %>%
+    filter(tree_id %in% local(tree_ids$tree_id)) %>%
     arrange(tree_id, desc(year)) %>%
     collect()
-
+  
   obs <- obs %>%  
     arrange(year) %>%
     mutate(year = as.character(year)) %>%
@@ -105,7 +109,7 @@ pull_rwl <- function(s_id, sp_id){
   if (any_duplicates) {
     print(paste0("Duplicate tree-year combinations; skipping site-species: ", s_id, " - ", sp_id))
     e = "Duplicate tree-year observations"
-    return(NaN)
+    return(NULL)
   }
 
   obs <- obs %>%
@@ -126,7 +130,7 @@ pull_rwl <- function(s_id, sp_id){
     }
   )
   if (failed){
-    return(NaN)
+    return(NULL)
   }
   
   # Check for invalid data that doesn't allow for rwl report
@@ -143,7 +147,7 @@ pull_rwl <- function(s_id, sp_id){
     }
   )
   if (failed){
-    return(NaN)
+    return(NULL)
   }
   
   # For series with internal NAs, drop old observations prior to NA
@@ -192,6 +196,7 @@ create_crn <- function(rwi_dat){
   return(crn_dat)
 }
 
+
 process_dendro <- function(s_id, sp_id) {
   # Purpose:
   #   Run full dendro workflow
@@ -205,7 +210,7 @@ process_dendro <- function(s_id, sp_id) {
   #     Table of site chronologies
   pb$tick()$print()
   rwl_dat <- pull_rwl(s_id, sp_id)
-  if (rwl_dat %>% is.na()) {
+  if (rwl_dat %>% is.null()) {
     return(NaN)
   }
   rwi_dat <- rwl_dat %>% detrend_rwl()
@@ -219,13 +224,94 @@ process_dendro <- function(s_id, sp_id) {
 }
 
 
+
+export_rwi <- function(s_id, sp_id) {
+  # Purpose:
+  #   Run full dendro workflow
+  # Inputs:
+  #   s_id: str
+  #     Site id
+  #   sp_id: str
+  #     Species id
+  # Outputs:
+  #   crn_dat: data.table
+  #     Table of site chronologies
+  pb$tick()$print()
+  rwl_dat <- pull_rwl(s_id, sp_id)
+  if (rwl_dat %>% is.null()) {
+    return(NaN)
+  }
+  rwi_dat <- rwl_dat %>% detrend_rwl()
+  rwi_dat <- rwi_dat %>% 
+    rownames_to_column("year") %>% 
+    pivot_longer(cols = -year,
+                 names_to = "tree_id",
+                 values_to = "rwi")
+
+  write.csv(rwi_dat, paste0(wdir, 'rwi_data\\sid-', s_id, '_spid-', sp_id, '.csv'))
+  # Diagnostic plots
+  # rwl_dat %>% rwl.report()
+  # rwl_dat %>% plot.rwl()
+  # crn_dat %>% plot()
+  # print(paste0("Successfully processed chronology for: ", s_id, sp_id))
+  # return(crn_dat)  
+  return(dim(rwi_dat)[1])
+  }
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Run chronology generation  ----------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# sites <- sites[1:10,]
+# site <- sites[2,]
+# sp_id <- site %>% pull(species_id)
+# s_id <- site %>% pull(site_id)
+
+ptm <- proc.time()
+pb <- progress_estimated(dim(sites)[1])
+sites$nobs <- map2(sites$site_id, sites$species_id, export_rwi) 
+ptm <- (proc.time() - ptm)
+ptm <- ptm[3] / 60
+
+invalid_sites <- sites %>%
+  filter(nobs %>% is.na()) %>%
+  as_tibble() %>% 
+  select(species_id, site_id)
+n_invalid = dim(invalid_sites)[1]
+invalid_sites %>% write.csv(paste0(wdir, 'rwi_data\\1_invalid_sites.csv'))
+
+valid_sites <- sites %>% 
+  filter(!nobs %>% is.na()) %>%
+  unnest('nobs') %>% 
+  as_tibble()
+n_valid = dim(valid_sites)[1]
+valid_sites %>% write.csv(paste0(wdir, 'rwi_data\\2_valid_sites.csv'))
+
+nobs <- valid_sites %>% 
+  pull(nobs) %>% 
+  sum()
+
+fileConn <- file(paste0(wdir, 'rwi_data\\3_dendro_summary.txt'))
+writeLines(c(paste0("Dendro processing completed with ",
+                    as.character(n_valid),
+                    " valid site/species combinations and ",
+                    as.character(n_invalid),
+                    " invalid site/species combinations."),
+             paste0("In aggregate, processed dataset includes ",
+                    as.character(nobs),
+                    " tree-year observations"),
+             paste0("Total processing time was ",
+                    as.character(ptm),
+                    " minutes.")), fileConn)
+close(fileConn)
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Generate and export cleaned chronology  ----------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 pb <- progress_estimated(dim(sites)[1])
 sites$crn <- map2(sites$site_id, sites$species_id, process_dendro) 
 invalid_sites <- sites %>%
-  filter(crn%>% is.na()) %>%
+  filter(crn %>% is.na()) %>%
   as_tibble()
 
 valid_sites <- sites %>% 
