@@ -163,14 +163,85 @@ sites <- site_db %>%
   st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
 
 
+# Pull relevant range map
+sp_range <- range_sf %>% 
+  filter(sp_code == spp_code)
+
+
+xlims <- c(-132, -102)
+ylims <- c(26, 56)
+
 # Plot species ranges
 world <- ne_coastline(scale = "medium", returnclass = "sf")
-ggplot() +
+map <- ggplot() +
   geom_sf(data = world) +
-  geom_sf(data = sp_range, fill = 'blue', alpha = .9) +
-  geom_sf(data = sites, color = 'red', fill = 'red', alpha = .2)
+  geom_sf(data = sp_range, fill = 'lightblue', alpha = .9) +
+  geom_sf(data = sites, color = 'darkblue', fill = 'red', alpha = .8) +
+  theme_bw(base_size = 22)+
+  ylab("Latitude")+
+  xlab("Longitude")+
+  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE) ## Western US
+map
+
+
+library(raster)
+library(rgdal)
+library(viridis)
+
+
+cwd_historic_df <- cwd_historic %>% 
+  # mask(sp_range) %>%
+  as.data.frame(xy = TRUE) %>% 
+  drop_na() %>% 
+  filter(x>xlims[1], x<xlims[2], y>ylims[1], y<ylims[2]) %>% 
+  mutate(CWD = layer,
+         cwd.mean = mean(layer),
+         cwd.sd = sd(layer),
+         std_cwd = (layer - cwd.mean) / cwd.sd)
+map <- ggplot() +
+  geom_raster(data = cwd_historic_df, aes(x = x, y = y, fill = CWD)) +
+  # geom_sf(data = sp_range, fill = 'lightblue', alpha = .9) +
+  scale_fill_viridis_c() +
+  geom_sf(data = sites, color = 'red', alpha = 1) +
+  theme_bw(base_size = 22)+
+  ylab("Latitude")+
+  xlab("Longitude")+
+  geom_sf(data = world, color = 'white') +
+  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE) ## Western US
+
+map
+
+flm_df <- read_csv(paste0(wdir, 'first_stage\\log_cwd_pet.csv')) %>%
+  select(-X1)
+
+sp_regs <- flm_df %>% 
+  filter(species_id == spp_code) %>% 
+  select(site_id, estimate_cwd.an, std.error_cwd.an, p.value_cwd.an)
+
+
+site_regs <- sites %>% 
+  left_join(sp_regs, by = c("site_id")) %>% 
+  mutate(ln_cwd = log(estimate_cwd.an)) %>% 
+  drop_na()
+  
+
+
+map <- ggplot() +
+  # geom_raster(data = cwd_historic_df, aes(x = x, y = y, fill = std_cwd)) +
+  # geom_sf(data = sp_range, fill = 'lightblue', alpha = .9) +
+  geom_sf(data = site_regs, aes(color = ln_cwd), alpha = 1) +
+  scale_fill_viridis_c() +
+  theme_bw(base_size = 22)+
+  ylab("Latitude")+
+  xlab("Longitude")+
+  geom_sf(data = world, color = 'white', size = 1) +
+  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE) ## Western US
+
+map
+
+
+
 # coord_sf(crs = st_crs(54019), expand = FALSE)
-# coord_sf(xlim = c(-125, -110), ylim = c(30, 45), expand = FALSE) ## Western US
 # coord_sf(xlim = c(-10, 60), ylim = c(30, 55), expand = FALSE) ## Europe
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
