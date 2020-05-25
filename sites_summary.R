@@ -1,7 +1,6 @@
 library(tidyverse)
 library(dbplyr)
 library(RSQLite)
-library(rnaturalearth)
 library(rnaturalearthdata)
 
 
@@ -26,9 +25,9 @@ map <- sites %>%
   ggplot(aes(x = longitude, y = latitude)) +  
   geom_hex(bins = 50) 
 
-# coast_sf <- ne_coastline(scale = "large", returnclass = "sf")
-# + geom_sf(data = coast_sf, alpha = 0, size=0.5,fill="white")
-# 
-# sr <- "+proj=longlat +datum=WGS84 +no_defs" 
+coast_sf <- ne_coastline(scale = "large", returnclass = "sf")
++ geom_sf(data = coast_sf, alpha = 0, size=0.5,fill="white")
+
+sr <- "+proj=longlat +datum=WGS84 +no_defs"
 
   
