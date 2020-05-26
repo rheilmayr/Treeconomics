@@ -191,7 +191,7 @@ site_lm <- site_lm %>%
 siteCoef <- site_lm %>%
   pivot_wider(names_from = "term", values_from = c("estimate", "std.error", "statistic", "p.value"))
 
-siteCoef %>% write.csv(paste0(wdir, 'first_stage\\', 'log_log_pet_cwd.csv'))
+siteCoef %>% write.csv(paste0(wdir, 'first_stage\\', 'log_cwd_pet.csv'))
 
 
 

@@ -62,8 +62,12 @@ cwd_df <- cwd_df %>%
 
 
 # 3. Site-level regressions
+# flm_df <- read_csv(paste0(wdir, 'first_stage\\tree_log_pet_cwd.csv')) %>%
+#   select(-X1)
+
 flm_df <- read_csv(paste0(wdir, 'first_stage\\log_cwd_pet.csv')) %>%
   select(-X1)
+
 
 # Remove extreme outliers
 flm_df <- flm_df %>%
@@ -73,7 +77,6 @@ flm_df <- flm_df %>%
   ungroup()
 flm_df <- flm_df %>%
   filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh)
-
 
 
 # Connect to database
@@ -168,23 +171,12 @@ flm_df <- flm_df %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Run second stage model --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Define model
-ss_mod <- function(d) {
-  # d <- d %>% mutate(errorweights = nobs / sum(nobs))
-  # d <- d %>% mutate(errorweights = 1 / (std.error_cwd.an^2))
-  mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights=errorweights, data=d)
-  # mod <- felm(estimate_cwd.an ~ cwd.ave + pet.ave | species_id, weights=d$errorweights, data=d)
-  return(mod)
-}
-mod <- trim_df %>% ss_mod()
-
-
-
 flm_df <- flm_df %>% 
   mutate(errorweights = 1 / (std.error_cwd.an^2))
 
 trim_df <- flm_df %>% 
-  filter(species_id %in% freq_species)
+  filter(species_id %in% freq_species) %>% 
+  drop_na()
 
 mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights=errorweights, data=flm_df)
 summary(mod)
@@ -419,6 +411,10 @@ pred <- cbind(pred,grid.x) %>%
 p <- pred %>% ggplot(aes(x = Var1, y = Var2, fill = fit)) +
   geom_tile()
 p
+
+
+
+
 
 
 
