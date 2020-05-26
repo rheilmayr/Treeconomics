@@ -57,9 +57,6 @@ cwd_dendro_sites <- dendro_sites %>%
 
 
 
-ihsTransform <- function(y) {log(y + (y ^ 2 + 1) ^ 0.5)}
-
-
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Summarize and merge site historic climate ------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -163,6 +160,9 @@ getnobs <- function(felm_mod){
 }
 
 
+ihsTransform <- function(y) {log(y + (y ^ 2 + 1) ^ 0.5)}
+
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Run site-level regressions --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -198,11 +198,19 @@ siteCoef %>% write.csv(paste0(wdir, 'first_stage\\', 'log_log_pet_cwd.csv'))
 
 
 
-
-
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Run tree-level regressions ------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+load_obs <- function(s_id, sp_id){
+  dendro_file <- paste0('sid-', s_id, '_spid-', sp_id, '.csv')
+  dendro_dat <- read.csv(paste0(dendro_dir, dendro_file)) %>% 
+    mutate(site_id = as.character(s_id)) %>% 
+    select(-X, -site_id) %>% 
+    drop_na()
+  return(dendro_dat)
+}
+
+
 fs_mod <- function(tree_df){
   failed <- F
   # Try to run felm. Typically fails if missing cwd / aet data 
@@ -221,6 +229,25 @@ fs_mod <- function(tree_df){
   }
   return(mod)
 }
+
+
+
+# select_sites = cwd_dendro_sites[1:20,]
+
+tree_df <- cwd_dendro_sites %>% 
+  group_by(site_id, species_id) %>% 
+  nest() %>% 
+  mutate(data = map2(site_id, species_id, load_obs)) %>% 
+  unnest(data)
+
+
+tree_df <- tree_df %>% 
+  left_join(clim_df, by = c("site_id", "year")) %>% 
+  drop_na()
+
+tree_df <- tree_df %>% 
+  mutate(ln_rwi = log(rwi)) %>% 
+  drop_na()
 
 
 tree_summary <- tree_df %>% 
@@ -244,15 +271,5 @@ tree_coef <- tree_lm %>%
 tree_coef <- tree_coef %>% 
   left_join(tree_summary, by = c("tree_id"))
 
-# Merge historic climate
-tree_coef <- tree_coef %>% 
-  left_join(hist_clim_df, by = c("site_id")) %>% 
-  left_join(sp_clim_df, by = c("species_id")) %>% 
-  mutate(pet.spstd = (pet.ave - pet.sp.ave) / pet.sp.sd,
-         cwd.spstd = (cwd.ave - cwd.sp.ave) / cwd.sp.sd)
+tree_coef %>% write.csv(paste0(wdir, 'first_stage\\', 'tree_log_pet_cwd.csv'))
 
-tree_coef <- tree_coef %>% 
-  mutate(errorweights = 1/(std.error_cwd.an^2)) %>% 
-  drop_na()
-mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = tree_coef$errorweights, data = tree_coef)
-summary(mod)
