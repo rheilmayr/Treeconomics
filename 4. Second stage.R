@@ -36,6 +36,7 @@ library(dbplyr)
 library(RSQLite)
 library(modi)
 library(margins)
+library(fixest)
 
 
 select <- dplyr::select
@@ -178,12 +179,20 @@ trim_df <- flm_df %>%
   filter(species_id %in% freq_species) %>% 
   drop_na()
 
-mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights=errorweights, data=flm_df)
+mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd + cwd.spstd:pet.spstd, weights=errorweights, data=flm_df)
 summary(mod)
 
+saveRDS(mod, paste0(wdir, "second_stage\\ss_mod.rds"))
 
 
+trim_df <- flm_df %>% 
+  filter(species_id == "psme") %>% 
+  drop_na()
 
+mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights=errorweights, data=trim_df)
+summary(mod)
+
+saveRDS(mod, paste0(wdir, "second_stage\\psme_mod.rds"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
