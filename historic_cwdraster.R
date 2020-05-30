@@ -10,6 +10,7 @@ library(parallel)
 library(doParallel)
 library(data.table)
 library(geosphere)
+library(dplyr)
 
 franspath="C:/Users/fmoore/Box/Davis Stuff/Treeconomics"
 
@@ -20,6 +21,7 @@ pr=stack(paste0(franspath,"/Data/CRUData/cru_ts4.04.1901.2019.pre.dat.nc"))
 
 baseyears=1901:1980
 basemonths=rep(1:12,length(baseyears))
+years=rep(baseyears,each=12)
 
 tas=tas[[which(cruyears%in%baseyears)]];pr=pr[[which(cruyears%in%baseyears)]]
 
@@ -71,6 +73,43 @@ dat=dat[complete.cases(dat),]
 
 test=cwd_function(site=as.factor(dat$site),slope=dat$slope,latitude=dat$lat,foldedaspect=dat$aspect,ppt=dat$precip,tmean=dat$temp,month=dat$month,soilawc=dat$swc,year=NULL,type="normal")
 fwrite(test,file=paste0(franspath,"/Data/griddedbaselinecwddata.csv"))
+
+#version with annual cwwd / pet instead of climatology
+tas=crop(tas,extent(swc));pr=crop(pr,extent(swc))
+
+for(i in 1:length(baseyears)){
+  tempt=as.data.frame(dropLayer(tas,which(years!=baseyears[i])))
+  tempp=as.data.frame(dropLayer(pr,which(years!=baseyears[i])))
+  colnames(tempt)=1:12;colnames(tempp)=1:12
+  tempt$year=rep(baseyears[i],dim(tempt)[1]);tempp$year=rep(baseyears[i],dim(tempp)[1])
+  tempt$site=1:dim(tempt)[1];tempp$site=1:dim(tempp)[1]
+  
+  if(i==1){tasdata=tempt;prdata=tempp}
+  if(i>1){
+    tasdata=rbind(tasdata,tempt)
+    prdata=rbind(prdata,tempp)
+  }
+  print(i)
+}
+
+
+tasdata=melt(tasdata,id.vars=c("site","year"));prdata=melt(prdata,id.vars=c("site","year"))
+climatedata=cbind(tasdata,prdata[,4])
+colnames(climatedata)=c("site","year","month","temp","precip")
+
+climatedata=as.tbl(climatedata);sitedata=as.tbl(sitedata)
+
+dat=inner_join(climatedata,sitedata,by="site")
+dat=dat[complete.cases(dat),]
+
+fwrite(dat,file=paste0(franspath,"/Data/dataforannualbaselinecwd.csv"))
+
+cl=makeCluster(6)
+clusterExport(cl,c("data","setorder"))
+registerDoParallel(cl)
+
+test=cwd_function(site=as.factor(dat$site),slope=dat$slope,latitude=dat$lat,foldedaspect=dat$aspect,ppt=dat$precip,tmean=dat$temp,month=dat$month,soilawc=dat$swc,year=dat$year,type="annual")
+fwrite(test,file=paste0(franspath,"/Data/griddedbaselinecwddata_annual.csv"))
 
 #merge in lat longs from site data
 sitecrosswalk=data.frame(site_grid=unique(dat$site),site=1:length(unique(dat$site)))
