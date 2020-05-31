@@ -28,7 +28,6 @@ wdir <- 'remote\\'
 
 # Load ITRDB database
 tree_db = paste0(wdir, 'tree_ring_data_V2.db')
-cwd_csv = paste0(wdir, 'essentialcwd_data.csv')
 sqlite <- dbDriver("SQLite")
 conn <- dbConnect(sqlite, tree_db)
 tables = dbListTables(conn)
@@ -38,7 +37,7 @@ site_db = as.data.frame(tbl(conn, "sites"))
 obs_db = tbl(conn, 'observations_new')
 
 # Load climate data
-cwd_csv <- paste0(wdir, 'essentialcwd_data.csv')
+cwd_csv = paste0(wdir, 'CRU//essentialcwd_data.csv')
 cwd_df <- read.csv(cwd_csv, sep=',')
 cwd_df <- cwd_df %>% 
   mutate("site_id" = as.character(site)) 
