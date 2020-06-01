@@ -34,10 +34,8 @@ select <- dplyr::select
 wdir <- 'remote\\'
 
 # 1. Historic climate raster
-clim_file <- paste0(wdir, 'HistoricCWD_AETGrids.Rdat')
+clim_file <- paste0(wdir, 'CRU//HistoricCWD_AETGrids_Annual.Rdat')
 load(clim_file)
-cwd_historic <- sum(cwd_historic)
-aet_historic <- sum(aet_historic)
 pet_historic <- aet_historic + cwd_historic
 
 # 2. Species range maps
@@ -69,18 +67,25 @@ pull_clim <- function(spp_code){
   return(clim_vals)
 }
 
+
 clim_df <- range_sf %>%
   pull(sp_code) %>% 
   unique() %>% 
   enframe(name = NULL) %>% 
   rename(sp_code = value)
 
-clim_df$clim_vals <- map(clim_df$sp_code, pull_clim)
+clim_df$clim_vals <- map(clim_df$sp_code, pull_clim) %>% 
+  unnest(clim_vals)
 
 clim_df <- clim_df %>% 
-  unnest()
+  drop_na() %>% 
+  group_by(sp_code) %>% 
+  summarize(pet_mean = mean(pet),
+            pet_sd = sd(pet),
+            cwd_mean = mean(cwd),
+            cwd_sd = sd(cwd))
 
-write.csv(clim_df, paste0(wdir, "clim_niche.csv"))
+write.csv(clim_df, paste0(wdir, "out//clim_niche.csv"))
 
 
 

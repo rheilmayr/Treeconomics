@@ -48,14 +48,13 @@ select <- dplyr::select
 wdir <- 'remote\\'
 
 # 1. Historic species niche data
-niche_csv <- paste0(wdir, 'clim_niche.csv')
+niche_csv <- paste0(wdir, 'out//clim_niche.csv')
 niche_df <- read_csv(niche_csv) %>% 
-  select(-X1) %>% 
-  drop_na()
+  select(-X1)
 
 
 # 2. Site-specific weather history
-cwd_csv <- paste0(wdir, 'essentialcwd_data.csv')
+cwd_csv <- paste0(wdir, 'CRU//essentialcwd_data.csv')
 cwd_df <- read.csv(cwd_csv, sep=',')
 cwd_df <- cwd_df %>% 
   mutate("site_id" = as.character(site)) %>%
@@ -76,8 +75,6 @@ flm_df <- flm_df %>%
   mutate(cwd.qhigh=quantile(estimate_cwd.an,0.99,na.rm=T),
          cwd.qlow=quantile(estimate_cwd.an,0.01,na.rm=T)) %>%
   ungroup()
-flm_df <- flm_df %>%
-  filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh)
 
 
 # Connect to database
@@ -125,48 +122,40 @@ flm_df <- flm_df %>%
   inner_join(hist_clim_df, by = c("site_id"))
 
 
-# Calculate species niche based on ITRDB sites
-clim_df <- clim_df %>% 
-  left_join(sp_site_index, by = c("site_id"))
-
-sp_clim_df <- clim_df %>% 
-  group_by(species_id) %>% 
-  filter(year<1980) %>% 
-  summarise(pet.sp.ave = mean(pet.an),
-            cwd.sp.ave = mean(cwd.an),
-            pet.sp.sd = sd(pet.an),
-            cwd.sp.sd = sd(cwd.an))
-
-flm_df <- flm_df %>% 
-  left_join(sp_clim_df, by = c("species_id"))
-
-
-flm_df <- flm_df %>% 
-  mutate(pet.spstd = (pet.ave - pet.sp.ave) / pet.sp.sd,
-         cwd.spstd = (cwd.ave - cwd.sp.ave) / cwd.sp.sd)
-
-# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# # Summarize species historic climate -------------------------------------
-# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# niche_smry <- niche_df %>%
-#   group_by(sp_code) %>%
-#   summarize(sp_cwd_mean = mean(cwd),
-#             sp_cwd_sd = sd(cwd),
-#             sp_aet_mean = mean(aet),
-#             sp_aet_sd = sd(aet),
-#             sp_pet_mean = mean(pet),
-#             sp_pet_sd = sd(pet)) %>%
-#   ungroup()
+# # Calculate species niche based on ITRDB sites
+# clim_df <- clim_df %>% 
+#   left_join(sp_site_index, by = c("site_id"))
 # 
-# # Merge chronology and species climate niche data
-# flm_df <- flm_df %>%
-#   inner_join(niche_smry, by = c("species_id" = "sp_code")) #note: currently losing a bunch of observations because we don't yet have range maps
+# sp_clim_df <- clim_df %>% 
+#   group_by(species_id) %>% 
+#   filter(year<1980) %>% 
+#   summarise(pet.sp.ave = mean(pet.an),
+#             cwd.sp.ave = mean(cwd.an),
+#             pet.sp.sd = sd(pet.an),
+#             cwd.sp.sd = sd(cwd.an))
 # 
-# # Calculate species-niche standardized climate
-# flm_df <- flm_df %>%
-#   mutate(aet.spstd = (aet.ave - sp_aet_mean) / sp_aet_sd,
-#          pet.spstd = (pet.ave - sp_pet_mean) / sp_pet_sd,
-#          cwd.spstd = (cwd.ave - sp_cwd_mean) / sp_cwd_sd)
+# flm_df <- flm_df %>% 
+#   left_join(sp_clim_df, by = c("species_id"))
+# 
+# 
+# flm_df <- flm_df %>% 
+#   mutate(pet.spstd = (pet.ave - pet.sp.ave) / pet.sp.sd,
+#          cwd.spstd = (cwd.ave - cwd.sp.ave) / cwd.sp.sd)
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Summarize species historic climate -------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+niche_df <- niche_df %>% 
+  select(sp_code, sp_pet_mean = pet_mean, sp_pet_sd = pet_sd, sp_cwd_mean = cwd_mean, sp_cwd_sd = cwd_sd)
+
+# Merge chronology and species climate niche data
+flm_df <- flm_df %>%
+  inner_join(niche_df, by = c("species_id" = "sp_code")) #note: currently losing a bunch of observations because we don't yet have range maps
+
+# Calculate species-niche standardized climate
+flm_df <- flm_df %>%
+  mutate(pet.spstd = (pet.ave - sp_pet_mean) / sp_pet_sd,
+         cwd.spstd = (cwd.ave - sp_cwd_mean) / sp_cwd_sd)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -175,11 +164,13 @@ flm_df <- flm_df %>%
 flm_df <- flm_df %>% 
   mutate(errorweights = 1 / (std.error_cwd.an^2))
 
-trim_df <- flm_df %>% 
-  filter(species_id %in% freq_species) %>% 
+trim_df <- flm_df %>%
+  filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
+         abs(cwd.spstd)<5,
+         abs(pet.spstd)<5) %>% 
   drop_na()
 
-mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd + cwd.spstd:pet.spstd, weights=errorweights, data=flm_df)
+mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights=errorweights, data=trim_df)
 summary(mod)
 
 saveRDS(mod, paste0(wdir, "second_stage\\ss_mod.rds"))
