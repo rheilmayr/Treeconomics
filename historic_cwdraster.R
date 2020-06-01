@@ -11,6 +11,7 @@ library(doParallel)
 library(data.table)
 library(geosphere)
 library(dplyr)
+library(tidyr)
 
 franspath="C:/Users/fmoore/Box/Davis Stuff/Treeconomics"
 
@@ -74,6 +75,32 @@ dat=dat[complete.cases(dat),]
 test=cwd_function(site=as.factor(dat$site),slope=dat$slope,latitude=dat$lat,foldedaspect=dat$aspect,ppt=dat$precip,tmean=dat$temp,month=dat$month,soilawc=dat$swc,year=NULL,type="normal")
 fwrite(test,file=paste0(franspath,"/Data/griddedbaselinecwddata.csv"))
 
+#merge in lat longs from site data
+sitecrosswalk=data.frame(site_grid=unique(dat$site),site=1:length(unique(dat$site)))
+test=merge(test,sitecrosswalk)
+
+test$site_grid=as.numeric(test$site_grid)
+test=merge(test[,c(3,28,29,30)],sitedata[,c(4:6)],by.x="site_grid",by.y="site")
+test$cells=cellFromXY(cwd_historic,test[,c(5,6)])
+
+testmonths=split(test,test$month)
+
+cwd_historic=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
+aet_historic=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
+
+cwd_historic[testmonths[[1]]$cells]=testmonths[[1]]$cwd
+aet_historic[testmonths[[1]]$cells]=testmonths[[1]]$aet
+
+for(j in 2:12){
+  cwdtemp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc));aettemp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
+  cwdtemp[testmonths[[j]]$cells]=testmonths[[j]]$cwd
+  aettemp[testmonths[[j]]$cells]=testmonths[[j]]$aet
+  cwd_historic=stack(cwd_historic,cwdtemp);aet_historic=stack(aet_historic,aettemp)
+}
+
+save(cwd_historic,aet_historic,file=paste0(franspath,"/Data/HistoricCWD_AETGrids.Rdat"))
+
+
 #version with annual cwwd / pet instead of climatology
 tas=crop(tas,extent(swc));pr=crop(pr,extent(swc))
 
@@ -102,39 +129,57 @@ climatedata=as.tbl(climatedata);sitedata=as.tbl(sitedata)
 dat=inner_join(climatedata,sitedata,by="site")
 dat=dat[complete.cases(dat),]
 
-fwrite(dat,file=paste0(franspath,"/Data/dataforannualbaselinecwd.csv"))
-
-cl=makeCluster(6)
+cl=makeCluster(20)
 clusterExport(cl,c("data","setorder"))
 registerDoParallel(cl)
 
-test=cwd_function(site=as.factor(dat$site),slope=dat$slope,latitude=dat$lat,foldedaspect=dat$aspect,ppt=dat$precip,tmean=dat$temp,month=dat$month,soilawc=dat$swc,year=dat$year,type="annual")
-fwrite(test,file=paste0(franspath,"/Data/griddedbaselinecwddata_annual.csv"))
+sites=unique(dat$site)
+#loop through 1000 sites at a time -> 61 groups of sites
+sitegroup=data.frame(site=sites,sitegroup=c(rep(1:60,each=1000),rep(61,97)))
+dat=left_join(dat,sitegroup)
+sitegroups=1:61
 
-#merge in lat longs from site data
-sitecrosswalk=data.frame(site_grid=unique(dat$site),site=1:length(unique(dat$site)))
-test=merge(test,sitecrosswalk)
+for(y in 1:length(sitegroups)){
+  groupdat=dat%>%filter(sitegroup==sitegroups[y])
+  test=cwd_function(site=as.factor(groupdat$site),slope=groupdat$slope,latitude=groupdat$lat,foldedaspect=groupdat$aspect,ppt=groupdat$precip,tmean=groupdat$temp,month=groupdat$month,soilawc=groupdat$swc,year=groupdat$year,type="annual")
+  fwrite(test,file=paste0(franspath,"/Data/Baseline CWD/cwd_group",sitegroups[y],".csv"))
+  print(y)
+}
 
-test$site_grid=as.numeric(test$site_grid)
-test=merge(test[,c(3,28,29,30)],sitedata[,c(4:6)],by.x="site_grid",by.y="site")
-test$cells=cellFromXY(cwd_historic,test[,c(5,6)])
+for(i in 1:length(sitegroups)){
+  temp=fread(paste0(franspath,"/Data/Baseline CWD/cwd_group",sitegroups[i],".csv"))
+  #annual totals
+  temp=temp%>%group_by(site,year)%>%summarize(aet=sum(aet),cwd=sum(cwd))
+  temp=left_join(temp,sitedata%>%select(lon,lat,site))
+  
+  if(i==1) cwdhist=temp
+  if(i>1) cwdhist=rbind(cwdhist,temp)
+}
 
-testmonths=split(test,test$month)
+cwdgrid=pivot_wider(cwdhist[,c(2,4,5,6)],id_cols=c(lon,lat),names_from=year,values_from=cwd)
+aetgrid=pivot_wider(cwdhist[,c(2,3,5,6)],id_cols=c(lon,lat),names_from=year,values_from=aet)
 
 cwd_historic=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
 aet_historic=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
 
-cwd_historic[testmonths[[1]]$cells]=testmonths[[1]]$cwd
-aet_historic[testmonths[[1]]$cells]=testmonths[[1]]$aet
+cwdgrid$cells=cellFromXY(cwd_historic,as.matrix(cwdgrid[,c(1,2)]))
+aetgrid$cells=cellFromXY(aet_historic,as.matrix(aetgrid[,c(1,2)]))
 
-for(j in 2:12){
-  cwdtemp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc));aettemp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
-  cwdtemp[testmonths[[j]]$cells]=testmonths[[j]]$cwd
-  aettemp[testmonths[[j]]$cells]=testmonths[[j]]$aet
-  cwd_historic=stack(cwd_historic,cwdtemp);aet_historic=stack(aet_historic,aettemp)
+cwdgrid=as.data.frame(cwdgrid);aetgrid=as.data.frame(aetgrid)
+
+cwd_historic[cwdgrid$cells]=cwdgrid[,grep(baseyears[1],colnames(cwdgrid))]
+aet_historic[aetgrid$cells]=aetgrid[,grep(baseyears[1],colnames(aetgrid))]
+
+for(i in 2:length(baseyears)){
+  cwdtemp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
+  aettemp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
+  cwdtemp[cwdgrid$cells]=cwdgrid[,grep(baseyears[i],colnames(cwdgrid))]
+  aettemp[aetgrid$cells]=aetgrid[,grep(baseyears[i],colnames(aetgrid))]
+  cwd_historic=addLayer(cwd_historic,cwdtemp)
+  aet_historic=addLayer(aet_historic,aettemp)
+  print(i)
 }
-
-save(cwd_historic,aet_historic,file=paste0(franspath,"/Data/HistoricCWD_AETGrids.Rdat"))
+save(cwd_historic,aet_historic,file=paste0(franspath,"/Data/HistoricCWD_AETGrids_Annual.Rdat"))
 
 cwd_function <- function(site,slope,latitude,foldedaspect,ppt,tmean,month,soilawc=200,year=NULL,type=c('normal','annual')) {
   
