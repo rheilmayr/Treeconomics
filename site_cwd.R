@@ -15,7 +15,7 @@ library(naniar)
 wdir <- 'remote\\'
 
 # 1. Pre-processed climate and soil data
-data=read.csv(paste0(wdir,"/CRU/181116-climate_soil_data_with_corrections.csv"))
+data=read.csv(paste0(wdir,"CRU\\181116-climate_soil_data_with_corrections.csv"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
