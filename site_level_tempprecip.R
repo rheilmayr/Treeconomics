@@ -18,6 +18,7 @@ monthyears=data.frame(year=rep(1901:2019,each=12),month=rep(1:12,length(1901:201
 vars=c("pre","tmn","tmx")
 for(i in 1:length(vars)){
   crudat=stack(paste0(franspath,"/Data/CRUData/cru_ts4.04.1901.2019.",vars[i],".dat.nc"))
+  NAvalue(crudat)=-999
   tempdat=extract(crudat,plots)
   nas=which(is.na(tempdat[,1]));napoints=nearestLand(plots@coords[nas,],crudat[[1]],max_distance = 100000)
   tempdat[nas,]=extract(crudat,napoints)
@@ -80,3 +81,6 @@ sites=merge(sites,climdat,by=c("year","month","site_id"))
 sites=merge(sites,baselines[,c(1:2,9:11)],by=c("month","site_id"))
 
 save(sites,file=paste0(franspath,"/Data/sitedataforcwd.Rdat"))
+fwrite(sites,file=paste0(franspath,"/Data/sitedataforcwd_210620.csv"))
+
+       
