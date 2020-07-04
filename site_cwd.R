@@ -6,6 +6,9 @@
 source("cwd_function.R")
 library(dplyr)
 library(naniar)
+library(data.table)
+library(tidyverse)
+library(geosphere)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -15,25 +18,17 @@ library(naniar)
 wdir <- 'remote\\'
 
 # 1. Pre-processed climate and soil data
-data=read.csv(paste0(wdir,"CRU\\181116-climate_soil_data_with_corrections.csv"))
+data=fread(paste0(wdir,"CRU\\sitedataforcwd_210620.csv"))
 miss_var_summary(data)
-
-
-
-clim_db = as.data.frame(tbl(conn, "climate_soil_data"))
-clim_db <- clim_db %>% 
-  mutate(swc = as.numeric(swc))
-miss_var_summary(clim_db)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Prep data --------------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Set NAs for precip and temp
-data <- data %>%
-  mutate(pre = na_if(pre, pre==-999),
-         tmn = na_if(tmn, tmn==-999),
-         tmx = na_if(tmx, tmx==-999))
+data$pre = na_if(data$pre,-999)
+data$tmn = na_if(data$tmn,-999)
+data$tmx = na_if(data$tmx,-999)
 
 # Add corrections from World Clim to CWD to get downscaled variables
 data$pre_corrected=data$pre+data$pre_correction
@@ -42,13 +37,8 @@ data$tmn_corrected=data$tmn+data$tmin_correction
 
 
 # Unit conversions
-# tmax, tmin and precip are in units of 1/10th of a degree / mm. swc is in units of mm and needs to be in units of cm
-cols=c("pre_corrected","tmn_corrected","tmx_corrected","swc") 
-for(i in 1:length(cols)){
-  col=which(colnames(data)==cols[i])
-  data[,col]=data[,col]/10
-}
-data$tmean=(data$tmn_corrected+data$tmx_corrected)/2 # IS IT VALID TO TAKE MIDPOINT BETWEEN MAX AND MIN TO CALCULATE TMEAN? 
+data$swc=data$swc/10 #convert swc from mm to cm
+data$tmean=(data$tmn_corrected+data$tmx_corrected)/2 
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -65,9 +55,13 @@ miss_var_summary(data)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Calculate CWD and save data --------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+cl=makeCluster(4)
+clusterExport(cl,c("data","setorder"))
+registerDoParallel(cl)
+
 cwd_data<-cwd_function(site=data$site_id,slope=data$slope,latitude=data$latitude,
                        foldedaspect=data$aspect,ppt=data$pre_corrected,
                        tmean=data$tmean,month=data$month,year=data$year,
                        soilawc=data$swc,type="annual")
-write.csv(data,file=paste0(wdir,"/cwd_data.csv"))
-write.csv(data[,c(1:9,23,27:29)],file=paste0(wdir,"/essentialcwd_data.csv"))
+fwrite(cwd_data,file=paste0(wdir,"/cwd_data_200620.csv"))
+fwrite(cwd_data[,c(1:9,23,27:29)],file=paste0(wdir,"/essentialcwd_data_200620.csv"))
