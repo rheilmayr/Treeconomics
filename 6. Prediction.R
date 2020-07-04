@@ -33,10 +33,11 @@ library(patchwork)
 wdir <- 'remote\\'
 
 # 1. Second stage model
-mod <- readRDS(paste0(wdir, "second_stage\\psme_mod.rds"))
+mod <- readRDS(paste0(wdir, "out\\second_stage\\psme_mod.rds"))
+mod <- readRDS(paste0(wdir, "out\\second_stage\\ss_mod.rds"))
 
 # 2. Historic climate raster
-clim_file <- paste0(wdir, 'HistoricCWD_AETGrids.Rdat')
+clim_file <- paste0(wdir, 'CRU\\HistoricCWD_AETGrids.Rdat')
 load(clim_file)
 cwd_historic <- sum(cwd_historic)
 aet_historic <- sum(aet_historic)
@@ -56,7 +57,7 @@ range_file <- paste0(wdir, 'range_maps//merged_ranges.shp')
 range_sf <- st_read(range_file)
 
 # 5. Species climate niche
-niche <- read.csv(paste0(wdir, "clim_niche.csv")) %>% 
+niche <- read.csv(paste0(wdir, "out//clim_niche.csv")) %>% 
   select(-X)
 
 
@@ -73,8 +74,9 @@ sp_range <- range_sf %>%
 sp_niche <- niche %>%
   drop_na() %>% 
   filter(sp_code == spp_code) %>% 
-  select(-sp_code) %>% 
-  summarise_all(list(mean = mean, sd = sd))
+  select(-sp_code) 
+# %>% 
+#   summarise_all(list(mean = mean, sd = sd))
 
 
 sp_range <- range_sf %>% 
@@ -172,9 +174,9 @@ sens_map | cwd_map
 # Predict growth deviation from future climate ---------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 pull_cmip_model <- function(mod_n){
-  cwd_lyr <- cwd_future[[i]]
+  cwd_lyr <- cwd_future[[mod_n]]
   names(cwd_lyr) = "cwd"
-  pet_lyr <- pet_future[[i]]
+  pet_lyr <- pet_future[[mod_n]]
   names(pet_lyr) = "pet"
   future_clim <- brick(list(cwd_lyr, pet_lyr))
   return(future_clim)
@@ -190,7 +192,7 @@ calc_rwi <- function(cmip_rast){
   return(rwi_rast)
 }
 
-n_cmip_mods <- dim(pet_raster)[3]
+n_cmip_mods <- dim(pet_future)[3]
 projections <- tibble(mod_n = 1:n_cmip_mods)
 projections <- projections %>% 
   mutate(cmip_rast = map(mod_n, pull_cmip_model),

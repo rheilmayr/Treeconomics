@@ -56,12 +56,12 @@ range_species <- range_sf %>%
   mutate(valid_range = 1)
 
 # Load list of valid dendrochronologies
-dendro_sites <- read_csv(paste0(wdir, 'rwi_data\\2_valid_sites.csv')) %>% 
+dendro_sites <- read_csv(paste0(wdir, 'out\\rwi_data\\2_valid_sites.csv')) %>% 
   select(site_id) %>% 
   mutate(valid_dendro = 1)
 
 # Load first stage results
-first_stage <- read_csv(paste0(wdir, 'first_stage\\', 'log_cwd_pet.csv'))
+first_stage <- read_csv(paste0(wdir, 'out\\first_stage\\', 'log_cwd_pet.csv'))
 first_stage <- first_stage %>% 
   select(site_id, species_id) %>% 
   mutate(valid_fs = 1)

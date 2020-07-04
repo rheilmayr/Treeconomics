@@ -36,7 +36,6 @@ library(dbplyr)
 library(RSQLite)
 library(modi)
 library(margins)
-library(fixest)
 
 
 select <- dplyr::select
@@ -62,14 +61,14 @@ cwd_df <- cwd_df %>%
 
 
 # 3. Site-level regressions
-# flm_df <- read_csv(paste0(wdir, 'first_stage\\tree_log_pet_cwd.csv')) %>%
+# flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\tree_log_pet_cwd.csv')) %>%
 #   select(-X1)
 
-flm_df <- read_csv(paste0(wdir, 'first_stage\\log_cwd_pet.csv')) %>%
+flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\log_cwd_pet.csv')) %>%
   select(-X1)
 
 
-# Remove extreme outliers
+# Identify extreme outliers
 flm_df <- flm_df %>%
   group_by(species_id) %>%
   mutate(cwd.qhigh=quantile(estimate_cwd.an,0.99,na.rm=T),
@@ -170,10 +169,10 @@ trim_df <- flm_df %>%
          abs(pet.spstd)<5) %>% 
   drop_na()
 
-mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights=errorweights, data=trim_df)
+mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=trim_df)
 summary(mod)
 
-saveRDS(mod, paste0(wdir, "second_stage\\ss_mod.rds"))
+saveRDS(mod, paste0(wdir, "out\\second_stage\\ss_mod.rds"))
 
 
 trim_df <- flm_df %>% 
