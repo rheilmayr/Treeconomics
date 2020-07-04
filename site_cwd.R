@@ -16,6 +16,14 @@ wdir <- 'remote\\'
 
 # 1. Pre-processed climate and soil data
 data=read.csv(paste0(wdir,"CRU\\181116-climate_soil_data_with_corrections.csv"))
+miss_var_summary(data)
+
+
+
+clim_db = as.data.frame(tbl(conn, "climate_soil_data"))
+clim_db <- clim_db %>% 
+  mutate(swc = as.numeric(swc))
+miss_var_summary(clim_db)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
