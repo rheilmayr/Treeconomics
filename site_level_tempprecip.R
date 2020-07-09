@@ -1,3 +1,17 @@
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Author: Robert Heilmayr, Frances Moore, Joan Dudney
+# Project: Treeconomics
+# Date: 7/6/20
+# Purpose: Pull site-level weather variables
+#
+# Input files:
+#
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Package imports --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 library(plyr)
 library(raster)
 library(sp)
@@ -7,8 +21,12 @@ library(seegSDM)
 library(data.table)
 library(ncdf4)
 
-franspath="C:/Users/fmoore/Box/Davis Stuff/Treeconomics"
-sites=fread(paste0(franspath,"/Data/siteslopeapsectelev.Rdat"))
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Load data --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+wdir <- 'remote\\'
+sites=fread(paste0(wdir,"siteslopeapsectelev.Rdat"))
 plots=unique(data.frame(latitude=sites$latitude,longitude=sites$longitude,site_id=sites$site_id))
 plots=SpatialPointsDataFrame(coords=plots[,c(2,1)],data=as.data.frame(plots[,3]))
 
