@@ -173,6 +173,19 @@ open_rwl <- function(file){
   return(out)
 }
 
+detrend_rwl <- function(rwl_dat) {
+  # Purpose:
+  #   Apply dplR to convert ring widths (RWL) to ring width index (RWI)
+  # Inputs:
+  #   rwl_dat: data.table
+  #     Generated from pull_rwl()
+  # Outputs:
+  #   rwi_dat: data.table
+  #     Table of de-trended ring width indices
+  rwi_dat <- rwl_dat %>%
+    detrend(method = "Spline", make.plot = FALSE, verbose = FALSE) # uses a spline that is 0.67 the series length
+  return(rwi_dat)
+}
 
 # read_ids <- function(rwl){
 #   caught_error <- NA
@@ -200,9 +213,11 @@ open_rwl <- function(file){
 
 rwl_files <- sapply(total_sites, site_to_filename, suffix = '')
 rwl_data <- tibble::enframe(rwl_files, name = "collection_id", value = "file")
-rwl_data <- rwl_data[1:50,]
+# rwl_data <- rwl_data[1:50,]
 rwl_data$rwl <- map(rwl_data$file, open_rwl) 
 rwl_data <- rwl_data %>% unnest(rwl)
+
+
 warnings <- rwl_data %>% 
   unnest(warning) %>% 
   select(collection_id, warning)
@@ -218,21 +233,52 @@ clean_data <- rwl_data %>%
   select(-error, -warning) %>% 
   filter(!(collection_id %in% error_collections))
 
-ids <- clean_data[1,4] %>% pull()
-rwi <- clean_data[1,3] %>% pull()
-rwi <- rwi[[1]]
-rwi <- rwi %>% 
-  rownames_to_column("year")
-rwi <- rwi %>% 
-  pivot_longer(cols = -year, names_to = "core_id", values_to = "width") %>% 
-  arrange(core_id, year)
+clean_data$rwi <- map(clean_data$rwl, detrend_rwl)
 
-ids <- ids[[1]]
-ids <- ids %>% 
-  rownames_to_column("core_id")
+pivot_rw <- function(rw, ids){
+  rw <- rw %>% as.data.frame()
+  rw <- rw %>% 
+    rownames_to_column("year")
+  rw <- rw %>% 
+    pivot_longer(cols = -year, names_to = "core_id", values_to = "width") %>% 
+    arrange(core_id, year)
+  
+  ids <- ids %>% as.data.frame()
+  ids <- ids %>% 
+    rownames_to_column("core_id")
+  
+  rw <- rw %>% 
+    left_join(ids, by = "core_id") %>% 
+    drop_na()
+  
+  return(rw)
+}
 
-rwi <- rwi %>% 
-  left_join(ids, by = "core_id")
+clean_data$rwi_long <- map2(clean_data$rwi, clean_data$ids, pivot_rw)
+
+clean_data <- clean_data %>% 
+  select(collection_id, rwi_long) %>% 
+  unnest(rwi_long) %>% 
+  mutate(site = replace_na(1))
+clean_data
+
+n_obs <- clean_data %>% dim()
+n_trees <- clean_data %>% 
+  select(collection_id, tree) %>% 
+  distinct() %>% 
+  dim()
+n_collections <- clean_data %>% 
+  select(collection_id) %>% 
+  distinct() %>% 
+  dim()
+
+n_usable_obs <- clean_data %>% 
+  filter(year>1900) %>% 
+  select(year, collection_id, tree) %>% 
+  distinct() %>% 
+  dim()
+
+write_csv(clean_data, paste0(out_dir, "rwi_long.csv"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
