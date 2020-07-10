@@ -12,6 +12,7 @@
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Package imports --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+library(tidyverse)
 library(plyr)
 library(raster)
 library(sp)
@@ -26,16 +27,16 @@ library(ncdf4)
 # Load data --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 wdir <- 'remote\\'
-sites=fread(paste0(wdir,"siteslopeapsectelev.Rdat"))
-plots=unique(data.frame(latitude=sites$latitude,longitude=sites$longitude,site_id=sites$site_id))
+sites=fread(paste0(wdir, 'out//dendro//site_summary_slopeaspect.csv'))
+plots=unique(data.frame(latitude=sites$latitude,longitude=sites$longitude,site_id=sites$collection_id))
 plots=SpatialPointsDataFrame(coords=plots[,c(2,1)],data=as.data.frame(plots[,3]))
 
 #get cru tmin, tmax and precip
 monthyears=data.frame(year=rep(1901:2019,each=12),month=rep(1:12,length(1901:2019)))
 
-vars=c("pre","tmn","tmx")
+vars=c("pre","tmp")
 for(i in 1:length(vars)){
-  crudat=stack(paste0(franspath,"/Data/CRUData/cru_ts4.04.1901.2019.",vars[i],".dat.nc"))
+  crudat=stack(paste0(wdir,"Raster Data for CWD/CRUData/cru_ts4.04.1901.2019.",vars[i],".dat.nc"))
   NAvalue(crudat)=-999
   tempdat=extract(crudat,plots)
   nas=which(is.na(tempdat[,1]));napoints=nearestLand(plots@coords[nas,],crudat[[1]],max_distance = 100000)
