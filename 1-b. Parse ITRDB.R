@@ -33,10 +33,6 @@ wdir <- 'remote\\'
 
 data_dir <- paste0(wdir, 'in\\itrdb\\rwi\\')
 header_files <- list.files(data_dir, pattern = 'noaa.rwl')
-# filenames <- list.files(data_dir, pattern = '.rwl')
-# header_bool <- stri_detect_fixed(filenames, "-noaa")
-# header_files <- filenames[which(header_bool)]
-# rwl_files <- filenames[which(!header_bool)]
 
 out_dir <- paste0(wdir, 'out\\dendro\\')
 
@@ -175,30 +171,6 @@ open_rwl <- function(file){
 }
 
 
-
-# read_ids <- function(rwl){
-#   caught_error <- NA
-#   caught_warning <- NA
-#   ids <- NA
-#   tryCatch(
-#     expr = {
-#       ids <- autoread.ids(rwl)
-#     },
-#     error = function(e){ 
-#       message("Returned error on site ", file)
-#       print(e)
-#       caught_error <<- e
-#     },
-#     warning = function(w){
-#       message("Returned warning on file ", file)
-#       print(w)
-#       caught_warning <<- w
-#     }
-#   )
-#   out <- tibble(ids = list(ids), error = caught_error[1], warning = caught_warning[1])
-#   return(out)
-# }
-
 separate_errors <- function(rwl_data){
   warnings <- rwl_data %>% 
     unnest(warning) %>% 
@@ -247,7 +219,6 @@ sum_rwl <- function(e_dat, l_dat){
   )
   if (failed){
     return(tibble(rwl = list(NULL), error = error))
-    # return(list(rwl = NULL, error = error))
   } 
   else {
     e_na <- is.na(e_dat)
