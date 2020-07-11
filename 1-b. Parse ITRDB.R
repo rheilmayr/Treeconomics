@@ -141,7 +141,7 @@ write_csv(site_summary, paste0(out_dir, "site_summary.csv"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Process rwl files --------------------------------------------------------
+# Process total rwl files --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 site_to_filename <- function(site, suffix){
   site <- str_to_lower(site)
@@ -228,12 +228,48 @@ rwl_data <- rwl_data %>% unnest(rwl)
 rwl_results <- separate_errors(rwl_data)
 clean_data <- rwl_results$clean_data
 
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Process earlywood/latewood files ---------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+sum_rwl <- function(e_dat, l_dat){
+  failed <- F
+  error <- NA
+  tryCatch(
+    expr = {
+      expect_identical(rownames(e_dat), rownames(l_dat))
+      expect_identical(colnames(e_dat), colnames(l_dat))
+    },
+    error = function(e){ 
+      failed <<- T
+      error <<- e[1]
+    }
+  )
+  if (failed){
+    return(tibble(rwl = list(NULL), error = error))
+    # return(list(rwl = NULL, error = error))
+  } 
+  else {
+    e_na <- is.na(e_dat)
+    l_na <- is.na(l_dat)
+    both_na <- (e_na & l_na)
+    e_dat[is.na(e_dat)] <- 0
+    l_dat[is.na(l_dat)] <- 0
+    sum_dat <- e_dat + l_dat
+    sum_dat[both_na] <- NA
+    rwl <- as.rwl(sum_dat)
+    return(tibble(rwl = list(rwl), error = error))
+    }
+}
+
 erwl_files <- sapply(sum_sites, site_to_filename, suffix = 'e')
 erwl_data <- tibble::enframe(erwl_files, name = "collection_id", value = "file")
 erwl_data$rwl <- map(erwl_data$file, open_rwl) 
 erwl_data <- erwl_data %>% unnest(rwl)
 erwl_results <- separate_errors(erwl_data)
 e_clean_data <- erwl_results$clean_data
+e_clean_data <- e_clean_data %>% 
+  rename(erwl = rwl)
 
 lrwl_files <- sapply(sum_sites, site_to_filename, suffix = 'l')
 lrwl_data <- tibble::enframe(lrwl_files, name = "collection_id", value = "file")
@@ -241,23 +277,20 @@ lrwl_data$rwl <- map(lrwl_data$file, open_rwl)
 lrwl_data <- lrwl_data %>% unnest(rwl)
 lrwl_results <- separate_errors(lrwl_data)
 l_clean_data <- lrwl_results$clean_data
+l_clean_data <- l_clean_data %>% 
+  rename(lrwl = rwl)
 
-# e_dat <- (erwl_clean_data[1,3] %>% pull())
-# l_dat <- (lrwl_clean_data[1,3] %>% pull())
+s_clean_data <- e_clean_data %>% 
+  select(-ids, -file) %>% 
+  inner_join(l_clean_data, by = "collection_id")
 
-# sum_rwl <- function(e_dat, l_dat){
-#   e_dat <- e_dat[[1]]
-#   l_dat <- l_dat[[1]]
-#   expect_identical(rownames(e_dat), rownames(l_dat))
-#   expect_identical(colnames(e_dat), colnames(l_dat))
-#   e_dat[is.na(e_dat)] <- 0
-#   l_dat[is.na(l_dat)] <- 0
-#   sum_dat <- e_dat + l_dat
-#   sum_dat[sum_dat==0] <- NA
-#   return(data.frame(sum_dat))
-# }
+s_clean_data$rwl <- map2(s_clean_data$erwl, s_clean_data$lrwl, sum_rwl)
+s_clean_data <- s_clean_data %>% 
+  unnest(rwl) %>% 
+  filter(map_lgl(error, is.na)) %>% #currently all files are merging correctly
+  select(collection_id, file, rwl, ids)
 
-
+clean_data <- rbind(clean_data, s_clean_data)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Detrend rwl to create rwi --------------------------------------------------------
@@ -277,8 +310,6 @@ detrend_rwl <- function(rwl_dat) {
 }
 
 clean_data$rwi <- map(clean_data$rwl, detrend_rwl)
-e_clean_data$rwi <- map(e_clean_data$rwl, detrend_rwl)
-l_clean_data$rwi <- map(l_clean_data$rwl, detrend_rwl)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Pivot to long --------------------------------------------------------
@@ -308,34 +339,6 @@ clean_data <- clean_data %>%
   unnest(rwi_long) %>% 
   mutate(site = replace_na(1)) %>% 
   select(collection_id, core_id, year, tree, core, site, width)
-
-e_clean_data$rwi_long <- map2(e_clean_data$rwi, e_clean_data$ids, pivot_rw)
-e_clean_data <- e_clean_data %>% 
-  select(collection_id, rwi_long) %>% 
-  unnest(rwi_long) %>% 
-  mutate(site = replace_na(1))
-e_clean_data <- e_clean_data %>% 
-  rename(ewidth = width)
-
-l_clean_data$rwi_long <- map2(l_clean_data$rwi, l_clean_data$ids, pivot_rw)
-l_clean_data <- l_clean_data %>% 
-  select(collection_id, rwi_long) %>% 
-  unnest(rwi_long) %>% 
-  mutate(site = replace_na(1)) 
-l_clean_data <- l_clean_data %>% 
-  rename(lwidth = width)
-
-s_clean_data <- e_clean_data %>% 
-  select(collection_id, year, core_id, ewidth) %>% 
-  merge(l_clean_data, by = c("collection_id","year","core_id"), all = TRUE)
-s_clean_data <- s_clean_data %>% 
-  mutate(lwidth = replace_na(lwidth, 0),
-         ewidth = replace_na(ewidth, 0),
-         width = sum(lwidth, ewidth, na.rm = TRUE),
-         width = na_if(width, 0)) %>% 
-  select(collection_id, core_id, year, tree, core, site, width)
-
-clean_data <- rbind(clean_data, s_clean_data)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
