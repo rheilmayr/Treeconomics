@@ -55,6 +55,9 @@ data$aspect <- data$aspect * 57.2958 # convert aspect from radians to degrees
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Characterize missing data ----------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+data <- data %>% 
+  select(site_id, slope, latitude, longitude, aspect, pre_corrected, tmean, month, year, swc)
+
 data %>% gg_miss_upset()
 any_missing <- data %>%
   filter_all(any_vars(is.na(.)))
@@ -66,13 +69,15 @@ miss_var_summary(data)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Calculate CWD and save data --------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# cl=makeCluster(4)
-# clusterExport(cl,c("data","setorder"))
-# registerDoParallel(cl)
+cl=makeCluster(4)
+clusterExport(cl,c("data","setorder"))
+registerDoParallel(cl)
 
 cwd_data<-cwd_function(site=data$site_id,slope=data$slope,latitude=data$latitude,
                        foldedaspect=data$aspect,ppt=data$pre_corrected,
                        tmean=data$tmean,month=data$month,year=data$year,
                        soilawc=data$swc,type="annual")
 # fwrite(cwd_data,file=paste0(wdir,"out/climate/cwd_data_200620.csv"))
-fwrite(cwd_data[,c(1:9,23,27:29)],file=paste0(wdir,"out/climate/essentialcwd_data_200620.csv"))
+cwd_data <- cwd_data %>%
+  select(site, year, month, aet, cwd)
+fwrite(cwd_data,file=paste0(wdir,"out/climate/essentialcwd_data.csv"))

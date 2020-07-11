@@ -34,12 +34,12 @@ select <- dplyr::select
 wdir <- 'remote\\'
 
 # 1. Historic climate raster
-clim_file <- paste0(wdir, 'CRU//HistoricCWD_AETGrids_Annual.Rdat')
+clim_file <- paste0(wdir, 'in//CRUData//historic_raster//HistoricCWD_AETGrids_Annual.Rdat')
 load(clim_file)
 pet_historic <- aet_historic + cwd_historic
 
 # 2. Species range maps
-range_file <- paste0(wdir, 'range_maps//merged_ranges.shp')
+range_file <- paste0(wdir, 'in//species_ranges//merged_ranges.shp')
 range_sf <- st_read(range_file)
 
 

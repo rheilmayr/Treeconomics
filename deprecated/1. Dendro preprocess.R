@@ -41,7 +41,7 @@ wdir <- 'remote\\'
 # #for Fran
 # wdir="C:/Users/fmoore/Google Drive/Treeconomics/Data/"
 tree_db = paste0(wdir, 'tree_ring_data_V2.db')
-cwd_csv = paste0(wdir, 'essentialcwd_data.csv')
+cwd_csv = paste0(wdir, 'CRU/essentialcwd_data_200620.csv')
 
 # Connect to database
 sqlite <- dbDriver("SQLite")
@@ -100,6 +100,11 @@ pull_rwl <- function(s_id, sp_id){
     arrange(year) %>%
     mutate(year = as.character(year)) %>%
     select(tree_id, year, ring_width) 
+  
+  dupes <- obs %>%
+    select(tree_id, year, ring_width) %>%
+    duplicated()
+  dupes <- obs %>% filter(dupes)
   
   # Check for invalid duplicates in site-species-year
   any_duplicates <- obs %>%
@@ -248,7 +253,7 @@ export_rwi <- function(s_id, sp_id) {
                  names_to = "tree_id",
                  values_to = "rwi")
 
-  write.csv(rwi_dat, paste0(wdir, 'rwi_data\\sid-', s_id, '_spid-', sp_id, '.csv'))
+  write.csv(rwi_dat, paste0(wdir, 'out\\rwi_data\\sid-', s_id, '_spid-', sp_id, '.csv'))
   # Diagnostic plots
   # rwl_dat %>% rwl.report()
   # rwl_dat %>% plot.rwl()
@@ -261,10 +266,10 @@ export_rwi <- function(s_id, sp_id) {
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Run chronology generation  ----------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# sites <- sites[1:10,]
-# site <- sites[2,]
-# sp_id <- site %>% pull(species_id)
-# s_id <- site %>% pull(site_id)
+sites <- sites[1:10,]
+site <- sites[1,]
+sp_id <- site %>% pull(species_id)
+s_id <- site %>% pull(site_id)
 
 ptm <- proc.time()
 pb <- progress_estimated(dim(sites)[1])
@@ -277,20 +282,20 @@ invalid_sites <- sites %>%
   as_tibble() %>% 
   select(species_id, site_id)
 n_invalid = dim(invalid_sites)[1]
-invalid_sites %>% write.csv(paste0(wdir, 'rwi_data\\1_invalid_sites.csv'))
+invalid_sites %>% write.csv(paste0(wdir, 'out\\rwi_data\\1_invalid_sites.csv'))
 
 valid_sites <- sites %>% 
   filter(!nobs %>% is.na()) %>%
   unnest('nobs') %>% 
   as_tibble()
 n_valid = dim(valid_sites)[1]
-valid_sites %>% write.csv(paste0(wdir, 'rwi_data\\2_valid_sites.csv'))
+valid_sites %>% write.csv(paste0(wdir, 'out\\rwi_data\\2_valid_sites.csv'))
 
 nobs <- valid_sites %>% 
   pull(nobs) %>% 
   sum()
 
-fileConn <- file(paste0(wdir, 'rwi_data\\3_dendro_summary.txt'))
+fileConn <- file(paste0(wdir, 'out\\rwi_data\\3_dendro_summary.txt'))
 writeLines(c(paste0("Dendro processing completed with ",
                     as.character(n_valid),
                     " valid site/species combinations and ",

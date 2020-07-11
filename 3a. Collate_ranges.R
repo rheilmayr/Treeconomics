@@ -15,8 +15,8 @@ library(sf)
 library(tidyverse)
 
 # Create file list
-# data_dir <- 'remote\\'
-wdir <- 'D:\\cloud\\Dropbox\\collaborations\\treeconomics\\species_ranges\\'
+wdir <- 'remote\\in\\species_ranges\\'
+# wdir <- 'D:\\cloud\\Dropbox\\collaborations\\treeconomics\\species_ranges\\'
 ranges_dir <- paste0(wdir, 'processed_data\\')
 species_list <- list.files(ranges_dir)
 
