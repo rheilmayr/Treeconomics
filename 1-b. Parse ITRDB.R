@@ -23,6 +23,7 @@ library(purrr)
 library(dplR)
 library(stringi)
 library(varhandle)
+library(testthat)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data --------------------------------------------------------
@@ -30,7 +31,7 @@ library(varhandle)
 # Define path
 wdir <- 'remote\\'
 
-data_dir <- paste0(wdir, 'raw_in\\itrdb\\rwi\\')
+data_dir <- paste0(wdir, 'in\\itrdb\\rwi\\')
 header_files <- list.files(data_dir, pattern = 'noaa.rwl')
 # filenames <- list.files(data_dir, pattern = '.rwl')
 # header_bool <- stri_detect_fixed(filenames, "-noaa")
@@ -173,19 +174,7 @@ open_rwl <- function(file){
   return(out)
 }
 
-detrend_rwl <- function(rwl_dat) {
-  # Purpose:
-  #   Apply dplR to convert ring widths (RWL) to ring width index (RWI)
-  # Inputs:
-  #   rwl_dat: data.table
-  #     Generated from pull_rwl()
-  # Outputs:
-  #   rwi_dat: data.table
-  #     Table of de-trended ring width indices
-  rwi_dat <- rwl_dat %>%
-    detrend(method = "Spline", make.plot = FALSE, verbose = FALSE) # uses a spline that is 0.67 the series length
-  return(rwi_dat)
-}
+
 
 # read_ids <- function(rwl){
 #   caught_error <- NA
@@ -210,31 +199,90 @@ detrend_rwl <- function(rwl_dat) {
 #   return(out)
 # }
 
+separate_errors <- function(rwl_data){
+  warnings <- rwl_data %>% 
+    unnest(warning) %>% 
+    select(collection_id, warning)
+  errors <- rwl_data %>% 
+    unnest(error) %>% 
+    select(collection_id, error)
+  
+  error_collections <- errors %>% pull(collection_id)
+  warning_collections <- warnings %>% pull(collection_id)
+  error_collections <- c(error_collections, warning_collections)
+  
+  clean_data <- rwl_data %>% 
+    select(-error, -warning) %>% 
+    filter(!(collection_id %in% error_collections))
+  errors <- rwl_data %>% 
+    select(-rwl, -ids) %>% 
+    filter(collection_id %in% error_collections) %>% 
+    unnest(c(warning, error))
+  return(list(clean_data = clean_data, errors = errors))
+}
 
 rwl_files <- sapply(total_sites, site_to_filename, suffix = '')
 rwl_data <- tibble::enframe(rwl_files, name = "collection_id", value = "file")
-# rwl_data <- rwl_data[1:50,]
 rwl_data$rwl <- map(rwl_data$file, open_rwl) 
 rwl_data <- rwl_data %>% unnest(rwl)
+rwl_results <- separate_errors(rwl_data)
+clean_data <- rwl_results$clean_data
+
+erwl_files <- sapply(sum_sites, site_to_filename, suffix = 'e')
+erwl_data <- tibble::enframe(erwl_files, name = "collection_id", value = "file")
+erwl_data$rwl <- map(erwl_data$file, open_rwl) 
+erwl_data <- erwl_data %>% unnest(rwl)
+erwl_results <- separate_errors(erwl_data)
+e_clean_data <- erwl_results$clean_data
+
+lrwl_files <- sapply(sum_sites, site_to_filename, suffix = 'l')
+lrwl_data <- tibble::enframe(lrwl_files, name = "collection_id", value = "file")
+lrwl_data$rwl <- map(lrwl_data$file, open_rwl) 
+lrwl_data <- lrwl_data %>% unnest(rwl)
+lrwl_results <- separate_errors(lrwl_data)
+l_clean_data <- lrwl_results$clean_data
+
+# e_dat <- (erwl_clean_data[1,3] %>% pull())
+# l_dat <- (lrwl_clean_data[1,3] %>% pull())
+
+# sum_rwl <- function(e_dat, l_dat){
+#   e_dat <- e_dat[[1]]
+#   l_dat <- l_dat[[1]]
+#   expect_identical(rownames(e_dat), rownames(l_dat))
+#   expect_identical(colnames(e_dat), colnames(l_dat))
+#   e_dat[is.na(e_dat)] <- 0
+#   l_dat[is.na(l_dat)] <- 0
+#   sum_dat <- e_dat + l_dat
+#   sum_dat[sum_dat==0] <- NA
+#   return(data.frame(sum_dat))
+# }
 
 
-warnings <- rwl_data %>% 
-  unnest(warning) %>% 
-  select(collection_id, warning)
-errors <- rwl_data %>% 
-  unnest(error) %>% 
-  select(collection_id, error)
 
-error_collections <- errors %>% pull(collection_id)
-warning_collections <- warnings %>% pull(collection_id)
-error_collections <- c(error_collections, warning_collections)
-
-clean_data <- rwl_data %>% 
-  select(-error, -warning) %>% 
-  filter(!(collection_id %in% error_collections))
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Detrend rwl to create rwi --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+detrend_rwl <- function(rwl_dat) {
+  # Purpose:
+  #   Apply dplR to convert ring widths (RWL) to ring width index (RWI)
+  # Inputs:
+  #   rwl_dat: data.table
+  #     Generated from pull_rwl()
+  # Outputs:
+  #   rwi_dat: data.table
+  #     Table of de-trended ring width indices
+  rwi_dat <- rwl_dat %>%
+    detrend(method = "Spline", make.plot = FALSE, verbose = FALSE) # uses a spline that is 0.67 the series length
+  return(rwi_dat)
+}
 
 clean_data$rwi <- map(clean_data$rwl, detrend_rwl)
+e_clean_data$rwi <- map(e_clean_data$rwl, detrend_rwl)
+l_clean_data$rwi <- map(l_clean_data$rwl, detrend_rwl)
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Pivot to long --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 pivot_rw <- function(rw, ids){
   rw <- rw %>% as.data.frame()
   rw <- rw %>% 
@@ -255,13 +303,53 @@ pivot_rw <- function(rw, ids){
 }
 
 clean_data$rwi_long <- map2(clean_data$rwi, clean_data$ids, pivot_rw)
-
 clean_data <- clean_data %>% 
   select(collection_id, rwi_long) %>% 
   unnest(rwi_long) %>% 
-  mutate(site = replace_na(1))
-clean_data
+  mutate(site = replace_na(1)) %>% 
+  select(collection_id, core_id, year, tree, core, site, width)
 
+e_clean_data$rwi_long <- map2(e_clean_data$rwi, e_clean_data$ids, pivot_rw)
+e_clean_data <- e_clean_data %>% 
+  select(collection_id, rwi_long) %>% 
+  unnest(rwi_long) %>% 
+  mutate(site = replace_na(1))
+e_clean_data <- e_clean_data %>% 
+  rename(ewidth = width)
+
+l_clean_data$rwi_long <- map2(l_clean_data$rwi, l_clean_data$ids, pivot_rw)
+l_clean_data <- l_clean_data %>% 
+  select(collection_id, rwi_long) %>% 
+  unnest(rwi_long) %>% 
+  mutate(site = replace_na(1)) 
+l_clean_data <- l_clean_data %>% 
+  rename(lwidth = width)
+
+s_clean_data <- e_clean_data %>% 
+  select(collection_id, year, core_id, ewidth) %>% 
+  merge(l_clean_data, by = c("collection_id","year","core_id"), all = TRUE)
+s_clean_data <- s_clean_data %>% 
+  mutate(lwidth = replace_na(lwidth, 0),
+         ewidth = replace_na(ewidth, 0),
+         width = sum(lwidth, ewidth, na.rm = TRUE),
+         width = na_if(width, 0)) %>% 
+  select(collection_id, core_id, year, tree, core, site, width)
+
+clean_data <- rbind(clean_data, s_clean_data)
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Export results and error log --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+write_csv(clean_data, paste0(out_dir, "rwi_long.csv"))
+
+error_log <- rbind(rwl_results$errors, erwl_results$errors, lrwl_results$errors)
+write_csv(clean_data, paste0(out_dir, "itrdb_error_log.csv"))
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Summarize number of observations ---------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 n_obs <- clean_data %>% dim()
 n_trees <- clean_data %>% 
   select(collection_id, tree) %>% 
@@ -271,14 +359,11 @@ n_collections <- clean_data %>%
   select(collection_id) %>% 
   distinct() %>% 
   dim()
-
 n_usable_obs <- clean_data %>% 
   filter(year>1900) %>% 
   select(year, collection_id, tree) %>% 
   distinct() %>% 
   dim()
-
-write_csv(clean_data, paste0(out_dir, "rwi_long.csv"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -291,7 +376,7 @@ write_csv(clean_data, paste0(out_dir, "rwi_long.csv"))
 # 
 # Updates over original dataset -
 #   Added data from more recent ITRDB uploads
-#   Correctly dealing with early / latewood observations
+#   Summing early / latewood observations
 #   Separating out multiple cores from a single tree
-#   Fewer parsing errors?
+#   Fewer parsing errors
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
