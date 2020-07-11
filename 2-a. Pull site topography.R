@@ -41,20 +41,20 @@ for(i in 1:dim(site)[1]){
   demname=paste0(demlatdir,demlat,demlondir,demlon)
   demfile=grep(demname,demfiles)
   if(length(demfile)==0){ #some sites don't have dems as on islands
-    siteslopeaspect=c(NA,NA,i)
+    siteslopeaspect=c(NA,NA,NA)
   }
   if(length(demfile)>0){
     dem=raster(demfiles[demfile])
     ter=terrain(dem,opt=c("slope","aspect"))
     if(lon%%1==0) lon=lon+0.001;if(lat%%1==0) lat=lat+0.001 #small adjustment for points right on the edge of the dem granule
-    siteslopeaspect=c(extract(ter,data.frame(lon=lon,lat=lat)),i)
+    siteslopeaspect=c(extract(ter,data.frame(lon=lon,lat=lat)),extract(dem,data.frame(lon=lon,lat=lat)))
   }
   if(i==1) slopeaspect=siteslopeaspect
   if(i>1) slopeaspect=rbind(slopeaspect,siteslopeaspect)
   print(i)
 }
 
-site=cbind(site,slopeaspect[,1:2])
-colnames(site)[13:14]=c("slope","aspect")
+site=cbind(site,slopeaspect)
+colnames(site)[13:15]=c("slope","aspect","demelevation")
 
 write.csv(site, file=paste0(wdir, 'out//dendro//site_summary_slopeaspect.csv'))
