@@ -1,3 +1,12 @@
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Author: Robert Heilmayr, Joan Dudney, Frances Moore
+# Project: Treeconomics
+# Date: 7/10/20
+# Purpose: Convert site topography, soil and weather to CWD/AET/PET
+#
+# Input files:
+#
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -57,13 +66,13 @@ miss_var_summary(data)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Calculate CWD and save data --------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-cl=makeCluster(4)
-clusterExport(cl,c("data","setorder"))
-registerDoParallel(cl)
+# cl=makeCluster(4)
+# clusterExport(cl,c("data","setorder"))
+# registerDoParallel(cl)
 
 cwd_data<-cwd_function(site=data$site_id,slope=data$slope,latitude=data$latitude,
                        foldedaspect=data$aspect,ppt=data$pre_corrected,
                        tmean=data$tmean,month=data$month,year=data$year,
                        soilawc=data$swc,type="annual")
-fwrite(cwd_data,file=paste0(wdir,"/cwd_data_200620.csv"))
-fwrite(cwd_data[,c(1:9,23,27:29)],file=paste0(wdir,"/essentialcwd_data_200620.csv"))
+# fwrite(cwd_data,file=paste0(wdir,"out/climate/cwd_data_200620.csv"))
+fwrite(cwd_data[,c(1:9,23,27:29)],file=paste0(wdir,"out/climate/essentialcwd_data_200620.csv"))
