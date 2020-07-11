@@ -23,6 +23,8 @@ wdir <- 'remote//'
 
 # 1. Load site latitude and longitude
 site <- read_csv(paste0(wdir, 'out//dendro//site_summary.csv'))
+site <- site %>% 
+  rename(elevation_itrdb = elevation)
 
 #2. Set Directory for DEM tiles
 demfiles=list.files("E:\\DEM Data",full.names=TRUE)
