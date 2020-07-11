@@ -18,7 +18,7 @@ library(geosphere)
 wdir <- 'remote\\'
 
 # 1. Pre-processed climate and soil data
-data=fread(paste0(wdir,"CRU\\sitedataforcwd_210620.csv"))
+data=fread(paste0(wdir,"out\\climate\\sitedataforcwd_210620.csv"))
 miss_var_summary(data)
 
 
@@ -39,6 +39,8 @@ data$tmn_corrected=data$tmn+data$tmin_correction
 # Unit conversions
 data$swc=data$swc/10 #convert swc from mm to cm
 data$tmean=(data$tmn_corrected+data$tmx_corrected)/2 
+data$slope <- data$slope * 57.2958 # convert slope from radians to degrees
+data$aspect <- data$aspect * 57.2958 # convert aspect from radians to degrees
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
