@@ -38,23 +38,25 @@ library(purrr)
 wdir <- 'remote\\'
 
 # 1. Dendrochronologies
-dendro_dir <- paste0(wdir, "rwi_data\\")
-dendro_sites <- read.csv(paste0(dendro_dir, "2_valid_sites.csv")) %>% 
-  select(-X) %>% 
-  mutate(file_name = paste0('sid-', site_id, '_spid-', species_id, '.csv'))
+dendro_dir <- paste0(wdir, "out\\dendro\\")
+dendro_df <- read_csv(paste0(dendro_dir, "rwi_long.csv"))
+dendro_df <- dendro_df %>% 
+  filter(year>1900)
+# dendro_sites <- read.csv(paste0(dendro_dir, "2_valid_sites.csv")) %>% 
+#   select(-X) %>% 
+#   mutate(file_name = paste0('sid-', site_id, '_spid-', species_id, '.csv'))
 
 # 2. Site-specific weather history
-cwd_csv <- paste0(wdir, 'essentialcwd_data.csv')
-cwd_df <- read.csv(cwd_csv, sep=',')
+cwd_csv <- paste0(wdir, 'out\\climate\\essentialcwd_data.csv')
+cwd_df <- read_csv(cwd_csv, sep=',')
 cwd_df <- cwd_df %>% 
   mutate("site_id" = as.character(site))
 
 cwd_sites <- cwd_df %>% 
   select(site) %>% 
   distinct()
-cwd_dendro_sites <- dendro_sites %>% 
-  inner_join(cwd_sites, by = c("site_id" = "site"))
-
+# cwd_dendro_sites <- dendro_sites %>% 
+#   inner_join(cwd_sites, by = c("site_id" = "site"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -62,12 +64,16 @@ cwd_dendro_sites <- dendro_sites %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Calculate site-level annual climate
 clim_df = cwd_df %>%
-  group_by(site_id, year) %>%
+  rename(collection_id = site_id) %>% 
+  group_by(collection_id, year) %>%
   summarise(aet.an = sum(aet),
             cwd.an = sum(cwd),
-            pet.an = sum(petm),
-            temp.an = mean(tmean),
-            ppt.an = sum(ppt))
+            pet.an = sum((aet+cwd)))
+            # temp.an = mean(tmean),
+            # ppt.an = sum(ppt))
+
+dendro_df <- dendro_df %>% 
+  left_join(clim_df, by = c("collection_id", "year"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -166,110 +172,133 @@ ihsTransform <- function(y) {log(y + (y ^ 2 + 1) ^ 0.5)}
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Run site-level regressions --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-# sites <- cwd_dendro_sites[1:10,]
-# i = 2
-# s_id <- cwd_dendro_sites[i,] %>%
-#   pull(site_id)
-# sp_id <- cwd_dendro_sites[i,] %>%
-#   pull(species_id)
-
-
-
-site_lm <- cwd_dendro_sites %>% 
-  group_by(site_id, species_id) %>% 
-  nest() %>% 
-  mutate(mod = map2(site_id, species_id, dendro_lm),
-         cov = map(mod, getcov),
-         nobs = map(mod, getnobs),
-         mod = map(mod, tidy))
-site_lm <- site_lm %>% 
-  select(-data) %>% 
-  unnest(c(mod, cov, nobs)) %>%
-  filter(term %in% c('cwd.an', 'pet.an'))
-
-siteCoef <- site_lm %>%
-  pivot_wider(names_from = "term", values_from = c("estimate", "std.error", "statistic", "p.value"))
-
-siteCoef %>% write.csv(paste0(wdir, 'first_stage\\', 'log_cwd_pet.csv'))
-
-
-
+# 
+# # sites <- cwd_dendro_sites[1:10,]
+# # i = 2
+# # s_id <- cwd_dendro_sites[i,] %>%
+# #   pull(site_id)
+# # sp_id <- cwd_dendro_sites[i,] %>%
+# #   pull(species_id)
+# 
+# 
+# 
+# site_lm <- cwd_dendro_sites %>% 
+#   group_by(site_id, species_id) %>% 
+#   nest() %>% 
+#   mutate(mod = map2(site_id, species_id, dendro_lm),
+#          cov = map(mod, getcov),
+#          nobs = map(mod, getnobs),
+#          mod = map(mod, tidy))
+# site_lm <- site_lm %>% 
+#   select(-data) %>% 
+#   unnest(c(mod, cov, nobs)) %>%
+#   filter(term %in% c('cwd.an', 'pet.an'))
+# 
+# siteCoef <- site_lm %>%
+#   pivot_wider(names_from = "term", values_from = c("estimate", "std.error", "statistic", "p.value"))
+# 
+# siteCoef %>% write.csv(paste0(wdir, 'first_stage\\', 'log_cwd_pet.csv'))
+# 
+# 
+# 
 
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Run tree-level regressions ------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-load_obs <- function(s_id, sp_id){
-  dendro_file <- paste0('sid-', s_id, '_spid-', sp_id, '.csv')
-  dendro_dat <- read.csv(paste0(dendro_dir, dendro_file)) %>% 
-    mutate(site_id = as.character(s_id)) %>% 
-    select(-X, -site_id) %>% 
-    drop_na()
-  return(dendro_dat)
-}
+# load_obs <- function(s_id, sp_id){
+#   dendro_file <- paste0('sid-', s_id, '_spid-', sp_id, '.csv')
+#   dendro_dat <- read.csv(paste0(dendro_dir, dendro_file)) %>% 
+#     mutate(site_id = as.character(s_id)) %>% 
+#     select(-X, -site_id) %>% 
+#     drop_na()
+#   return(dendro_dat)
+# }
 
 
-fs_mod <- function(tree_df){
+fs_mod <- function(tree_data){
   failed <- F
+  error <- NA
+  mod <- NA
   # Try to run felm. Typically fails if missing cwd / aet data 
   tryCatch(
     expr = {
-      mod <- lm(ln_rwi ~ pet.an + cwd.an, data = tree_df)
+      mod <- lm(ln_rwi ~ pet.an + cwd.an, data = tree_data)
     },
     error = function(e){ 
-      message("Returned error")
-      print(e)
+      message("Returned regression error")
+      error <<- e[1]
       failed <<- T
     }
   )
   if (failed){
-    return(NULL)
+    return(tibble(mod = list(tidy(mod)), error = error))
   }
-  return(mod)
+  return(tibble(mod = list(tidy(mod)), error = error))
 }
 
 
-
-# select_sites = cwd_dendro_sites[1:20,]
-
-tree_df <- cwd_dendro_sites %>% 
-  group_by(site_id, species_id) %>% 
-  nest() %>% 
-  mutate(data = map2(site_id, species_id, load_obs)) %>% 
-  unnest(data)
-
+tree_df <- dendro_df %>% 
+  mutate(ln_rwi = log(width)) %>% 
+  group_by(collection_id, tree) %>%
+  add_tally(name = 'nobs') %>% 
+  filter(nobs>10) %>% 
+  nest()
 
 tree_df <- tree_df %>% 
-  left_join(clim_df, by = c("site_id", "year")) %>% 
-  drop_na()
+  mutate(fs_result = map(data, fs_mod)) %>% 
+  select(collection_id, tree, fs_result) %>% 
+  unnest(fs_result) %>% 
+  unnest(mod)
 
-tree_df <- tree_df %>% 
-  mutate(ln_rwi = log(rwi)) %>% 
-  drop_na()
-
-
-tree_summary <- tree_df %>% 
-  select(tree_id, species_id, site_id) %>% 
-  distinct()
-
-tree_lm <- tree_df %>% 
-  group_by(tree_id) %>%
-  nest() %>% 
-  mutate(mod = map(data, fs_mod),
-         mod = map(mod, tidy))
-
-tree_lm <- tree_lm %>% 
-  unnest(mod) %>%
-  select(-data) %>% 
-  filter(term %in% c('cwd.an', 'pet.an'))
-
-tree_coef <- tree_lm %>%
+tree_df <-  tree_df %>% 
+  filter(term %in% c('cwd.an', 'pet.an')) %>% 
   pivot_wider(names_from = "term", values_from = c("estimate", "std.error", "statistic", "p.value"))
 
-tree_coef <- tree_coef %>% 
-  left_join(tree_summary, by = c("tree_id"))
+tree_df <- tree_df %>% 
+  select(-x, -error) %>% 
+  drop_na()
 
-tree_coef %>% write.csv(paste0(wdir, 'first_stage\\', 'tree_log_pet_cwd.csv'))
+# 
+# # select_sites = cwd_dendro_sites[1:20,]
+# 
+# tree_df <- cwd_dendro_sites %>% 
+#   group_by(site_id, species_id) %>% 
+#   nest() %>% 
+#   mutate(data = map2(site_id, species_id, load_obs)) %>% 
+#   unnest(data)
+# 
+# 
+# tree_df <- tree_df %>% 
+#   left_join(clim_df, by = c("site_id", "year")) %>% 
+#   drop_na()
+# 
+# tree_df <- tree_df %>% 
+#   mutate(ln_rwi = log(rwi)) %>% 
+#   drop_na()
+# 
+# 
+# tree_summary <- tree_df %>% 
+#   select(tree_id, species_id, site_id) %>% 
+#   distinct()
+# 
+# tree_lm <- tree_df %>% 
+#   group_by(tree_id) %>%
+#   nest() %>% 
+#   mutate(mod = map(data, fs_mod),
+#          mod = map(mod, tidy))
+# 
+# tree_lm <- tree_lm %>% 
+#   unnest(mod) %>%
+#   select(-data) %>% 
+#   filter(term %in% c('cwd.an', 'pet.an'))
+# 
+# tree_coef <- tree_lm %>%
+#   pivot_wider(names_from = "term", values_from = c("estimate", "std.error", "statistic", "p.value"))
+# 
+# tree_coef <- tree_coef %>% 
+#   left_join(tree_summary, by = c("tree_id"))
+
+tree_df %>% write.csv(paste0(wdir, 'out\\first_stage\\', 'tree_log_pet_cwd.csv'))
 
