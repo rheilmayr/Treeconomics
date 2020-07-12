@@ -67,6 +67,6 @@ merged_sf <- rbind(merged_sf, select_ranges)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Export new file --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-st_write(merged_sf, paste0(ranges_dir, '..\\', 'merged_ranges.shp'), update = TRUE)
+st_write(merged_sf, paste0(wdir, 'merged_ranges.shp'), overwrite = TRUE)
 
 # merged_sf %>% st_set_geometry(NULL) %>% select(sp_code) %>% distinct()
