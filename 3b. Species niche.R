@@ -48,10 +48,11 @@ range_sf <- st_read(range_file)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Pull and organize climate distribution for species
 pull_clim <- function(spp_code){
+  print(spp_code)
   # Pull relevant range map
   sp_range <- range_sf %>%
     filter(sp_code == spp_code)
-  
+  print(sp_range)
   # Pull cwd and aet values
   cwd_vals <- raster::extract(cwd_historic, sp_range) %>% 
     unlist()
@@ -72,7 +73,8 @@ clim_df <- range_sf %>%
   pull(sp_code) %>% 
   unique() %>% 
   enframe(name = NULL) %>% 
-  rename(sp_code = value)
+  rename(sp_code = value) %>% 
+  drop_na()
 
 clim_df$clim_vals <- map(clim_df$sp_code, pull_clim) %>% 
   unnest(clim_vals)
@@ -85,7 +87,7 @@ clim_df <- clim_df %>%
             cwd_mean = mean(cwd),
             cwd_sd = sd(cwd))
 
-write.csv(clim_df, paste0(wdir, "out//clim_niche.csv"))
+write.csv(clim_df, paste0(wdir, "out//climate//clim_niche.csv"))
 
 
 
