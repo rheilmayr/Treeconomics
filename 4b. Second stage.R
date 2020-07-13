@@ -11,10 +11,8 @@
 # - essentialcwd_data.csv: File detailing plot-level weather history
 #
 # ToDo:
-# - add nobs
-# - fix joins to prevent duplicate species_id
-# - think through how to deal with CWD outliers
-# - track down lost observations - currently dropping a lot due to NAN or failed RWI generation
+# - Mechanisms: Think through this model in more detail
+#
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -24,7 +22,6 @@
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 library(MASS)
 library(tidyverse)
-library(lfe)
 library(broom)
 library(purrr)
 library(patchwork)
@@ -37,7 +34,6 @@ library(RSQLite)
 library(modi)
 library(margins)
 
-
 select <- dplyr::select
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -47,50 +43,32 @@ select <- dplyr::select
 wdir <- 'remote\\'
 
 # 1. Historic species niche data
-niche_csv <- paste0(wdir, 'out//clim_niche.csv')
+niche_csv <- paste0(wdir, 'out/climate/clim_niche.csv')
 niche_df <- read_csv(niche_csv) %>% 
   select(-X1)
 
-
 # 2. Site-specific weather history
-cwd_csv <- paste0(wdir, 'CRU//essentialcwd_data.csv')
+cwd_csv <- paste0(wdir, 'out/climate/essentialcwd_data.csv')
 cwd_df <- read.csv(cwd_csv, sep=',')
 cwd_df <- cwd_df %>% 
   mutate("site_id" = as.character(site)) %>%
   select(-site)
 
-
-# 3. Site-level regressions
-# flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\tree_log_pet_cwd.csv')) %>%
-#   select(-X1)
-
-flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\log_cwd_pet.csv')) %>%
+# 3. Tree-level regressions
+flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\tree_log_pet_cwd.csv')) %>%
   select(-X1)
 
+# 4. Site information
+site_df <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
+site_df <- site_df %>% 
+  select(collection_id, sp_id)
+flm_df <- flm_df %>% 
+  left_join(site_df, by = "collection_id")
+flm_df <- flm_df %>% 
+  rename(species_id = sp_id) %>% 
+  mutate(species_id = str_to_lower(species_id),
+         genus = substr(species_id, 1, 2))
 
-# Identify extreme outliers
-flm_df <- flm_df %>%
-  group_by(species_id) %>%
-  mutate(cwd.qhigh=quantile(estimate_cwd.an,0.99,na.rm=T),
-         cwd.qlow=quantile(estimate_cwd.an,0.01,na.rm=T)) %>%
-  ungroup()
-
-
-# Connect to database
-tree_db = paste0(wdir, 'tree_ring_data_V2.db')
-sqlite <- dbDriver("SQLite")
-conn <- dbConnect(sqlite, tree_db)
-tree_db = as.data.frame(tbl(conn, 'trees'))
-sp_site_index <- tree_db %>% 
-  select(species_id, site_id) %>% 
-  distinct()
-dbDisconnect(conn)
-n_sp_sites <- sp_site_index %>% 
-  group_by(species_id) %>% 
-  tally()
-freq_species <- n_sp_sites %>% 
-  filter(n > 10) %>% 
-  pull(species_id)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Characterize site-level climate in relation to species range -------------
@@ -100,11 +78,8 @@ clim_df = cwd_df %>%
   group_by(site_id, year) %>%
   summarise(aet.an = sum(aet),
             cwd.an = sum(cwd),
-            pet.an = sum(petm),
-            temp.an = mean(tmean),
-            ppt.an = sum(ppt)) %>% 
+            pet.an = sum(aet+cwd)) %>% 
   drop_na()
-
 
 # Calculate site-level historic climate
 hist_clim_df <- clim_df %>%
@@ -112,34 +87,12 @@ hist_clim_df <- clim_df %>%
   filter(year<1980) %>%
   summarise(aet.ave = mean(aet.an),
             cwd.ave = mean(cwd.an),
-            pet.ave = mean(pet.an),
-            temp.ave = mean(temp.an),
-            ppt.ave = mean(ppt.an))
+            pet.ave = mean(pet.an))
 
 # Merge historic climate to flm data
 flm_df <- flm_df %>% 
-  inner_join(hist_clim_df, by = c("site_id"))
+  inner_join(hist_clim_df, by = c("collection_id" = "site_id"))
 
-
-# # Calculate species niche based on ITRDB sites
-# clim_df <- clim_df %>% 
-#   left_join(sp_site_index, by = c("site_id"))
-# 
-# sp_clim_df <- clim_df %>% 
-#   group_by(species_id) %>% 
-#   filter(year<1980) %>% 
-#   summarise(pet.sp.ave = mean(pet.an),
-#             cwd.sp.ave = mean(cwd.an),
-#             pet.sp.sd = sd(pet.an),
-#             cwd.sp.sd = sd(cwd.an))
-# 
-# flm_df <- flm_df %>% 
-#   left_join(sp_clim_df, by = c("species_id"))
-# 
-# 
-# flm_df <- flm_df %>% 
-#   mutate(pet.spstd = (pet.ave - pet.sp.ave) / pet.sp.sd,
-#          cwd.spstd = (cwd.ave - cwd.sp.ave) / cwd.sp.sd)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Summarize species historic climate -------------------------------------
@@ -149,19 +102,32 @@ niche_df <- niche_df %>%
 
 # Merge chronology and species climate niche data
 flm_df <- flm_df %>%
-  inner_join(niche_df, by = c("species_id" = "sp_code")) #note: currently losing a bunch of observations because we don't yet have range maps
+  inner_join(niche_df, by = c("species_id" = "sp_code")) #note: currently losing ~7k trees (10%) because we don't have range maps
 
 # Calculate species-niche standardized climate
 flm_df <- flm_df %>%
   mutate(pet.spstd = (pet.ave - sp_pet_mean) / sp_pet_sd,
          cwd.spstd = (cwd.ave - sp_cwd_mean) / sp_cwd_sd)
 
+# Calculate tree-species-niche standardized climate
+flm_df <- flm_df %>%
+  mutate(pet.trstd = (pet.trmean - sp_pet_mean) / sp_pet_sd,
+         cwd.trstd = (cwd.trmean - sp_cwd_mean) / sp_cwd_sd)
+
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Run second stage model --------------------------------------------------------
+# Trim data --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Add weighting based on inverse of first stage variance
 flm_df <- flm_df %>% 
   mutate(errorweights = 1 / (std.error_cwd.an^2))
+
+# Identify and trim extreme outliers
+flm_df <- flm_df %>%
+  group_by(species_id) %>%
+  mutate(cwd.qhigh=quantile(estimate_cwd.an,0.99,na.rm=T),
+         cwd.qlow=quantile(estimate_cwd.an,0.01,na.rm=T)) %>%
+  ungroup()
 
 trim_df <- flm_df %>%
   filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
@@ -169,44 +135,29 @@ trim_df <- flm_df %>%
          abs(pet.spstd)<5) %>% 
   drop_na()
 
-mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=trim_df)
-summary(mod)
-
-saveRDS(mod, paste0(wdir, "out\\second_stage\\ss_mod.rds"))
-
-
-trim_df <- flm_df %>% 
-  filter(species_id == "psme") %>% 
-  drop_na()
-
-mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights=errorweights, data=trim_df)
-summary(mod)
-
-saveRDS(mod, paste0(wdir, "second_stage\\psme_mod.rds"))
-
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Generate plots --------------------------------------------------------
+# Summary plots --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-site_summary <- flm_df
-## Summary plot of sample distribution
-hex <- site_summary %>% ggplot(aes(x = cwd.spstd, y = pet.spstd, weight = nobs)) +
+xmin <- -2.5
+xmax <- 2.5
+
+### Summary plot of sample distribution
+hex <- flm_df %>% ggplot(aes(x = cwd.spstd, y = pet.spstd, weight = nobs)) +
   geom_hex() +
-  xlim(-2.5, 2.5) +
-  ylim(-2.5, 2.5) +
+  xlim(xmin, xmax) +
+  ylim(xmin, xmax) +
   labs(fill = "Number of tree-year\nobservations") +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") + 
   theme_bw(base_size = 22) +
   coord_fixed()
 hex
-ggsave(paste0(wdir, 'figures\\clim_density.svg'), plot = hex)
+# ggsave(paste0(wdir, 'figures\\clim_density.svg'), plot = hex)
 
-
-
-## Binned plot of cwd sensitivity
+### Binned plot of cwd sensitivity
 plot_dat <- trim_df %>%
-  filter(abs(cwd.spstd)<3,abs(pet.spstd<3)) %>% 
+  filter(((abs(cwd.spstd)<3) & (abs(pet.spstd<3)))) %>%
   drop_na()
 nbins = 8
 plot_dat <- plot_dat %>% 
@@ -247,15 +198,28 @@ binned_margins <- group_dat %>%
   coord_fixed()
 
 binned_margins 
-ggsave(paste0(wdir, 'figures\\binned_margins.svg'), plot = binned_margins)
+# ggsave(paste0(wdir, 'figures\\binned_margins.svg'), plot = binned_margins)
 
 
-## Modeled margins plots
-cdat <- cplot(mod, 'cwd.spstd', what = "prediction", draw = FALSE)
-cdat <- cdat %>%
-  filter(abs(xvals)<2.5)
-margins_plot <- ggplot(cdat, aes(x = xvals)) + 
-  geom_line(aes(y = yvals)) +
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Primary second stage model --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Run regression and cluster s.e.
+mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=trim_df)
+coeftest(mod, vcov = vcovCL, cluster = trim_df$collection_id)
+cluster_vcov <- vcovCL(mod, cluster = trim_df$collection_id)
+saveRDS(mod, paste0(wdir, "out\\second_stage\\ss_mod.rds"))
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Plot marginal effects ---------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+predictions <- prediction(mod, at = list(cwd.spstd = seq(xmin, xmax, .1)), vcov = cluster_vcov, calculate_se = T) %>% 
+  summary() %>% 
+  rename(cwd.spstd = "at(cwd.spstd)")
+
+margins_plot <- ggplot(predictions, aes(x = cwd.spstd)) + 
+  geom_line(aes(y = Prediction)) +
   geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
   geom_line(aes(y = upper), linetype = 3) +
   geom_line(aes(y = lower), linetype = 3) +
@@ -264,33 +228,145 @@ margins_plot <- ggplot(cdat, aes(x = xvals)) +
   ylab("Predicted sensitivity to CWD") + 
   theme_bw(base_size = 22) +
   scale_y_continuous(labels = scales::scientific)
-# +
-#   geom_point(data = plot_dat, aes(x = cwd.spstd, y = estimate_cwd.an)) +
-#   ylim(c(-1.5e-4, 0)) +
-#   xlim(c(-2.5, 2.5))
 
-
-
-
-margins_plot
-ggsave(paste0(wdir, 'figures\\cwd_margins.svg'), plot = margins_plot)
-
+# margins_plot
 
 histogram <- ggplot(plot_dat, aes(x = cwd.spstd)) + 
   geom_histogram(bins = 40, alpha=0.2, fill = "darkblue") +
-  xlim(c(-2.5, 2.5)) +
+  xlim(c(xmin, xmax)) +
   theme_bw(base_size = 22) + 
-  ylab("") +
-  scale_x_continuous(labels = c(""), breaks = c(0)) +
+  ylab("# trees") +
   theme(aspect.ratio = 0.3,
         axis.title.x = element_blank(),
         axis.text.x = element_blank(),
         axis.ticks.x = element_blank())
 
-
 histogram / margins_plot
-  
-  
+=ggsave(paste0(wdir, 'figures\\cwd_margins.svg'), plot = margins_plot)
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Robustness tests --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Squared terms
+sq_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd + I(cwd.spstd^2) + I(pet.spstd^2), weights = errorweights, data=trim_df)
+coeftest(sq_mod, vcov = vcovCL, cluster = trim_df$collection_id)
+sq_cluster_vcov <- vcovCL(sq_mod, cluster = trim_df$collection_id)
+
+# Drop PET
+nopet_mod <- lm(estimate_cwd.an ~ cwd.spstd, weights = errorweights, data=trim_df)
+coeftest(nopet_mod, vcov = vcovCL, cluster = trim_df$collection_id)
+nopet_cluster_vcov <- vcovCL(nopet_mod, cluster = trim_df$collection_id)
+
+# Don't trim dataset
+allobs_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=flm_df)
+coeftest(allobs_mod, vcov = vcovCL, cluster = flm_df$collection_id)
+allobs_cluster_vcov <- vcovCL(allobs_mod, cluster = flm_df$collection_id)
+
+# Limit to genera with significant effects (pines, junipers, firs)
+subset_df <- trim_df %>% filter(genus %in% c("ju", "pi", "ps"))
+conifer_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=subset_df)
+coeftest(conifer_mod, vcov = vcovCL, cluster = subset_df$collection_id)
+conifer_cluster_vcov <- vcovCL(conifer_mod, cluster = subset_df$collection_id)
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Investigate mechanism - tree or site --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Focus on trees from genera with effect, and for which we have full weather history
+trim_df <- flm_df %>%
+  filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
+         abs(cwd.spstd)<5,
+         abs(pet.spstd)<5,
+         genus %in% c("ju", "pi", "ps"),
+         young==TRUE) %>% 
+  drop_na()
+
+mod <- lm(estimate_cwd.an ~ cwd.spstd + cwd.trstd + pet.spstd + pet.trstd, weights = errorweights, data=trim_df)
+coeftest(mod, vcov = vcovCL, cluster = trim_df$collection_id)
+
+# Could include all trees from sites with any variation in tree-level drought history (including trees born <1901) 
+young_sites <- flm_df %>% 
+  filter(young == T) %>% 
+  pull(collection_id) %>% 
+  unique()
+trim_df <- flm_df %>%
+  filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
+         abs(cwd.spstd)<5,
+         abs(pet.spstd)<5,
+         genus %in% c("ju", "pi", "ps"),
+         collection_id %in% young_sites) %>% 
+  drop_na()
+mod <- lm(estimate_cwd.an ~ cwd.spstd + cwd.trstd + pet.spstd + pet.trstd, weights = errorweights, data=trim_df)
+coeftest(mod, vcov = vcovCL, cluster = trim_df$collection_id)
+
+# Include collection fixed effects
+mod <- feols(estimate_cwd.an ~ cwd.trstd + pet.trstd | collection_id, weights = trim_df$errorweights, data=trim_df)
+summary(mod)
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Investigate variation by genus  ----------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+## Plot marginal effects by genus
+genus_freq <- flm_df %>% 
+  group_by(genus) %>% 
+  summarise(n_collections = n_distinct(collection_id)) %>% 
+  arrange(desc(n_collections))
+
+genus_keep <- genus_freq %>% 
+  filter(n_collections>50) %>% 
+  pull(genus)
+
+predict_cwd_effect <- function(trim_df){
+  trim_df <- trim_df %>%
+    filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
+           abs(cwd.spstd)<5,
+           abs(pet.spstd)<5) %>%
+    drop_na()
+  gen_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights=errorweights, data=trim_df)
+  cluster_vcov <- vcovCL(gen_mod, cluster = trim_df$collection_id)
+  print(coeftest(gen_mod, vcov = vcovCL, cluster = trim_df$collection_id))
+  predictions <- prediction(gen_mod, at = list(cwd.spstd = seq(-2, 2, .5)), vcov = cluster_vcov, calculate_se = T) %>% 
+    summary() %>% 
+    rename(cwd.spstd = "at(cwd.spstd)") 
+  return(predictions)
+}
+
+genus_df <- flm_df %>% 
+  filter(genus %in% genus_keep) %>% 
+  group_by(genus) %>% 
+  nest() %>% 
+  mutate(prediction = map(data, predict_cwd_effect))
+
+genus_df <- genus_df %>% 
+  unnest(prediction) %>% 
+  select(-data)
+
+margins_plot <- ggplot(genus_df, aes(x = cwd.spstd)) + 
+  geom_line(aes(y = Prediction)) +
+  geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
+  facet_wrap(~genus, scales = "free") +
+  geom_line(aes(y = upper), linetype = 3) +
+  geom_line(aes(y = lower), linetype = 3) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  xlab("Historic CWD\n(Deviation from species mean)") + 
+  ylab("Predicted sensitivity to CWD") + 
+  theme_bw(base_size = 22) +
+  scale_y_continuous(labels = scales::scientific)
+margins_plot
+
+
+
+
+
+
+
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Deprecated code below this  ----------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 margins(mod, at  = list(pet.spstd = -2:2))
 cplot(mod, 'pet.spstd', what = "prediction")
 persp(mod, 'cwd.spstd', 'pet.spstd')
@@ -332,9 +408,6 @@ p1 <- plot_dat %>% ggplot(aes(x=cwd.q, y=estimate_cwd.an)) +
   geom_boxplot() +
   ylim(-0.0025, 0.0025)
 p1
-
-
-
 
 
 
@@ -413,11 +486,6 @@ p
 
 
 
-
-
-
-
-
 ## Bootstrap distributions from first stage
 N <- 100
 
@@ -443,12 +511,11 @@ draw_df <- cbind(flm_df, draw_df) %>%
 ## Boxplots of effects by cwd / pet bins
 
 
-
-
 sig_df <- flm_df %>% 
   filter(p.value_cwd.an<0.05)
 
 plot_dat <- flm_df %>%
+  # filter(genus %in% c("pi", "ps", "ju")) %>% 
   group_by("species_id") %>%
   mutate(cwd.q = as.factor(ntile(cwd.ave, 5)),
          pet.q = as.factor(ntile(pet.ave, 5)),
