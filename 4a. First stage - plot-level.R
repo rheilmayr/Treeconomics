@@ -29,6 +29,7 @@ library(RSQLite)
 library(lfe)
 library(broom)
 library(purrr)
+library(fixest)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -41,20 +42,21 @@ wdir <- 'remote\\'
 dendro_dir <- paste0(wdir, "out\\dendro\\")
 dendro_df <- read_csv(paste0(dendro_dir, "rwi_long.csv"))
 dendro_df <- dendro_df %>% 
-  filter(year>1900)
+  filter(year>1900) %>% 
+  select(-core_id)
 # dendro_sites <- read.csv(paste0(dendro_dir, "2_valid_sites.csv")) %>% 
 #   select(-X) %>% 
 #   mutate(file_name = paste0('sid-', site_id, '_spid-', species_id, '.csv'))
 
 # 2. Site-specific weather history
 cwd_csv <- paste0(wdir, 'out\\climate\\essentialcwd_data.csv')
-cwd_df <- read_csv(cwd_csv, sep=',')
+cwd_df <- read_csv(cwd_csv)
 cwd_df <- cwd_df %>% 
   mutate("site_id" = as.character(site))
 
-cwd_sites <- cwd_df %>% 
-  select(site) %>% 
-  distinct()
+# cwd_sites <- cwd_df %>% 
+#   select(site) %>% 
+#   distinct()
 # cwd_dendro_sites <- dendro_sites %>% 
 #   inner_join(cwd_sites, by = c("site_id" = "site"))
 
@@ -74,6 +76,30 @@ clim_df = cwd_df %>%
 
 dendro_df <- dendro_df %>% 
   left_join(clim_df, by = c("collection_id", "year"))
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Identify tree-level weather history ------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+tree_clim <- dendro_df %>% 
+  select(collection_id, year, tree, aet.an, cwd.an, pet.an) %>% 
+  distinct()
+
+tree_clim <- tree_clim %>%
+  filter(year<1980) %>% 
+  group_by(collection_id, tree) %>% 
+  summarize(first_year = min(year),
+            young = first_year > 1901,
+            cwd.trmean = mean(cwd.an),
+            cwd.trsd = sd(cwd.an),
+            pet.trmean = mean(pet.an),
+            pet.trsd = sd(pet.an))
+
+# tree_clim %>% 
+#   filter(young == T) %>% 
+#   group_by(collection_id) %>% 
+#   tally() %>% 
+#   filter(n>1)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -172,7 +198,77 @@ ihsTransform <- function(y) {log(y + (y ^ 2 + 1) ^ 0.5)}
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Run site-level regressions --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# 
+fs_mod <- function(site_data){
+  failed <- F
+  reg_error <- NA
+  femod <- NA
+  pet_cwd_cov <- NA
+  nobs <- NA
+  ncores <- site_data %>% select(core) %>%  n_distinct()
+  no_cwd_var <- (site_data %>% select(cwd.an) %>% n_distinct() == 1)
+  no_pet_var <- (site_data %>% select(pet.an) %>% n_distinct() == 1)
+  if (no_cwd_var | no_pet_var) {
+    message("Site has no variation in CWD or PET")
+    failed <- T
+  } else{
+    # Try to run felm. Typically fails if missing cwd / aet data 
+    tryCatch(
+      expr = {
+        # mod <- lm(ln_rwi ~ pet.an + cwd.an, data = tree_data)
+        if (n_cores==1){
+          femod <- feols(ln_rwi ~ cwd.an + pet.an, site_data)
+        } else{
+          femod <- feols(ln_rwi ~ cwd.an + pet.an | tree, site_data)
+        }
+        vcov <- femod$cov.unscaled
+        pet_cwd_cov <- vcov %>% 
+          subset(rownames(vcov) == "cwd.an") %>% 
+          as_tibble() %>% 
+          pull("pet.an")
+        nobs <- femod$nobs
+        femod <- tidy(femod) %>%
+          filter(term %in% c('cwd.an', 'pet.an')) %>% 
+          pivot_wider(names_from = "term", values_from = c("estimate", "std.error", "statistic", "p.value"))
+      },
+      error = function(e){ 
+        message("Returned regression error")
+        reg_error <<- e[1]
+        failed <<- T
+      }
+    )    
+  }
+  if (failed){
+    return(tibble(mod = list(femod), cov = pet_cwd_cov, nobs = nobs, ncores = ncores, error = reg_error))
+  }
+  return(tibble(mod = list(femod), cov = pet_cwd_cov, nobs = nobs, ncores = ncores, error = reg_error))
+}
+
+
+site_df <- dendro_df %>% 
+  drop_na() %>% 
+  mutate(ln_rwi = log(width)) %>% 
+  group_by(collection_id) %>%
+  add_tally(name = 'nobs') %>% 
+  filter(nobs>10) %>% 
+  nest()
+
+site_df <- site_df %>% 
+  mutate(fs_result = map(data, fs_mod)) 
+
+site_df <- site_df %>% 
+  select(collection_id, fs_result) %>% 
+  unnest(fs_result)
+
+site_df <- site_df[which(!(site_df %>% pull(mod) %>% is.na())),]
+site_df <- site_df %>% 
+  unnest(mod)
+
+site_df <- site_df %>% 
+  select(-error)
+
+site_df %>% write.csv(paste0(wdir, 'out\\first_stage\\site_log_pet_cwd.csv'))
+
+
 # # sites <- cwd_dendro_sites[1:10,]
 # # i = 2
 # # s_id <- cwd_dendro_sites[i,] %>%
@@ -216,30 +312,54 @@ ihsTransform <- function(y) {log(y + (y ^ 2 + 1) ^ 0.5)}
 #   return(dendro_dat)
 # }
 
-
 fs_mod <- function(tree_data){
   failed <- F
-  error <- NA
-  mod <- NA
-  # Try to run felm. Typically fails if missing cwd / aet data 
-  tryCatch(
-    expr = {
-      mod <- lm(ln_rwi ~ pet.an + cwd.an, data = tree_data)
-    },
-    error = function(e){ 
-      message("Returned regression error")
-      error <<- e[1]
-      failed <<- T
-    }
-  )
-  if (failed){
-    return(tibble(mod = list(tidy(mod)), error = error))
+  reg_error <- NA
+  femod <- NA
+  pet_cwd_cov <- NA
+  nobs <- NA
+  ncores <- tree_data %>% select(core) %>%  n_distinct()
+  no_cwd_var <- (tree_data %>% select(cwd.an) %>% n_distinct() == 1)
+  no_pet_var <- (tree_data %>% select(pet.an) %>% n_distinct() == 1)
+  if (no_cwd_var | no_pet_var) {
+    message("Site has no variation in CWD or PET")
+    failed <- T
+  } else{
+    # Try to run felm. Typically fails if missing cwd / aet data 
+    tryCatch(
+      expr = {
+        # mod <- lm(ln_rwi ~ pet.an + cwd.an, data = tree_data)
+        if (n_cores==1){
+          femod <- feols(ln_rwi ~ cwd.an + pet.an, tree_data)
+        } else{
+          femod <- feols(ln_rwi ~ cwd.an + pet.an | core, tree_data)
+        }
+        vcov <- femod$cov.unscaled
+        pet_cwd_cov <- vcov %>% 
+          subset(rownames(vcov) == "cwd.an") %>% 
+          as_tibble() %>% 
+          pull("pet.an")
+        nobs <- femod$nobs
+        femod <- tidy(femod) %>%
+          filter(term %in% c('cwd.an', 'pet.an')) %>% 
+          pivot_wider(names_from = "term", values_from = c("estimate", "std.error", "statistic", "p.value"))
+      },
+      error = function(e){ 
+        message("Returned regression error")
+        reg_error <<- e[1]
+        failed <<- T
+      }
+    )    
   }
-  return(tibble(mod = list(tidy(mod)), error = error))
+  if (failed){
+    return(tibble(mod = list(femod), cov = pet_cwd_cov, nobs = nobs, ncores = ncores, error = reg_error))
+  }
+  return(tibble(mod = list(femod), cov = pet_cwd_cov, nobs = nobs, ncores = ncores, error = reg_error))
 }
 
 
 tree_df <- dendro_df %>% 
+  drop_na() %>% 
   mutate(ln_rwi = log(width)) %>% 
   group_by(collection_id, tree) %>%
   add_tally(name = 'nobs') %>% 
@@ -247,18 +367,29 @@ tree_df <- dendro_df %>%
   nest()
 
 tree_df <- tree_df %>% 
-  mutate(fs_result = map(data, fs_mod)) %>% 
-  select(collection_id, tree, fs_result) %>% 
-  unnest(fs_result) %>% 
-  unnest(mod)
-
-tree_df <-  tree_df %>% 
-  filter(term %in% c('cwd.an', 'pet.an')) %>% 
-  pivot_wider(names_from = "term", values_from = c("estimate", "std.error", "statistic", "p.value"))
+  mutate(fs_result = map(data, fs_mod)) 
 
 tree_df <- tree_df %>% 
-  select(-x, -error) %>% 
-  drop_na()
+  select(collection_id, tree, fs_result, data) %>% 
+  unnest(fs_result) 
+
+tree_df <- tree_df[which(!(tree_df %>% pull(mod) %>% is.na())),]
+tree_df <- tree_df %>% 
+  filter(map_lgl(error, is.null)) %>% 
+  unnest(mod)
+
+tree_df <- tree_df %>% 
+  select(-error, -data)
+
+tree_df <- tree_df %>% 
+  left_join(tree_clim, by = c("collection_id", "tree"))
+
+# tree_df %>% filter(p.value_pet.an<0.05) %>% select(estimate_cwd.an, estimate_pet.an) %>% summary()
+
+tree_df %>% write.csv(paste0(wdir, 'out\\first_stage\\tree_log_pet_cwd.csv'))
+
+
+
 
 # 
 # # select_sites = cwd_dendro_sites[1:20,]
@@ -300,5 +431,4 @@ tree_df <- tree_df %>%
 # tree_coef <- tree_coef %>% 
 #   left_join(tree_summary, by = c("tree_id"))
 
-tree_df %>% write.csv(paste0(wdir, 'out\\first_stage\\', 'tree_log_pet_cwd.csv'))
 
