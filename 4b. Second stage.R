@@ -33,6 +33,7 @@ library(dbplyr)
 library(RSQLite)
 library(modi)
 library(margins)
+library(lmtest)
 
 select <- dplyr::select
 
@@ -120,7 +121,8 @@ flm_df <- flm_df %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Add weighting based on inverse of first stage variance
 flm_df <- flm_df %>% 
-  mutate(errorweights = 1 / (std.error_cwd.an^2))
+  mutate(errorweights = 1 / (std.error_cwd.an^2),
+         pet_errorweights = 1 / (std.error_pet.an^2))
 
 # Identify and trim extreme outliers
 flm_df <- flm_df %>%
@@ -206,9 +208,16 @@ binned_margins
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Run regression and cluster s.e.
 mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=trim_df)
-coeftest(mod, vcov = vcovCL, cluster = trim_df$collection_id)
 cluster_vcov <- vcovCL(mod, cluster = trim_df$collection_id)
+coeftest(mod, cluster = trim_df$collection_id)
 saveRDS(mod, paste0(wdir, "out\\second_stage\\ss_mod.rds"))
+
+
+
+pet_mod <- lm(estimate_pet.an ~ cwd.spstd + pet.spstd, weights = pet_errorweights, data=flm_df)
+cluster_vcov <- vcovCL(pet_mod, cluster = flm_df$collection_id)
+coeftest(pet_mod, cluster = flm_df$collection_id)
+saveRDS(pet_mod, paste0(wdir, "out\\second_stage\\pet_ss_mod.rds"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
