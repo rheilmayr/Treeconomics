@@ -189,7 +189,6 @@ separate_errors <- function(rwl_data){
 
 rwl_files <- sapply(total_sites, site_to_filename, suffix = '')
 rwl_data <- tibble::enframe(rwl_files, name = "collection_id", value = "file")
-rwl_data <- rwl_data[1:50,]
 rwl_data$rwl <- map(rwl_data$file, open_rwl) 
 rwl_data <- rwl_data %>% unnest(rwl)
 rwl_results <- separate_errors(rwl_data)
@@ -327,7 +326,7 @@ data_summary <- clean_data %>%
   group_by(collection_id) %>% 
   summarise(obs_start_year = min(year),
             obs_end_year = max(year),
-            n_trees = n_distinct(tree_id))
+            n_trees = n_distinct(tree))
 
 site_summary <- site_summary %>% 
   left_join(data_summary, by = "collection_id")
@@ -342,6 +341,9 @@ site_summary <- site_summary %>%
 write_csv(site_summary, paste0(out_dir, "site_summary.csv"))
 
 
+
+
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Filter to usable data and run final checks --------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -349,17 +351,28 @@ clean_data <- clean_data %>%
   filter(year>=1900)
 
 n_check <- clean_data %>% 
-  group_by(collection_id, tree_id, core_id, year) %>% 
+  group_by(collection_id, tree, core, year) %>% 
   summarise(n = n())
 errors <- n_check %>%
   filter(n>1) %>% 
   ungroup() %>% 
-  select(collection_id) %>% 
+  select(collection_id, tree) %>% 
   unique()
 
-test_that("No core has multiple observations in a year",{
-  expect_equal(dim(errors)[1], 0)
-})
+# test_that("No core has multiple observations in a year",{
+#   expect_equal(dim(errors)[1], 0)
+# })
+
+# Drop trees (n=17) that have multiple observations in a single year
+error_list <- errors %>%   
+  mutate(temp_id = paste0(collection_id, "_", tree)) %>% 
+  pull(temp_id)
+error_collections <- errors %>% select(collection_id) %>% unique()
+
+clean_data <- clean_data %>% 
+  mutate(temp_id = paste0(collection_id, "_", tree)) %>%
+  filter(!(temp_id %in% error_list)) %>% 
+  select(-temp_id)
 
 test_that("Core ids have been assigned",{
   expect_equal(is.na(clean_data$core_code) %>% sum(), 0)
@@ -369,7 +382,6 @@ test_that("Core ids have been assigned",{
 # Export results and error log --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 write_csv(clean_data, paste0(out_dir, "rwi_long.csv"))
-# write_csv(clean_data, paste0(out_dir, "itrdb_error_log.csv"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -390,64 +402,6 @@ n_usable_obs <- clean_data %>%
   distinct() %>% 
   dim()
 
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Quality control  ---------------------------------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-clean_data <- read_csv(paste0(out_dir, "rwi_long.csv"))
-
-
-
-
-data_summary <- n_check %>% 
-  select(tree_id, core_id, n) %>% 
-  summary()
-
-year_range <- clean_data %>% 
-  group_by(collection_id) %>% 
-  summarize(start_year = min(year),
-            end_year = max(year), .groups = "drop")
-
-site_summary <- read_csv(paste0(out_dir, "site_summary.csv"))
-
-index <- clean_data %>%
-  select(collection_id, tree_id, core_id) %>% 
-  unique()
-
-issue_sites <- index %>% 
-  filter(tree>100) %>% 
-  select(collection_id) %>% 
-  unique()
-
-n_trees <- index %>% group_by(collection_id) %>% summarise(n = max(tree_id))
-n_trees %>% filter(n>300)
-
-
-problems <- index %>% filter(tree_id>300)
-problems %>% group_by(collection_id) %>% summarise(n = max(tree_id))
-
-
-problems <- index %>% filter(core_id>100)
-problems %>% group_by(collection_id) %>% summarise(n = max(core_id))
-
-
-cid <- "AK053"
-c_data <- clean_data %>% 
-  filter(collection_id == cid) %>% 
-  unique()
-
-
-file <- paste0("cana462.rwl")
-test <- open_rwl(file)
-rwl_test <- test %>% unnest(rwl)
-rw_test <- detrend_rwl(rwl_test)
-# detrend
-# pivot
-# check if coreid still present
-
-### ISSUES: 
-# 1) multiple observations for single core / year combination; 
-# 2) Too many trees / cores for some sites? Actually seems like there are this many trees
-# 3) core-id not making it through?
 
 
 
