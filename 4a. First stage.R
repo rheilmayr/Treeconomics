@@ -215,7 +215,7 @@ fs_mod <- function(site_data){
     tryCatch(
       expr = {
         # mod <- lm(ln_rwi ~ pet.an + cwd.an, data = tree_data)
-        if (n_cores==1){
+        if (ncores==1){
           femod <- feols(ln_rwi ~ cwd.an + pet.an, site_data)
         } else{
           femod <- feols(ln_rwi ~ cwd.an + pet.an | tree, site_data)
@@ -253,7 +253,7 @@ site_df <- dendro_df %>%
   nest()
 
 site_df <- site_df %>% 
-  mutate(fs_result = map(data, fs_mod)) 
+  mutate(fs_result = map(data, fs_mod))
 
 site_df <- site_df %>% 
   select(collection_id, fs_result) %>% 
@@ -268,6 +268,8 @@ site_df <- site_df %>%
 
 site_df %>% write.csv(paste0(wdir, 'out\\first_stage\\site_log_pet_cwd.csv'))
 
+
+## TODO: add error reports to site_summary document?
 
 # # sites <- cwd_dendro_sites[1:10,]
 # # i = 2
@@ -329,7 +331,7 @@ fs_mod <- function(tree_data){
     tryCatch(
       expr = {
         # mod <- lm(ln_rwi ~ pet.an + cwd.an, data = tree_data)
-        if (n_cores==1){
+        if (ncores==1){
           femod <- feols(ln_rwi ~ cwd.an + pet.an, tree_data)
         } else{
           femod <- feols(ln_rwi ~ cwd.an + pet.an | core, tree_data)
