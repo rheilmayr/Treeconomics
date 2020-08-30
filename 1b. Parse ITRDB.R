@@ -195,6 +195,7 @@ separate_errors <- function(rwl_data){
 
 rwl_files <- sapply(total_sites, site_to_filename, suffix = '')
 rwl_data <- tibble::enframe(rwl_files, name = "collection_id", value = "file")
+rwl_data <- rwl_data[1:200,]
 rwl_data$rwl <- map(rwl_data$file, open_rwl) 
 rwl_data <- rwl_data %>% unnest(rwl)
 rwl_results <- separate_errors(rwl_data)
@@ -308,17 +309,68 @@ clean_data$rwi_long <- map2(clean_data$rwi, clean_data$ids, pivot_rw)
 clean_data <- clean_data %>% 
   select(collection_id, rwi_long) %>% 
   unnest(rwi_long) %>% 
-  mutate(site = replace_na(1)) %>% 
-  select(collection_id, core_id, year, tree, core, site, width)
+  mutate(site = replace_na(1))
 
+test_that("No collections contain multiple sites",{
+  expect_equal(clean_data %>% select(site) %>% unique() %>% pull(), 1)
+})
+
+clean_data <- clean_data  %>% 
+  mutate(tree = vctrs::vec_group_id(tree),
+         core = vctrs::vec_group_id(core)) %>% 
+  select(collection_id, core_id, tree, core, year, width)
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Add parsed data summary to site summary --------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+data_summary <- clean_data %>% 
+  group_by(collection_id) %>% 
+  summarise(obs_start_year = min(year),
+            obs_end_year = max(year),
+            n_trees = n_distinct(tree_id))
+
+site_summary <- site_summary %>% 
+  left_join(data_summary, by = "collection_id")
+
+error_log <- rbind(rwl_results$errors, erwl_results$errors, lrwl_results$errors)
+site_summary <- site_summary %>% 
+  left_join(error_log, by = "collection_id")
+#### Note: Currently dropping ~1000 sites due to parsing errors or warnings. 
+#### Could probably increase sample size by including less egregious warnings
+#### occurring in open_rwl function, especially from autoread.ids step.
+
+write_csv(site_summary, paste0(out_dir, "site_summary.csv"))
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Filter to usable data and run final checks --------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+clean_data <- clean_data %>% 
+  filter(year>=1900)
+
+n_check <- clean_data %>% 
+  group_by(collection_id, tree_id, core_id, year) %>% 
+  summarise(n = n())
+errors <- n_check %>%
+  filter(n>1) %>% 
+  ungroup() %>% 
+  select(collection_id) %>% 
+  unique()
+
+test_that("No core has multiple observations in a year",{
+  expect_equal(dim(errors)[1], 0)
+})
+
+test_that("Core ids have been assigned",{
+  expect_equal(is.na(clean_data$core_code) %>% sum(), 0)
+})
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Export results and error log --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 write_csv(clean_data, paste0(out_dir, "rwi_long.csv"))
-
-error_log <- rbind(rwl_results$errors, erwl_results$errors, lrwl_results$errors)
-write_csv(clean_data, paste0(out_dir, "itrdb_error_log.csv"))
+# write_csv(clean_data, paste0(out_dir, "itrdb_error_log.csv"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -338,6 +390,66 @@ n_usable_obs <- clean_data %>%
   select(year, collection_id, tree) %>% 
   distinct() %>% 
   dim()
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Quality control  ---------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+clean_data <- read_csv(paste0(out_dir, "rwi_long.csv"))
+
+
+
+
+data_summary <- n_check %>% 
+  select(tree_id, core_id, n) %>% 
+  summary()
+
+year_range <- clean_data %>% 
+  group_by(collection_id) %>% 
+  summarize(start_year = min(year),
+            end_year = max(year), .groups = "drop")
+
+site_summary <- read_csv(paste0(out_dir, "site_summary.csv"))
+
+index <- clean_data %>%
+  select(collection_id, tree_id, core_id) %>% 
+  unique()
+
+issue_sites <- index %>% 
+  filter(tree>100) %>% 
+  select(collection_id) %>% 
+  unique()
+
+n_trees <- index %>% group_by(collection_id) %>% summarise(n = max(tree_id))
+n_trees %>% filter(n>300)
+
+
+problems <- index %>% filter(tree_id>300)
+problems %>% group_by(collection_id) %>% summarise(n = max(tree_id))
+
+
+problems <- index %>% filter(core_id>100)
+problems %>% group_by(collection_id) %>% summarise(n = max(core_id))
+
+
+cid <- "AK053"
+c_data <- clean_data %>% 
+  filter(collection_id == cid) %>% 
+  unique()
+
+
+file <- paste0("cana462.rwl")
+test <- open_rwl(file)
+rwl_test <- test %>% unnest(rwl)
+rw_test <- detrend_rwl(rwl_test)
+# detrend
+# pivot
+# check if coreid still present
+
+### ISSUES: 
+# 1) multiple observations for single core / year combination; 
+# 2) Too many trees / cores for some sites? Actually seems like there are this many trees
+# 3) core-id not making it through?
+
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
