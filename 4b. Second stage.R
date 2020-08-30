@@ -34,6 +34,9 @@ library(RSQLite)
 library(modi)
 library(margins)
 library(lmtest)
+library(sandwich)
+library(prediction)
+library(Hmisc)
 
 select <- dplyr::select
 
@@ -171,7 +174,7 @@ pet.quantiles = quantile(plot_dat$pet.spstd, probs = seq(0, 1, 1/nbins), names =
 
 group_dat <- plot_dat %>% 
   group_by(cwd.q, pet.q) %>% 
-  summarize(wvar = weighted.var(estimate_cwd.an, errorweights, na.rm = TRUE),
+  dplyr::summarize(wvar = wtd.var(estimate_cwd.an, errorweights, na.rm = TRUE),
             wsd = sqrt(wvar),
             wmean = weighted.mean(estimate_cwd.an, errorweights, na.rm = TRUE),
             n = n(),

@@ -20,7 +20,6 @@ library(fixest)
 library(raster)
 library(sp)
 library(sf)
-
 library(rnaturalearth)
 library(rnaturalearthdata)
 library(patchwork)
