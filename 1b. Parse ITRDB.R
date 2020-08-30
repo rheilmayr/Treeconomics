@@ -129,12 +129,6 @@ late_sites <- late_sites[which(!late_sites %in% total_sites)]
 sum_sites <- early_sites[which(early_sites %in% late_sites)]
 keep_sites <- c(total_sites, sum_sites)
 
-site_summary <- site_data %>% 
-  select(collection_id, site_name, location, latitude, longitude, elevation, start_year, end_year, time_unit, sp_id, sp_scient, sp_common) %>% 
-  distinct() %>% 
-  filter(collection_id %in% keep_sites)
-write_csv(site_summary, paste0(out_dir, "site_summary.csv"))
-
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Process total rwl files --------------------------------------------------------
@@ -195,7 +189,7 @@ separate_errors <- function(rwl_data){
 
 rwl_files <- sapply(total_sites, site_to_filename, suffix = '')
 rwl_data <- tibble::enframe(rwl_files, name = "collection_id", value = "file")
-rwl_data <- rwl_data[1:200,]
+rwl_data <- rwl_data[1:50,]
 rwl_data$rwl <- map(rwl_data$file, open_rwl) 
 rwl_data <- rwl_data %>% unnest(rwl)
 rwl_results <- separate_errors(rwl_data)
@@ -324,6 +318,11 @@ clean_data <- clean_data  %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Add parsed data summary to site summary --------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+site_summary <- site_data %>% 
+  select(collection_id, site_name, location, latitude, longitude, elevation, start_year, end_year, time_unit, sp_id, sp_scient, sp_common) %>% 
+  distinct() %>% 
+  filter(collection_id %in% keep_sites)
+
 data_summary <- clean_data %>% 
   group_by(collection_id) %>% 
   summarise(obs_start_year = min(year),
