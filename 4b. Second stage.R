@@ -25,18 +25,20 @@ library(tidyverse)
 library(broom)
 library(purrr)
 library(patchwork)
-library(ggpubr)
-library(ggiraphExtra)
 library(patchwork)
-library(hexbin)
 library(dbplyr)
 library(RSQLite)
-library(modi)
-library(margins)
 library(lmtest)
 library(sandwich)
 library(prediction)
 library(Hmisc)
+library(hexbin)
+
+library(ggpubr)
+library(ggiraphExtra)
+library(modi)
+library(margins)
+
 
 select <- dplyr::select
 
@@ -59,7 +61,7 @@ cwd_df <- cwd_df %>%
   select(-site)
 
 # 3. Tree-level regressions
-flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\tree_log_pet_cwd.csv')) %>%
+flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\site_log_pet_cwd.csv')) %>%
   select(-X1)
 
 # 4. Site information
@@ -70,9 +72,14 @@ flm_df <- flm_df %>%
   left_join(site_df, by = "collection_id")
 flm_df <- flm_df %>% 
   rename(species_id = sp_id) %>% 
-  mutate(species_id = str_to_lower(species_id),
-         genus = substr(species_id, 1, 2))
+  mutate(species_id = str_to_lower(species_id))
 
+# 5. Species information
+sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
+sp_info <- sp_info %>% 
+  select(species_id, genus, gymno_angio, family)
+flm_df <- flm_df %>% 
+  left_join(sp_info, by = "species_id")
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Characterize site-level climate in relation to species range -------------
@@ -210,6 +217,10 @@ binned_margins
 # Primary second stage model --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Run regression and cluster s.e.
+
+# trim_df <- trim_df %>% 
+#   filter(gymno_angio=="gymno")
+
 mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=trim_df)
 cluster_vcov <- vcovCL(mod, cluster = trim_df$collection_id)
 coeftest(mod, cluster = trim_df$collection_id)
@@ -275,8 +286,8 @@ allobs_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights
 coeftest(allobs_mod, vcov = vcovCL, cluster = flm_df$collection_id)
 allobs_cluster_vcov <- vcovCL(allobs_mod, cluster = flm_df$collection_id)
 
-# Limit to genera with significant effects (pines, junipers, firs)
-subset_df <- trim_df %>% filter(genus %in% c("ju", "pi", "ps"))
+# Limit to gymnosperms
+subset_df <- trim_df %>% filter(gymno_angio=="gymno")
 conifer_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=subset_df)
 coeftest(conifer_mod, vcov = vcovCL, cluster = subset_df$collection_id)
 conifer_cluster_vcov <- vcovCL(conifer_mod, cluster = subset_df$collection_id)
@@ -320,6 +331,58 @@ summary(mod)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Investigate variation by genus  ----------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+predict_cwd_effect <- function(trim_df){
+  trim_df <- trim_df %>%
+    filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
+           abs(cwd.spstd)<5,
+           abs(pet.spstd)<5) %>%
+    drop_na()
+  gen_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights=errorweights, data=trim_df)
+  cluster_vcov <- vcovCL(gen_mod, cluster = trim_df$collection_id)
+  print(coeftest(gen_mod, vcov = vcovCL, cluster = trim_df$collection_id))
+  predictions <- prediction(gen_mod, at = list(cwd.spstd = seq(-3, 3, .5)), vcov = cluster_vcov, calculate_se = T) %>% 
+    summary() %>% 
+    rename(cwd.spstd = "at(cwd.spstd)") 
+  return(predictions)
+}
+
+## Plot marginal effects by gymno / angio
+grp_freq <- flm_df %>% 
+  group_by(gymno_angio) %>% 
+  summarise(n_collections = n_distinct(collection_id)) %>% 
+  arrange(desc(n_collections))
+
+grp_keep <- grp_freq %>% 
+  filter(n_collections>50) %>% 
+  pull(gymno_angio)
+
+grp_df <- flm_df %>%
+  filter(gymno_angio %in% grp_keep) %>% 
+  group_by(gymno_angio) %>% 
+  nest() %>%
+  mutate(prediction = map(data, predict_cwd_effect))
+
+grp_df <- grp_df %>% 
+  unnest(prediction) %>% 
+  select(-data)
+
+grp_df$gymno_angio <- grp_df$gymno_angio %>% recode("angio" = "Angiosperm", "gymno" = "Gymnosperm")
+
+margins_plot <- ggplot(grp_df, aes(x = cwd.spstd)) + 
+  geom_line(aes(y = Prediction)) +
+  geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
+  facet_wrap(~gymno_angio, scales = "free", ncol = 1) +
+  geom_line(aes(y = upper), linetype = 3) +
+  geom_line(aes(y = lower), linetype = 3) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  xlab("Historic CWD\n(Deviation from species mean)") + 
+  ylab("Predicted sensitivity to CWD") + 
+  theme_bw(base_size = 22) +
+  scale_y_continuous(labels = scales::comma)
+margins_plot
+ggsave(paste0(wdir, 'figures\\gymno_angio.svg'), plot = margins_plot)
+
+
 ## Plot marginal effects by genus
 genus_freq <- flm_df %>% 
   group_by(genus) %>% 
@@ -330,32 +393,22 @@ genus_keep <- genus_freq %>%
   filter(n_collections>50) %>% 
   pull(genus)
 
-predict_cwd_effect <- function(trim_df){
-  trim_df <- trim_df %>%
-    filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
-           abs(cwd.spstd)<5,
-           abs(pet.spstd)<5) %>%
-    drop_na()
-  gen_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights=errorweights, data=trim_df)
-  cluster_vcov <- vcovCL(gen_mod, cluster = trim_df$collection_id)
-  print(coeftest(gen_mod, vcov = vcovCL, cluster = trim_df$collection_id))
-  predictions <- prediction(gen_mod, at = list(cwd.spstd = seq(-2, 2, .5)), vcov = cluster_vcov, calculate_se = T) %>% 
-    summary() %>% 
-    rename(cwd.spstd = "at(cwd.spstd)") 
-  return(predictions)
-}
-
 genus_df <- flm_df %>% 
   filter(genus %in% genus_keep) %>% 
   group_by(genus) %>% 
   nest() %>% 
   mutate(prediction = map(data, predict_cwd_effect))
 
+genus_key <- sp_info %>% 
+  select(genus, gymno_angio) %>% 
+  unique()
+
 genus_df <- genus_df %>% 
   unnest(prediction) %>% 
-  select(-data)
+  select(-data) %>% 
+  left_join(genus_key, by = "genus")
 
-margins_plot <- ggplot(genus_df, aes(x = cwd.spstd)) + 
+margins_plot <- ggplot(genus_df, aes(x = cwd.spstd, fill = gymno_angio)) + 
   geom_line(aes(y = Prediction)) +
   geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
   facet_wrap(~genus, scales = "free") +
