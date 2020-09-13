@@ -62,45 +62,15 @@ range_sf <- st_read(range_file)
 niche <- read.csv(paste0(wdir, "out\\climate\\clim_niche.csv")) %>% 
   select(-X)
 
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Calculate deviation from species' historic range ---------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Define species
-# spp_code <- "pipo"
-spp_code <- "psme"
-
-sp_niche <- niche %>%
-  drop_na() %>% 
-  filter(sp_code == spp_code) %>% 
-  select(-sp_code) 
-# %>% 
-#   summarise_all(list(mean = mean, sd = sd))
-
-
-sp_range <- range_sf %>% 
-  filter(sp_code == spp_code)
-pet_historic_sp <- pet_historic %>%  
-  mask(sp_range)
-pet_historic_spstd <- (pet_historic_sp - sp_niche$pet_mean) / sp_niche$pet_sd
-names(pet_historic_spstd) = "pet.spstd"
-
-cwd_historic_sp <- cwd_historic %>% 
-  mask(sp_range)
-cwd_historic_spstd <- (cwd_historic_sp - sp_niche$cwd_mean) / sp_niche$cwd_sd
-names(cwd_historic_spstd) = "cwd.spstd"
+# 6. Species information
+sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
+sp_info <- sp_info %>% 
+  select(species_id, genus, gymno_angio, family) %>% 
+  rename(sp_code = species_id)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Create climate sensitivity rasters ---------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-clim_historic_sp <- brick(list(cwd_historic_spstd, pet_historic_spstd))
-cwd_sens <- raster::predict(clim_historic_sp, mod)
-pet_sens <- raster::predict(clim_historic_sp, pet_mod)
-
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Predict growth deviation from future climate ---------------
+# Organize CMIP models into tibble  ---------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 pull_cmip_model <- function(mod_n){
   cwd_lyr <- cwd_future[[mod_n]]
@@ -111,27 +81,285 @@ pull_cmip_model <- function(mod_n){
   return(future_clim)
 }
 
-sp_clip <- function(rast){
-  rast_clip <- mask(rast, sp_range)
-  return(rast_clip)
+calc_cwd_change <- function(cmip_rast){
+  cwd_change <- ((cmip_rast %>% subset("cwd")) - cwd_historic)
+  # cwd_change <- (cmip_rast %>% subset("cwd") - cwd_historic) / cwd_historic
+  return(cwd_change)
 }
 
-calc_rwi <- function(cmip_rast){
+n_cmip_mods <- dim(pet_future)[3]
+cmip_projections <- tibble(mod_n = 1:n_cmip_mods)
+cmip_projections <- cmip_projections %>% 
+  mutate(cmip_rast = map(mod_n, pull_cmip_model))
+
+select_cwd <- function(raster_brick){
+  cwd <- raster_brick %>% raster::subset("cwd")
+  return(cwd)
+}
+
+cmip_cwd <- cmip_projections %>% 
+  pull(cmip_rast) %>% 
+  lapply(select_cwd)
+
+names(cwd_historic) = "cwd.hist"
+names(pet_historic) = "pet.hist"
+clim_smry <- raster::brick(c(cwd_historic, pet_historic, cmip_cwd))
+clim_smry <- clim_smry %>% 
+  as.data.frame() %>% 
+  drop_na() %>% 
+  pivot_longer(c(-cwd.hist, -pet.hist), names_to = "cmip_mod", values_to = "future_cwd") %>% 
+  mutate(cwd_change = (future_cwd - cwd.hist))
+
+# Plot change in cwd
+nbins = 26
+label_gaps <- 5
+label_pattern <- seq(1,nbins,label_gaps)
+plot_dat <- clim_smry %>% 
+  mutate(cwd.q = as.numeric(ntile(cwd.hist, nbins)),
+         pet.q = as.numeric(ntile(pet.hist, nbins)))
+
+cwd.quantiles = quantile(plot_dat$cwd.hist, probs = seq(0, 1, 1/nbins), names = TRUE) %>% 
+  round(2) %>% 
+  lapply(round)
+pet.quantiles = quantile(plot_dat$pet.hist, probs = seq(0, 1, 1/nbins), names = TRUE) %>% 
+  round(2) %>% 
+  lapply(round)
+cwd.breaks = seq(0.5, nbins+0.5, 1)
+pet.breaks = seq(0.5, nbins+0.5, 1)
+
+group_dat <- plot_dat %>% 
+  group_by(cwd.q, pet.q) %>% 
+  dplyr::summarize(cwd_change = mean(cwd_change, na.rm = TRUE),
+                   n = n()) %>% 
+  filter(n>100)
+
+binned_change <- group_dat %>% 
+  ggplot(aes(x = cwd.q, y = pet.q, fill = cwd_change)) +
+  geom_tile() +
+  scale_fill_viridis_c() +
+  theme_bw(base_size = 22)+
+  ylab("Deviation from mean PET")+
+  xlab("Deviation from mean CWD")+
+  theme(legend.position = "right") +
+  labs(fill = "CWD change\nby 2100") +
+  scale_x_continuous(labels = cwd.quantiles[label_pattern], breaks = cwd.breaks[label_pattern]) +
+  scale_y_continuous(labels = pet.quantiles[label_pattern], breaks = pet.breaks[label_pattern]) +
+  ylab(bquote("Historic PET (mmH"[2]*"O)")) +
+  xlab(bquote("Historic CWD (mmH"[2]*"O)")) + 
+  coord_fixed()
+
+binned_change 
+ggsave(paste0(wdir, 'figures\\cwd_change.svg'), plot = binned_change)
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Calculate deviation from species' historic range ---------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Define species
+# spp_code <- "pipo"
+species_list <- niche %>% 
+  select(sp_code) %>% 
+  left_join(sp_info, by = "sp_code")
+# species_list <- species_list %>% 
+#   filter(genus == "Pinus")
+rasterize_spstd <- function(spp_code){
+  sp_niche <- niche %>%
+    drop_na() %>% 
+    filter(sp_code == spp_code) %>% 
+    select(-sp_code) 
+  
+  sp_range <- range_sf %>% 
+    filter(sp_code == spp_code)
+  pet_historic_sp <- pet_historic %>%  
+    mask(sp_range)
+  pet_historic_spstd <- (pet_historic_sp - sp_niche$pet_mean) / sp_niche$pet_sd
+  names(pet_historic_spstd) = "pet.spstd"
+  
+  cwd_historic_sp <- cwd_historic %>% 
+    mask(sp_range)
+  cwd_historic_spstd <- (cwd_historic_sp - sp_niche$cwd_mean) / sp_niche$cwd_sd
+  names(cwd_historic_spstd) = "cwd.spstd"
+  
+  clim.spstd <- raster::brick(list(cwd_historic_spstd, pet_historic_spstd))
+  return(clim.spstd)
+}
+
+sp_predictions <- species_list %>% 
+  mutate(clim_historic_sp = map(sp_code, rasterize_spstd))
+
+# sp_niche <- niche %>%
+#   drop_na() %>% 
+#   filter(sp_code == spp_code) %>% 
+#   select(-sp_code) 
+# 
+# sp_range <- range_sf %>% 
+#   filter(sp_code == spp_code)
+# pet_historic_sp <- pet_historic %>%  
+#   mask(sp_range)
+# pet_historic_spstd <- (pet_historic_sp - sp_niche$pet_mean) / sp_niche$pet_sd
+# names(pet_historic_spstd) = "pet.spstd"
+# 
+# cwd_historic_sp <- cwd_historic %>% 
+#   mask(sp_range)
+# cwd_historic_spstd <- (cwd_historic_sp - sp_niche$cwd_mean) / sp_niche$cwd_sd
+# names(cwd_historic_spstd) = "cwd.spstd"
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Create climate sensitivity rasters ---------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# clim_historic_sp <- brick(list(cwd_historic_spstd, pet_historic_spstd))
+# pet_sens <- raster::predict(clim_historic_sp, pet_mod)
+predict_sens <- function(clim_historic_sp){
+  cwd_sens <- raster::predict(clim_historic_sp, mod)
+  names(cwd_sens) = "cwd_sens"
+  pet_sens <- raster::predict(clim_historic_sp, pet_mod)
+  names(pet_sens) = "pet_sens"
+  sensitivity <- raster::brick(cwd_sens, pet_sens) 
+  return(sensitivity)
+}
+
+sp_predictions <- sp_predictions %>% 
+  mutate(sensitivity = map(clim_historic_sp, predict_sens))
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Predict growth deviation from future climate ---------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# sp_clip <- function(rast){
+#   rast_clip <- mask(rast, sp_range)
+#   return(rast_clip)
+# }
+
+calc_rwi <- function(cmip_rast, sensitivity){
+  cwd_sens = sensitivity %>% subset("cwd_sens")
+  pet_sens = sensitivity %>% subset("pet_sens")
   rwi_rast <- cmip_rast$cwd * cwd_sens + cmip_rast$pet * pet_sens
   return(rwi_rast)
 }
 
-n_cmip_mods <- dim(pet_future)[3]
-projections <- tibble(mod_n = 1:n_cmip_mods)
-projections <- projections %>% 
-  mutate(cmip_rast = map(mod_n, pull_cmip_model),
-         cmip_rast = map(cmip_rast, sp_clip),
-         rwi_rast = map(cmip_rast, calc_rwi))
+rwi_cmip_predict <- function(sensitivity){
+  sp_predictions <- cmip_projections %>% 
+    mutate(rwi_rast = map(cmip_rast, calc_rwi, sensitivity = sensitivity)) %>% 
+    pull(rwi_rast)
+  return(sp_predictions)
+}
 
-mean_rwi <- raster::brick(projections %>% pull(rwi_rast)) %>% mean()
+sp_predictions <- sp_predictions %>% 
+  mutate(rwi_predictions = map(sensitivity, rwi_cmip_predict))
+
+extract_predictions <- function(clim_historic_sp, rwi_predictions){
+  predict_rasters <- raster::brick(c(clim_historic_sp, rwi_predictions))
+  predict_df <- predict_rasters %>% 
+    as.data.frame() %>% 
+    drop_na()
+  return(predict_df)
+}
+
+sp_predictions <- sp_predictions %>% 
+  mutate(predict_df = map2(clim_historic_sp, rwi_predictions, extract_predictions))
+
+sp_predictions <- sp_predictions %>% 
+  select(sp_code, predict_df) %>% 
+  unnest(predict_df) %>% 
+  pivot_longer(c(-sp_code, -cwd.spstd, -pet.spstd), names_to = "cmip_run", values_to = "ln_rwi")
 
 
-### Map predicted RWI impact by historic cwd and pet
+### Binned plot of cwd sensitivity
+nbins = 21
+label_gaps <- 5
+label_pattern <- seq(1,nbins,label_gaps)
+plot_dat <- sp_predictions %>% 
+  mutate(cwd.q = as.numeric(ntile(cwd.spstd, nbins)),
+         pet.q = as.numeric(ntile(pet.spstd, nbins)))
+
+cwd.quantiles = quantile(plot_dat$cwd.spstd, probs = seq(0, 1, 1/nbins), names = TRUE) %>% 
+  round(2) %>% 
+  lapply(round, digits = 1)
+pet.quantiles = quantile(plot_dat$pet.spstd, probs = seq(0, 1, 1/nbins), names = TRUE) %>% 
+  round(2) %>% 
+  lapply(round, digits = 1)
+cwd.breaks = seq(0.5, nbins+0.5, 1)
+pet.breaks = seq(0.5, nbins+0.5, 1)
+
+group_dat <- plot_dat %>% 
+  group_by(cwd.q, pet.q) %>% 
+  dplyr::summarize(ln_rwi = mean(ln_rwi, na.rm = TRUE),
+                   n = n()) %>% 
+  filter(n>1000)
+
+
+binned_margins <- group_dat %>% 
+  ggplot(aes(x = cwd.q, y = pet.q, fill = ln_rwi)) +
+  geom_tile() +
+  scale_fill_viridis_c() +
+  theme_bw(base_size = 22)+
+  theme(legend.position = "right") +
+  labs(fill = "Mean ln(RWI)\nin 2100") +
+  scale_x_continuous(labels = cwd.quantiles[label_pattern], breaks = cwd.breaks[label_pattern]) +
+  scale_y_continuous(labels = pet.quantiles[label_pattern], breaks = pet.breaks[label_pattern]) +
+  ylab("Historic PET\n(Deviation from species mean)") +
+  xlab("Historic CWD\n(Deviation from species mean)") + 
+  coord_fixed()
+
+binned_margins 
+ggsave(paste0(wdir, 'figures\\predicted_rwi.svg'), plot = binned_margins)
+
+
+
+
+
+
+# calc_mean_rwi <- function(rwi_predictions){
+#   mean_rwi <- raster::brick(rwi_predictions %>% pull(rwi_rast)) %>% mean()
+#   return(mean_rwi)
+# }
+# 
+# sp_predictions <- sp_predictions %>% 
+#   mutate(rwi_2100 = map(rwi_predictions, calc_mean_rwi))
+
+
+### Plot drought change by historic cwd and pet
+cwd_historic_sp <- clim_historic_sp %>% subset("cwd.spstd")
+cwd_change <- raster::brick(c(clim_historic_sp, projections$cwd_change))
+cwd_change <- as.data.frame(cwd_change)
+cwd_change <- cwd_change %>% 
+  pivot_longer(-c(cwd.spstd, pet.spstd), names_to = "cmip_mod", values_to = "cwd_change")
+
+plot_dat <- cwd_change %>% drop_na()
+nbins = 10
+plot_dat <- plot_dat %>% 
+  mutate(cwd.q = as.numeric(ntile(cwd.spstd, nbins)),
+         pet.q = as.numeric(ntile(pet.spstd, nbins)))
+cwd.quantiles = quantile(plot_dat$cwd.spstd, probs = seq(0, 1, 1/nbins), names = TRUE) %>% round(2)
+pet.quantiles = quantile(plot_dat$pet.spstd, probs = seq(0, 1, 1/nbins), names = TRUE) %>% round(2)
+
+group_dat <- plot_dat %>% 
+  group_by(cwd.q, pet.q) %>% 
+  summarize(mean = mean(cwd_change),
+            n = n())
+
+binned_margins <- group_dat %>% 
+  ggplot(aes(x = cwd.q, y = pet.q, fill = mean)) +
+  geom_tile() +
+  # xlim(c(-3, 4)) +
+  #ylim(c(-1.5, 1.5))+
+  # scale_fill_gradientn (colours = c("darkblue","lightblue")) +
+  scale_fill_viridis_c() +
+  # scale_fill_viridis_c() +
+  theme_bw(base_size = 22)+
+  ylab("Deviation from mean PET")+
+  xlab("Deviation from mean CWD")+
+  theme(legend.position = "right") +
+  labs(fill = "Mean predicted\nchange in CWD") +
+  scale_x_continuous(labels = cwd.quantiles, breaks = seq(0.5, nbins+0.5, 1)) +
+  scale_y_continuous(labels = pet.quantiles, breaks = seq(0.5, nbins+0.5, 1)) +
+  ylab("Historic PET\n(Deviation from species mean)") +
+  xlab("Historic CWD\n(Deviation from species mean)") + 
+  coord_fixed()
+
+binned_margins 
+
+### Plot predicted RWI impact by historic cwd and pet
 predict_brick <- raster::brick(c(rwi_change = mean_rwi, cwd_hist = cwd_historic, pet_hist = pet_historic))
 rwi_change_df <- as.data.frame(predict_brick)
 rwi_change_df <- rwi_change_df %>% 
