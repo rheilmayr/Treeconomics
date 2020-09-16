@@ -175,7 +175,7 @@ hex
 # ggsave(paste0(wdir, 'figures\\clim_density.svg'), plot = hex)
 
 ### Binned plot of cwd sensitivity
-plot_dat <- trim_df %>%
+plot_dat <- flm_df %>%
   filter(((abs(cwd.spstd)<3) & (abs(pet.spstd<3)))) %>%
   drop_na()
 nbins = 8
@@ -293,7 +293,7 @@ coeftest(allobs_mod, vcov = vcovCL, cluster = flm_df$collection_id)
 allobs_cluster_vcov <- vcovCL(allobs_mod, cluster = flm_df$collection_id)
 
 # Limit to gymnosperms
-subset_df <- trim_df %>% filter(gymno_angio=="gymno")
+subset_df <- trim_df %>% filter(gymno_angio=="angio")
 # subset_df <- trim_df %>% filter(gymno_angio=="gymno") %>% filter(collection_id %in% old_sites)
 subset_df <- trim_df %>% filter(genus=="Juniperus")
 # subset_df <- trim_df %>% filter(genus=="Pinus") %>% filter(collection_id %in% old_sites)
@@ -358,6 +358,22 @@ predict_cwd_effect <- function(trim_df){
   return(predictions)
 }
 
+predict_cwd_effect <- function(trim_df){
+  trim_df <- trim_df %>%
+    filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
+           abs(cwd.spstd)<5,
+           abs(pet.spstd)<5) %>%
+    drop_na()
+  gen_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights=errorweights, data=trim_df)
+  cluster_vcov <- vcovCL(gen_mod, cluster = trim_df$collection_id)
+  mod_cl <- tidy(coeftest(gen_mod, vcov = vcovCL, cluster = trim_df$collection_id))
+  predictions <- prediction(gen_mod, at = list(cwd.spstd = seq(-3, 3, .5)), vcov = cluster_vcov, calculate_se = T) %>% 
+    summary() %>% 
+    rename(cwd.spstd = "at(cwd.spstd)")
+  out <- tibble(predictions = list(predictions), model = list(mod_cl))
+  return(out)
+}
+
 ## Plot marginal effects by gymno / angio
 grp_freq <- flm_df %>% 
   group_by(gymno_angio) %>% 
@@ -405,24 +421,36 @@ genus_keep <- genus_freq %>%
   filter(n_collections>50) %>% 
   pull(genus)
 
-genus_df <- flm_df %>% 
-  filter(genus %in% genus_keep) %>% 
-  group_by(genus) %>% 
-  nest() %>% 
-  mutate(prediction = map(data, predict_cwd_effect))
-
 genus_key <- sp_info %>% 
   select(genus, gymno_angio) %>% 
   unique()
 
-genus_df <- genus_df %>% 
+genus_df <- flm_df %>% 
+  filter(genus %in% genus_keep) %>% 
+  group_by(genus) %>% 
+  nest() %>% 
+  mutate(prediction = map(data, predict_cwd_effect)) %>% 
   unnest(prediction) %>% 
-  select(-data) %>% 
   left_join(genus_key, by = "genus")
 
-margins_plot <- ggplot(genus_df, aes(x = cwd.spstd, fill = gymno_angio)) + 
+
+genus_coefs <- genus_df %>%
+  unnest(model) %>% 
+  filter(term == "cwd.spstd") %>% 
+  select(genus, estimate, p.value)
+
+genus_coefs <- genus_coefs %>% 
+  mutate(lab = paste0("Slope: ", as.character(format(estimate, digits = 3, scientific = F)), 
+                      "\nP value: ", as.character(format(p.value, digits = 3, scientific = T))))
+
+genus_predictions <- genus_df %>% 
+  unnest(predictions) %>% 
+  select(-data, -model)
+
+
+margins_plot <- ggplot(genus_predictions, aes(x = cwd.spstd)) + 
   geom_line(aes(y = Prediction)) +
-  geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
+  geom_ribbon(aes(ymin=lower, ymax=upper, fill = gymno_angio), alpha=0.2) +
   facet_wrap(~genus, scales = "free") +
   geom_line(aes(y = upper), linetype = 3) +
   geom_line(aes(y = lower), linetype = 3) +
@@ -431,11 +459,20 @@ margins_plot <- ggplot(genus_df, aes(x = cwd.spstd, fill = gymno_angio)) +
   ylab("Predicted sensitivity to CWD") + 
   theme_bw(base_size = 22) +
   scale_y_continuous(labels = scales::scientific)
+  
+margins_plot <- margins_plot +
+  geom_text(data = genus_coefs, aes(x = -1.8, y = 0, label = lab))
+
 margins_plot
 
-
-
-
+histogram <- ggplot(flm_df %>% filter(genus %in% genus_keep), aes(x = cwd.spstd)) + 
+  facet_wrap(~genus) +
+  geom_histogram(aes(fill = gymno_angio), bins = 40, alpha=0.4) +
+  xlim(c(-3, 3)) +
+  theme_bw(base_size = 22) + 
+  ylab("# sites") +
+  xlab("Historic CWD\n(Deviation from species mean)")
+histogram
 
 
 
