@@ -44,6 +44,10 @@ dendro_df <- read_csv(paste0(dendro_dir, "rwi_long.csv"))
 dendro_df <- dendro_df %>% 
   filter(year>1900) %>% 
   select(-core_id)
+# old_dendro_df <- read_csv(paste0(dendro_dir, "rwi_long_old.csv"))
+# old_dendro_df <- old_dendro_df %>% 
+#   filter(year>1900) %>% 
+#   select(-core_id)
 # dendro_sites <- read.csv(paste0(dendro_dir, "2_valid_sites.csv")) %>% 
 #   select(-X) %>% 
 #   mutate(file_name = paste0('sid-', site_id, '_spid-', species_id, '.csv'))
@@ -133,25 +137,25 @@ dendro_lm <- function(s_id, sp_id){
 }
 
 
-getcov <- function(felm_mod, cov_vars = c("pet.an", "cwd.an")){
-  failed <- F
-  tryCatch(
-    expr = {
-      vcov <- felm_mod$vcv
-      pet_cwd_cov <- vcov %>% 
-        subset(rownames(vcov) == cov_vars[1]) %>% 
-        as_tibble() %>% 
-        pull(cov_vars[2])
-    },
-    error = function(e){
-      failed <<- T
-    }
-  )
-  if (failed){
-    return(NULL)
-  }
-  return(pet_cwd_cov)
-}
+# getcov <- function(felm_mod, cov_vars = c("pet.an", "cwd.an")){
+#   failed <- F
+#   tryCatch(
+#     expr = {
+#       vcov <- felm_mod$vcv
+#       pet_cwd_cov <- vcov %>% 
+#         subset(rownames(vcov) == cov_vars[1]) %>% 
+#         as_tibble() %>% 
+#         pull(cov_vars[2])
+#     },
+#     error = function(e){
+#       failed <<- T
+#     }
+#   )
+#   if (failed){
+#     return(NULL)
+#   }
+#   return(pet_cwd_cov)
+# }
 
 
 getcov <- function(felm_mod){
