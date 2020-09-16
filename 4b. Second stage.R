@@ -33,7 +33,6 @@ library(sandwich)
 library(prediction)
 library(Hmisc)
 library(hexbin)
-
 library(ggpubr)
 library(ggiraphExtra)
 library(modi)
@@ -63,6 +62,12 @@ cwd_df <- cwd_df %>%
 # 3. Tree-level regressions
 flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\site_log_pet_cwd.csv')) %>%
   select(-X1)
+
+# old_flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\tree_log_pet_cwd_old.csv')) %>%
+#   select(-X1) %>%
+#   select(-c(year, aet.an, cwd.an, pet.an)) %>%
+#   unique()
+# old_sites <- old_flm_df %>% select(collection_id) %>% unique() %>% pull()
 
 # 4. Site information
 site_df <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
@@ -131,8 +136,8 @@ flm_df <- flm_df %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Add weighting based on inverse of first stage variance
 flm_df <- flm_df %>% 
-  mutate(errorweights = 1 / (std.error_cwd.an^2),
-         pet_errorweights = 1 / (std.error_pet.an^2))
+  mutate(errorweights = 1 / (std.error_cwd.an),
+         pet_errorweights = 1 / (std.error_pet.an))
 
 # Identify and trim extreme outliers
 flm_df <- flm_df %>%
@@ -144,7 +149,9 @@ flm_df <- flm_df %>%
 trim_df <- flm_df %>%
   filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
          abs(cwd.spstd)<5,
-         abs(pet.spstd)<5) %>% 
+         abs(pet.spstd)<5,
+         abs(estimate_cwd.an)<1,
+         abs(estimate_pet.an)<1) %>% 
   drop_na()
 
 
@@ -188,7 +195,7 @@ group_dat <- plot_dat %>%
             error = qt(0.975, df = n-1)*wsd/sqrt(n),
             lower = wmean - error,
             upper = wmean + error) %>% 
-  filter(n>4)
+  filter(n>20)
 
 
 binned_margins <- group_dat %>% 
@@ -209,7 +216,7 @@ binned_margins <- group_dat %>%
   xlab("Historic CWD\n(Deviation from species mean)") + 
   coord_fixed()
 
-binned_margins 
+binned_margins
 # ggsave(paste0(wdir, 'figures\\binned_margins.svg'), plot = binned_margins)
 
 
@@ -252,7 +259,6 @@ margins_plot <- ggplot(predictions, aes(x = cwd.spstd)) +
   theme_bw(base_size = 22) +
   scale_y_continuous(labels = scales::scientific)
 
-# margins_plot
 
 histogram <- ggplot(plot_dat, aes(x = cwd.spstd)) + 
   geom_histogram(bins = 40, alpha=0.2, fill = "darkblue") +
@@ -288,6 +294,10 @@ allobs_cluster_vcov <- vcovCL(allobs_mod, cluster = flm_df$collection_id)
 
 # Limit to gymnosperms
 subset_df <- trim_df %>% filter(gymno_angio=="gymno")
+# subset_df <- trim_df %>% filter(gymno_angio=="gymno") %>% filter(collection_id %in% old_sites)
+subset_df <- trim_df %>% filter(genus=="Juniperus")
+# subset_df <- trim_df %>% filter(genus=="Pinus") %>% filter(collection_id %in% old_sites)
+subset_df %>% dim()
 conifer_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=subset_df)
 coeftest(conifer_mod, vcov = vcovCL, cluster = subset_df$collection_id)
 conifer_cluster_vcov <- vcovCL(conifer_mod, cluster = subset_df$collection_id)
@@ -301,11 +311,13 @@ trim_df <- flm_df %>%
   filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
          abs(cwd.spstd)<5,
          abs(pet.spstd)<5,
-         genus %in% c("ju", "pi", "ps"),
+         # genus == "Pinus",
+         abs(estimate_cwd.an)<1,
          young==TRUE) %>% 
   drop_na()
 
 mod <- lm(estimate_cwd.an ~ cwd.spstd + cwd.trstd + pet.spstd + pet.trstd, weights = errorweights, data=trim_df)
+cluster_vcov <- vcovCL(mod, cluster = trim_df$collection_id)
 coeftest(mod, vcov = vcovCL, cluster = trim_df$collection_id)
 
 # Could include all trees from sites with any variation in tree-level drought history (including trees born <1901) 
@@ -317,7 +329,7 @@ trim_df <- flm_df %>%
   filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
          abs(cwd.spstd)<5,
          abs(pet.spstd)<5,
-         genus %in% c("ju", "pi", "ps"),
+         # genus %in% c("ju", "pi", "ps"),
          collection_id %in% young_sites) %>% 
   drop_na()
 mod <- lm(estimate_cwd.an ~ cwd.spstd + cwd.trstd + pet.spstd + pet.trstd, weights = errorweights, data=trim_df)
