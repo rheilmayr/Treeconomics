@@ -112,6 +112,11 @@ site_data <- site_data %>%
          filename = str_remove(filename, "-noaa.rwl"),
          metric = idMetric(filename))
 
+### Pre-remove sites with spans outside of study period?
+# site_data <- site_data %>% 
+#   filter((end_year<1900) | (end_year>3000))
+
+
 total_sites <- site_data %>% 
   filter(metric == "total_ring_width") %>% 
   pull(collection_id)
@@ -130,6 +135,13 @@ sum_sites <- early_sites[which(early_sites %in% late_sites)]
 keep_sites <- c(total_sites, sum_sites)
 
 
+site_summary <- site_data %>% 
+  select(collection_id, site_name, location, latitude, longitude, elevation, start_year, end_year, time_unit, sp_id, sp_scient, sp_common) %>% 
+  distinct() %>% 
+  filter(collection_id %in% keep_sites)
+write_csv(site_summary, paste0(out_dir, "site_summary.csv"))
+
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Process total rwl files --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -138,52 +150,91 @@ site_to_filename <- function(site, suffix){
   site <- paste0(site, suffix, '.rwl')
 }
 
-
 open_rwl <- function(file){
   caught_error <- NA
   caught_warning <- NA
   rwl <- NA
-  ids <- NA
   tryCatch(
     expr = {
       rwl <- read.tucson(paste0(data_dir, file))
+    },
+    error = function(e){
+      tryCatch(
+        expr = {
+          path_nohead <- remove_head(file)
+          rwl <<- read.tucson(paste0(path_nohead))
+        },
+        error = function(e){
+          message("Returned error on site ", file)
+          print(e)
+          caught_error <<- e
+        }
+      )
+    }
+    # ,
+    # warning = function(w){
+    #   message("Returned warning on file ", file)
+    #   print(w)
+    #   caught_warning <<- w
+    # }
+  )
+  # out <- tibble(rwl = list(rwl), read_error = list(caught_error), read_warning = list(caught_warning))
+  out <- tibble(rwl = list(rwl), read_error = list(caught_error))
+  return(out)
+}
+
+
+remove_head <- function(file){
+  path <- paste0(data_dir, file)
+  temp_path <- paste0(data_dir, "temp_nohead.rwl")
+  txt <- readLines(path)
+  txt <- txt[-(1:3)]
+  fileConn<-file(temp_path)
+  writeLines(txt, fileConn)
+  close(fileConn)
+  return(temp_path)
+}
+
+read_ids <- function(rwl){
+  # rwl <- rwl[[1]]
+  caught_error <- NA
+  caught_warning <- NA
+  ids <- NA
+  tryCatch(
+    expr = {
       ids <- autoread.ids(rwl)
     },
     error = function(e){ 
       message("Returned error on site ", file)
       print(e)
       caught_error <<- e
-    },
-    warning = function(w){
-      message("Returned warning on file ", file)
-      print(w)
-      caught_warning <<- w
     }
+    # ,
+    # warning = function(w){
+    #   message("Returned warning on file ", file)
+    #   print(w)
+    #   caught_warning <<- w
+    #   ids <<- autoread.ids(rwl)
+    # }
   )
-  out <- tibble(rwl = list(rwl), ids = list(ids), error = caught_error[1], warning = caught_warning[1])
+  # out <- tibble(ids = list(ids), id_warning = list(caught_warning), id_error = list(caught_error))
+  out <- tibble(ids = list(ids), id_error = list(caught_error))
   return(out)
 }
 
 
 separate_errors <- function(rwl_data){
-  warnings <- rwl_data %>% 
-    unnest(warning) %>% 
-    select(collection_id, warning)
   errors <- rwl_data %>% 
-    unnest(error) %>% 
-    select(collection_id, error)
-  
+    filter((!is.na(read_error)) | (!is.na(id_error)))
+
   error_collections <- errors %>% pull(collection_id)
-  warning_collections <- warnings %>% pull(collection_id)
-  error_collections <- c(error_collections, warning_collections)
   
   clean_data <- rwl_data %>% 
-    select(-error, -warning) %>% 
+    select(-c(read_error, id_error)) %>% 
     filter(!(collection_id %in% error_collections))
   errors <- rwl_data %>% 
     select(-rwl, -ids) %>% 
-    filter(collection_id %in% error_collections) %>% 
-    unnest(c(warning, error))
+    filter(collection_id %in% error_collections)
   return(list(clean_data = clean_data, errors = errors))
 }
 
@@ -191,6 +242,9 @@ rwl_files <- sapply(total_sites, site_to_filename, suffix = '')
 rwl_data <- tibble::enframe(rwl_files, name = "collection_id", value = "file")
 rwl_data$rwl <- map(rwl_data$file, open_rwl) 
 rwl_data <- rwl_data %>% unnest(rwl)
+rwl_data <- rwl_data %>% 
+  mutate(ids = map(rwl_data$rwl, read_ids))
+rwl_data <-rwl_data %>% unnest(ids)
 rwl_results <- separate_errors(rwl_data)
 clean_data <- rwl_results$clean_data
 
@@ -231,6 +285,9 @@ erwl_files <- sapply(sum_sites, site_to_filename, suffix = 'e')
 erwl_data <- tibble::enframe(erwl_files, name = "collection_id", value = "file")
 erwl_data$rwl <- map(erwl_data$file, open_rwl) 
 erwl_data <- erwl_data %>% unnest(rwl)
+erwl_data <- erwl_data %>% 
+  mutate(ids = map(erwl_data$rwl, read_ids))
+erwl_data <- erwl_data %>% unnest(ids)
 erwl_results <- separate_errors(erwl_data)
 e_clean_data <- erwl_results$clean_data
 e_clean_data <- e_clean_data %>% 
@@ -240,6 +297,9 @@ lrwl_files <- sapply(sum_sites, site_to_filename, suffix = 'l')
 lrwl_data <- tibble::enframe(lrwl_files, name = "collection_id", value = "file")
 lrwl_data$rwl <- map(lrwl_data$file, open_rwl) 
 lrwl_data <- lrwl_data %>% unnest(rwl)
+lrwl_data <- lrwl_data %>% 
+  mutate(ids = map(lrwl_data$rwl, read_ids))
+lrwl_data <- lrwl_data %>% unnest(ids)
 lrwl_results <- separate_errors(lrwl_data)
 l_clean_data <- lrwl_results$clean_data
 l_clean_data <- l_clean_data %>% 
@@ -338,7 +398,7 @@ site_summary <- site_summary %>%
 #### Could probably increase sample size by including less egregious warnings
 #### occurring in open_rwl function, especially from autoread.ids step.
 
-write_csv(site_summary, paste0(out_dir, "site_summary.csv"))
+# write_csv(site_summary, paste0(out_dir, "site_summary.csv"))
 
 
 
@@ -402,17 +462,47 @@ n_usable_obs <- clean_data %>%
   distinct() %>% 
   dim()
 
-
-
-
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+n = 2
+errors[((n-1)*10+1):(n*10),]
+warnings <- site_df %>% select(collection_id, warning) %>% drop_na()
+site <- "ak006"
+file <- paste0(site, ".rwl")
+read.tucson(paste0(data_dir, file))
+rwl <- open_rwl(file)
+
+
+file <- "remote\\in\\itrdb\\cana008.rwl"
+rwl <- read.tucson(file)
+ids <- autoread.ids(rwl)
+
 # NOTES:
 # NOAA header files  missing species data block and collection name. Added manually
 #   cana575-cana586; paki041
 #
+# Series with inconsistent names edited manually
+#   
+#
 # Collections ARGE and ME recoded as ARGE999 and ME999
-# 
-# 
+#   AK020; CV05SW: After 1860 shifted to lowercase
+#   AK077; ZC-5-6W: After 1760 was missing first digit (Z) of code
+#   AK109; FTR25WAS: Typo corrected after 1810
+#   AR073; PB07C: First row missing first digit (O)
+#   AR077; p160t046: Last row has typo
+#   BRIT10; all series: Removed 0s after precision indicators
+#   CA527; 041031: Added precision
+#   CA599; TPR17B: Added precision
+#   CA621; KER17C: Corrected typo, Shouldve been KER17B
+#   CA645; B2707A
+#   CANA101: Added space to first line
+#   CANA151: Corrected lots of typos
+#   CANA161; 1s012a
+#   CANA260; p0504b
+#   CANA273; bs496b2: Added precision
+#   CANA275: Corrected typos
+#   CANA521: Corrected typo
+#   
+
 # Updates over original dataset -
 #   Added data from more recent ITRDB uploads
 #   Summing early / latewood observations
