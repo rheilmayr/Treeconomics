@@ -13,6 +13,9 @@ dendro_df=dendro_df%>%
 index <- dendro_df %>% select(collection_id, year, tree, core)
 dendro_df <- dendro_df[!duplicated(index),]
 
+dendro_df <- dendro_df %>% 
+  rename(site = collection_id)
+
 nlags=30
 for(i in 1:nlags){
   lagdf=dendro_df%>%
@@ -24,7 +27,7 @@ for(i in 1:nlags){
   print(i)
 }
 
-fwrite(dendro_lagged,file="C:\\Users\\fmoore\\Desktop\\treedendrolagged.csv")
+# fwrite(dendro_lagged,file="C:\\Users\\fmoore\\Desktop\\treedendrolagged.csv")
 
 #merge in species data
 site_df <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
