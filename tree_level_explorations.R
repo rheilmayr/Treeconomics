@@ -1,26 +1,89 @@
-#get dendro_df data frame from first 79 lines of code from 4a
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Authors: Robert Heilmayr, Joan Dudney, Frances Moore
+# Project: Treeconomics
+# Date: 5/27/20
+# Purpose: Creat predictions of growth impacts from climate change
+#
+# Input files:
+# - ss_mod: R model object saved from Second stage
+# - 
+#
+# ToDo:
+#
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Package imports --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+library(tidyr)
+library(tidyverse)
+library(dbplyr)
+library(RSQLite)
+library(lfe)
+library(broom)
+library(purrr)
+library(fixest)
 library(dlnm)
 library(tidyverse)
 library(data.table)
-library(lfe)
 
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Import data --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Define path
+wdir <- 'remote\\'
+
+# 1. Dendrochronologies
+dendro_dir <- paste0(wdir, "out\\dendro\\")
+dendro_df <- read_csv(paste0(dendro_dir, "rwi_long.csv"))
+dendro_df <- dendro_df %>% 
+  filter(year>1900) %>% 
+  select(-core_id)
+
+# 2. Site-specific weather history
+cwd_csv <- paste0(wdir, 'out\\climate\\essentialcwd_data.csv')
+cwd_df <- read_csv(cwd_csv)
+cwd_df <- cwd_df %>% 
+  mutate("site_id" = as.character(site))
+
+# 3. Site summary data
+site_df <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
+site_df <- site_df %>% 
+  select(collection_id, sp_id)
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Summarize and merge site historic climate ------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Calculate site-level annual climate
+clim_df = cwd_df %>%
+  rename(collection_id = site_id) %>% 
+  group_by(collection_id, year) %>%
+  summarise(aet.an = sum(aet),
+            cwd.an = sum(cwd),
+            pet.an = sum((aet+cwd)))
+
+dendro_df <- dendro_df %>% 
+  left_join(clim_df, by = c("collection_id", "year"))
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Clean up data  ------------------------------
+# TODO: should be integrated into dendro prep - 1b
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 #drop a couple spurious years
 dendro_df=dendro_df%>%
   filter(year<2020)
-
-#filter non-unique ids
-index <- dendro_df %>% select(collection_id, year, tree, core)
-dendro_df <- dendro_df[!duplicated(index),]
 
 dendro_df <- dendro_df %>% 
   rename(site = collection_id)
 
 nlags=30
 for(i in 1:nlags){
-  lagdf=dendro_df%>%
-    select(-c(width,pet.an,aet.an,site))%>%
-    mutate(year=year+i)
+  lagdf=dendro_df %>%
+    select(-c(width,pet.an,aet.an,site)) %>%
+    mutate(year = year + i)
   colnames(lagdf)[5]=paste0("cwd_L",i)
   if(i==1) dendro_lagged=left_join(dendro_df,lagdf)
   if(i>1) dendro_lagged=left_join(dendro_lagged,lagdf)
@@ -30,14 +93,11 @@ for(i in 1:nlags){
 # fwrite(dendro_lagged,file="C:\\Users\\fmoore\\Desktop\\treedendrolagged.csv")
 
 #merge in species data
-site_df <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
-site_df <- site_df %>% 
-  select(collection_id, sp_id)
 dendro_lagged=left_join(dendro_lagged,site_df,by = "collection_id")
 dendro_lagged <- dendro_lagged %>% 
   rename(species_id = sp_id) %>% 
   mutate(species_id = str_to_lower(species_id),
-         genus = substr(species_id, 1, 2))
+         genus = substr(species_id, 1, 2)) # TODO: need to correct this
 
 #log ring width for dependent variable
 dendro_lagged$ln_rwi=log(dendro_lagged$width)
