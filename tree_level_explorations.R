@@ -1,11 +1,10 @@
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Authors: Robert Heilmayr, Joan Dudney, Frances Moore
 # Project: Treeconomics
-# Date: 5/27/20
-# Purpose: Creat predictions of growth impacts from climate change
+# Date: 9/21/20
+# Purpose: Assess tree-level evolution of drought sensitivity
 #
 # Input files:
-# - ss_mod: R model object saved from Second stage
 # - 
 #
 # ToDo:
@@ -125,7 +124,11 @@ for(i in 1:length(relgenus)){
 }
 
 intlist=list()
-#interactions effect
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Lag interaction models  ------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 for(i in 1:length(relgenus)){
   gendat=dendro_lagged%>%
     filter(genus==relgenus[i])%>%
@@ -145,8 +148,10 @@ dendro_lagged=dendro_lagged%>%
 dendro_lagged$id=interaction(dendro_lagged$collection_id,dendro_lagged$tree)
 intmod=felm(ln_rwi~cwd.an*lag_5+cwd.an*lag_6_10+pet.an|id|0|collection_id,data=dendro_lagged)
 
-#early life drought
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Early life drought models  ------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 young_trees <- dendro_lagged %>% 
   group_by(collection_id, tree) %>% 
   summarise(min_year = min(year)) %>% 
