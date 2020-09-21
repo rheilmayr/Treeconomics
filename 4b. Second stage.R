@@ -59,9 +59,19 @@ cwd_df <- cwd_df %>%
   mutate("site_id" = as.character(site)) %>%
   select(-site)
 
-# 3. Tree-level regressions
+# 3a. Site-level regressions
 flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\site_log_pet_cwd.csv')) %>%
   select(-X1)
+
+# # 3b. Tree-level regressions
+# tree_df <- read_csv(paste0(wdir, 'out\\first_stage\\tree_log_pet_cwd.csv')) %>%
+#   select(-X1)
+
+# ggplot(flm_df %>% filter(abs(estimate_cwd.an)<0.01, cwd.min>5), aes(x = estimate_cwd.an)) + 
+#   geom_histogram(bins = 100, alpha=0.4)
+# dim(flm_df %>% filter(abs(estimate_cwd.an)<100))[1] / dim(flm_df)[1] 
+# dim(tree_df %>% filter(abs(estimate_cwd.an)<100))[1] / dim(tree_df)[1] 
+
 
 # old_flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\tree_log_pet_cwd_old.csv')) %>%
 #   select(-X1) %>%
@@ -103,7 +113,8 @@ hist_clim_df <- clim_df %>%
   filter(year<1980) %>%
   summarise(aet.ave = mean(aet.an),
             cwd.ave = mean(cwd.an),
-            pet.ave = mean(pet.an))
+            pet.ave = mean(pet.an),
+            cwd.min = min(cwd.an))
 
 # Merge historic climate to flm data
 flm_df <- flm_df %>% 
@@ -160,6 +171,8 @@ trim_df <- flm_df %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 xmin <- -2.5
 xmax <- 2.5
+increment <- 0.5
+breaks <- seq(xmin, xmax, increment)
 
 ### Summary plot of sample distribution
 hex <- flm_df %>% ggplot(aes(x = cwd.spstd, y = pet.spstd, weight = nobs)) +
@@ -175,16 +188,26 @@ hex
 # ggsave(paste0(wdir, 'figures\\clim_density.svg'), plot = hex)
 
 ### Binned plot of cwd sensitivity
+nbins = 8
+label_gaps <- 1
+label_pattern <- seq(1, nbins + 1,label_gaps)
 plot_dat <- flm_df %>%
   filter(((abs(cwd.spstd)<3) & (abs(pet.spstd<3)))) %>%
   drop_na()
-nbins = 8
-plot_dat <- plot_dat %>% 
+
+# plot_dat <- plot_dat %>%
+#   mutate(cwd.q = as.numeric(cut(cwd.spstd, breaks = breaks)),
+#          pet.q = as.numeric(cut(pet.spstd, breaks = breaks)))
+
+plot_dat <- plot_dat %>%
   mutate(cwd.q = as.numeric(ntile(cwd.spstd, nbins)),
          pet.q = as.numeric(ntile(pet.spstd, nbins)))
 
-cwd.quantiles = quantile(plot_dat$cwd.spstd, probs = seq(0, 1, 1/nbins), names = TRUE) %>% round(2)
-pet.quantiles = quantile(plot_dat$pet.spstd, probs = seq(0, 1, 1/nbins), names = TRUE) %>% round(2)
+cwd.quantiles = quantile(plot_dat$cwd.spstd, probs = seq(0, 1, 1/nbins), names = TRUE) %>% round(2) %>% lapply(round, digits = 1)
+pet.quantiles = quantile(plot_dat$pet.spstd, probs = seq(0, 1, 1/nbins), names = TRUE) %>% round(2) %>% lapply(round, digits = 1)
+cwd.breaks = seq(0.5, nbins+0.5, 1)
+pet.breaks = seq(0.5, nbins+0.5, 1)
+
 
 group_dat <- plot_dat %>% 
   group_by(cwd.q, pet.q) %>% 
@@ -203,15 +226,17 @@ binned_margins <- group_dat %>%
   geom_tile() +
   # xlim(c(-3, 4)) +
   #ylim(c(-1.5, 1.5))+
-  scale_fill_gradientn (colours = c("darkblue","lightblue")) +
-  # scale_fill_viridis_c() +
+  # scale_fill_gradientn (colours = c("darkblue","lightblue")) +
+  scale_fill_viridis_c(direction = -1) +
   theme_bw(base_size = 22)+
   ylab("Deviation from mean PET")+
   xlab("Deviation from mean CWD")+
-  theme(legend.position = "right") +
+  theme(legend.position = "left") +
   labs(fill = "Marginal effect\nof CWD") +
-  scale_x_continuous(labels = cwd.quantiles, breaks = seq(0.5, nbins+0.5, 1)) +
-  scale_y_continuous(labels = pet.quantiles, breaks = seq(0.5, nbins+0.5, 1)) +
+  scale_x_continuous(labels = cwd.quantiles[label_pattern], breaks = cwd.breaks[label_pattern]) +
+  scale_y_continuous(labels = pet.quantiles[label_pattern], breaks = pet.breaks[label_pattern]) +
+  # scale_x_continuous(labels = cwd.quantiles, breaks = seq(0.5, nbins+0.5, 1)) +
+  # scale_y_continuous(labels = pet.quantiles, breaks = seq(0.5, nbins+0.5, 1)) +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") + 
   coord_fixed()
@@ -249,29 +274,30 @@ predictions <- prediction(mod, at = list(cwd.spstd = seq(xmin, xmax, .1)), vcov 
   rename(cwd.spstd = "at(cwd.spstd)")
 
 margins_plot <- ggplot(predictions, aes(x = cwd.spstd)) + 
-  geom_line(aes(y = Prediction)) +
-  geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
+  geom_line(aes(y = Prediction), color = "#404788FF") +
+  geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.8, fill = "#404788FF") +
   geom_line(aes(y = upper), linetype = 3) +
   geom_line(aes(y = lower), linetype = 3) +
   geom_hline(yintercept = 0, linetype = 2) +
-  xlab("Historic CWD\n(Deviation from species mean)") + 
-  ylab("Predicted sensitivity to CWD") + 
+  xlab("Historic CWD\n(Deviation from species mean)") +
+  # xlab(element_blank()) + 
+  ylab("Predicted sensitivity\nto CWD") + 
   theme_bw(base_size = 22) +
   scale_y_continuous(labels = scales::scientific)
 
 
 histogram <- ggplot(plot_dat, aes(x = cwd.spstd)) + 
-  geom_histogram(bins = 40, alpha=0.2, fill = "darkblue") +
+  geom_histogram(bins = 40, alpha=0.8, fill = "#404788FF") +
   xlim(c(xmin, xmax)) +
   theme_bw(base_size = 22) + 
-  ylab("# trees") +
+  ylab("# sites") +
   theme(aspect.ratio = 0.3,
         axis.title.x = element_blank(),
         axis.text.x = element_blank(),
         axis.ticks.x = element_blank())
 
-histogram / margins_plot
-=ggsave(paste0(wdir, 'figures\\cwd_margins.svg'), plot = margins_plot)
+out_fig <- binned_margins | (histogram / margins_plot)
+ggsave(paste0(wdir, 'figures\\cwd_margins.svg'), plot = out_fig, width = 15, height = 9, units = "in")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -281,6 +307,20 @@ histogram / margins_plot
 sq_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd + I(cwd.spstd^2) + I(pet.spstd^2), weights = errorweights, data=trim_df)
 coeftest(sq_mod, vcov = vcovCL, cluster = trim_df$collection_id)
 sq_cluster_vcov <- vcovCL(sq_mod, cluster = trim_df$collection_id)
+sq_predictions <- prediction(sq_mod, at = list(cwd.spstd = seq(xmin, xmax, .1)), vcov = sq_cluster_vcov, calculate_se = T) %>% 
+  summary() %>% 
+  rename(cwd.spstd = "at(cwd.spstd)")
+margins_plot <- ggplot(sq_predictions, aes(x = cwd.spstd)) + 
+  geom_line(aes(y = Prediction)) +
+  geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
+  geom_line(aes(y = upper), linetype = 3) +
+  geom_line(aes(y = lower), linetype = 3) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  xlab("Historic CWD\n(Deviation from species mean)") + 
+  ylab("Predicted sensitivity to CWD") + 
+  theme_bw(base_size = 22) +
+  scale_y_continuous(labels = scales::scientific)
+margins_plot
 
 # Drop PET
 nopet_mod <- lm(estimate_cwd.an ~ cwd.spstd, weights = errorweights, data=trim_df)
@@ -298,65 +338,137 @@ subset_df <- trim_df %>% filter(gymno_angio=="angio")
 subset_df <- trim_df %>% filter(genus=="Juniperus")
 # subset_df <- trim_df %>% filter(genus=="Pinus") %>% filter(collection_id %in% old_sites)
 subset_df %>% dim()
-conifer_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=subset_df)
-coeftest(conifer_mod, vcov = vcovCL, cluster = subset_df$collection_id)
-conifer_cluster_vcov <- vcovCL(conifer_mod, cluster = subset_df$collection_id)
+subset_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=subset_df)
+coeftest(subset_mod, vcov = vcovCL, cluster = subset_df$collection_id)
+subset_cluster_vcov <- vcovCL(subset_mod, cluster = subset_df$collection_id)
 
 
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Investigate mechanism - tree or site --------------------------------------------------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Focus on trees from genera with effect, and for which we have full weather history
-trim_df <- flm_df %>%
-  filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
-         abs(cwd.spstd)<5,
-         abs(pet.spstd)<5,
-         # genus == "Pinus",
-         abs(estimate_cwd.an)<1,
-         young==TRUE) %>% 
-  drop_na()
-
-mod <- lm(estimate_cwd.an ~ cwd.spstd + cwd.trstd + pet.spstd + pet.trstd, weights = errorweights, data=trim_df)
-cluster_vcov <- vcovCL(mod, cluster = trim_df$collection_id)
-coeftest(mod, vcov = vcovCL, cluster = trim_df$collection_id)
-
-# Could include all trees from sites with any variation in tree-level drought history (including trees born <1901) 
-young_sites <- flm_df %>% 
-  filter(young == T) %>% 
-  pull(collection_id) %>% 
-  unique()
-trim_df <- flm_df %>%
-  filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
-         abs(cwd.spstd)<5,
-         abs(pet.spstd)<5,
-         # genus %in% c("ju", "pi", "ps"),
-         collection_id %in% young_sites) %>% 
-  drop_na()
-mod <- lm(estimate_cwd.an ~ cwd.spstd + cwd.trstd + pet.spstd + pet.trstd, weights = errorweights, data=trim_df)
-coeftest(mod, vcov = vcovCL, cluster = trim_df$collection_id)
-
-# Include collection fixed effects
-mod <- feols(estimate_cwd.an ~ cwd.trstd + pet.trstd | collection_id, weights = trim_df$errorweights, data=trim_df)
-summary(mod)
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# # Investigate mechanism - tree or site --------------------------------------------------------
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# # Focus on trees from genera with effect, and for which we have full weather history
+# trim_df <- flm_df %>%
+#   filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
+#          abs(cwd.spstd)<5,
+#          abs(pet.spstd)<5,
+#          # genus == "Pinus",
+#          abs(estimate_cwd.an)<1,
+#          young==TRUE) %>% 
+#   drop_na()
+# 
+# mod <- lm(estimate_cwd.an ~ cwd.spstd + cwd.trstd + pet.spstd + pet.trstd, weights = errorweights, data=trim_df)
+# cluster_vcov <- vcovCL(mod, cluster = trim_df$collection_id)
+# coeftest(mod, vcov = vcovCL, cluster = trim_df$collection_id)
+# 
+# # Could include all trees from sites with any variation in tree-level drought history (including trees born <1901) 
+# young_sites <- flm_df %>% 
+#   filter(young == T) %>% 
+#   pull(collection_id) %>% 
+#   unique()
+# trim_df <- flm_df %>%
+#   filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
+#          abs(cwd.spstd)<5,
+#          abs(pet.spstd)<5,
+#          # genus %in% c("ju", "pi", "ps"),
+#          collection_id %in% young_sites) %>% 
+#   drop_na()
+# mod <- lm(estimate_cwd.an ~ cwd.spstd + cwd.trstd + pet.spstd + pet.trstd, weights = errorweights, data=trim_df)
+# coeftest(mod, vcov = vcovCL, cluster = trim_df$collection_id)
+# 
+# # Include collection fixed effects
+# mod <- feols(estimate_cwd.an ~ cwd.trstd + pet.trstd | collection_id, weights = trim_df$errorweights, data=trim_df)
+# summary(mod)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Investigate variation by genus  ----------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-predict_cwd_effect <- function(trim_df){
-  trim_df <- trim_df %>%
-    filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
-           abs(cwd.spstd)<5,
-           abs(pet.spstd)<5) %>%
-    drop_na()
-  gen_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights=errorweights, data=trim_df)
-  cluster_vcov <- vcovCL(gen_mod, cluster = trim_df$collection_id)
-  print(coeftest(gen_mod, vcov = vcovCL, cluster = trim_df$collection_id))
-  predictions <- prediction(gen_mod, at = list(cwd.spstd = seq(-3, 3, .5)), vcov = cluster_vcov, calculate_se = T) %>% 
-    summary() %>% 
-    rename(cwd.spstd = "at(cwd.spstd)") 
-  return(predictions)
-}
+# predict_cwd_effect <- function(trim_df){
+#   trim_df <- trim_df %>%
+#     filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
+#            abs(cwd.spstd)<5,
+#            abs(pet.spstd)<5) %>%
+#     drop_na()
+#   gen_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights=errorweights, data=trim_df)
+#   cluster_vcov <- vcovCL(gen_mod, cluster = trim_df$collection_id)
+#   print(coeftest(gen_mod, vcov = vcovCL, cluster = trim_df$collection_id))
+#   predictions <- prediction(gen_mod, at = list(cwd.spstd = seq(-3, 3, .5)), vcov = cluster_vcov, calculate_se = T) %>% 
+#     summary() %>% 
+#     rename(cwd.spstd = "at(cwd.spstd)") 
+#   return(predictions)
+# }
+# # ## Plot marginal effects by gymno / angio
+# grp_freq <- flm_df %>% 
+#   group_by(gymno_angio) %>% 
+#   summarise(n_collections = n_distinct(collection_id)) %>% 
+#   arrange(desc(n_collections))
+# 
+# grp_keep <- grp_freq %>% 
+#   filter(n_collections>50) %>% 
+#   pull(gymno_angio)
+# 
+# grp_df <- flm_df %>%
+#   filter(gymno_angio %in% grp_keep) %>% 
+#   group_by(gymno_angio) %>% 
+#   nest() %>%
+#   mutate(prediction = map(data, predict_cwd_effect))
+# 
+# grp_df <- grp_df %>% 
+#   unnest(prediction) %>% 
+#   select(-data)
+# 
+# grp_df$gymno_angio <- grp_df$gymno_angio %>% recode("angio" = "Angiosperm", "gymno" = "Gymnosperm")
+# 
+# margins_plot <- ggplot(grp_df, aes(x = cwd.spstd)) + 
+#   geom_line(aes(y = Prediction)) +
+#   geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
+#   facet_wrap(~gymno_angio, scales = "free", ncol = 1) +
+#   geom_line(aes(y = upper), linetype = 3) +
+#   geom_line(aes(y = lower), linetype = 3) +
+#   geom_hline(yintercept = 0, linetype = 2) +
+#   xlab("Historic CWD\n(Deviation from species mean)") + 
+#   ylab("Predicted sensitivity to CWD") + 
+#   theme_bw(base_size = 22) +
+#   scale_y_continuous(labels = scales::comma)
+# margins_plot
+# ggsave(paste0(wdir, 'figures\\gymno_angio.svg'), plot = margins_plot)
+# 
+# ## Plot marginal effects by gymno / angio
+# grp_freq <- flm_df %>% 
+#   group_by(gymno_angio) %>% 
+#   summarise(n_collections = n_distinct(collection_id)) %>% 
+#   arrange(desc(n_collections))
+# 
+# grp_keep <- grp_freq %>% 
+#   filter(n_collections>50) %>% 
+#   pull(gymno_angio)
+# 
+# grp_df <- flm_df %>%
+#   filter(gymno_angio %in% grp_keep) %>% 
+#   group_by(gymno_angio) %>% 
+#   nest() %>%
+#   mutate(prediction = map(data, predict_cwd_effect))
+# 
+# grp_df <- grp_df %>% 
+#   unnest(prediction) %>% 
+#   select(-data)
+# 
+# grp_df$gymno_angio <- grp_df$gymno_angio %>% recode("angio" = "Angiosperm", "gymno" = "Gymnosperm")
+# 
+# margins_plot <- ggplot(grp_df, aes(x = cwd.spstd)) + 
+#   geom_line(aes(y = Prediction)) +
+#   geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
+#   facet_wrap(~gymno_angio, scales = "free", ncol = 1) +
+#   geom_line(aes(y = upper), linetype = 3) +
+#   geom_line(aes(y = lower), linetype = 3) +
+#   geom_hline(yintercept = 0, linetype = 2) +
+#   xlab("Historic CWD\n(Deviation from species mean)") + 
+#   ylab("Predicted sensitivity to CWD") + 
+#   theme_bw(base_size = 22) +
+#   scale_y_continuous(labels = scales::comma)
+# margins_plot
+# ggsave(paste0(wdir, 'figures\\gymno_angio.svg'), plot = margins_plot)
+
 
 predict_cwd_effect <- function(trim_df){
   trim_df <- trim_df %>%
@@ -374,41 +486,6 @@ predict_cwd_effect <- function(trim_df){
   return(out)
 }
 
-## Plot marginal effects by gymno / angio
-grp_freq <- flm_df %>% 
-  group_by(gymno_angio) %>% 
-  summarise(n_collections = n_distinct(collection_id)) %>% 
-  arrange(desc(n_collections))
-
-grp_keep <- grp_freq %>% 
-  filter(n_collections>50) %>% 
-  pull(gymno_angio)
-
-grp_df <- flm_df %>%
-  filter(gymno_angio %in% grp_keep) %>% 
-  group_by(gymno_angio) %>% 
-  nest() %>%
-  mutate(prediction = map(data, predict_cwd_effect))
-
-grp_df <- grp_df %>% 
-  unnest(prediction) %>% 
-  select(-data)
-
-grp_df$gymno_angio <- grp_df$gymno_angio %>% recode("angio" = "Angiosperm", "gymno" = "Gymnosperm")
-
-margins_plot <- ggplot(grp_df, aes(x = cwd.spstd)) + 
-  geom_line(aes(y = Prediction)) +
-  geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
-  facet_wrap(~gymno_angio, scales = "free", ncol = 1) +
-  geom_line(aes(y = upper), linetype = 3) +
-  geom_line(aes(y = lower), linetype = 3) +
-  geom_hline(yintercept = 0, linetype = 2) +
-  xlab("Historic CWD\n(Deviation from species mean)") + 
-  ylab("Predicted sensitivity to CWD") + 
-  theme_bw(base_size = 22) +
-  scale_y_continuous(labels = scales::comma)
-margins_plot
-ggsave(paste0(wdir, 'figures\\gymno_angio.svg'), plot = margins_plot)
 
 
 ## Plot marginal effects by genus
@@ -473,9 +550,6 @@ histogram <- ggplot(flm_df %>% filter(genus %in% genus_keep), aes(x = cwd.spstd)
   ylab("# sites") +
   xlab("Historic CWD\n(Deviation from species mean)")
 histogram
-
-
-
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
