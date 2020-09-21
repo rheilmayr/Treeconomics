@@ -305,6 +305,8 @@ binned_margins
 ggsave(paste0(wdir, 'figures\\predicted_rwi.svg'), plot = binned_margins)
 
 
+combined_plot <- binned_change / binned_margins
+ggsave(paste0(wdir, 'figures\\climate_change.svg'), plot = combined_plot, width = 7, height = 11, units = "in")
 
 
 
