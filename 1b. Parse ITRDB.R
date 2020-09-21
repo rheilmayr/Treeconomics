@@ -476,6 +476,8 @@ file <- "remote\\in\\itrdb\\cana008.rwl"
 rwl <- read.tucson(file)
 ids <- autoread.ids(rwl)
 
+# TODO: Why are there some years >2020?
+
 # NOTES:
 # NOAA header files  missing species data block and collection name. Added manually
 #   cana575-cana586; paki041
