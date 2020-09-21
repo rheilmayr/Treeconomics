@@ -26,6 +26,7 @@ library(fixest)
 library(dlnm)
 library(tidyverse)
 library(data.table)
+library(tidylog)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -38,19 +39,28 @@ wdir <- 'remote\\'
 dendro_dir <- paste0(wdir, "out\\dendro\\")
 dendro_df <- read_csv(paste0(dendro_dir, "rwi_long.csv"))
 dendro_df <- dendro_df %>% 
+  select(-core_id) %>% 
   filter(year>1900) %>% 
-  select(-core_id)
+  filter(year<2020)
+  # TODO: should be debugged in dendro prep - 1b
+
 
 # 2. Site-specific weather history
 cwd_csv <- paste0(wdir, 'out\\climate\\essentialcwd_data.csv')
 cwd_df <- read_csv(cwd_csv)
 cwd_df <- cwd_df %>% 
-  mutate("site_id" = as.character(site))
+  rename("collection_id" = site)
 
 # 3. Site summary data
 site_df <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
 site_df <- site_df %>% 
   select(collection_id, sp_id)
+
+dendro_df=left_join(dendro_df,site_df,by = "collection_id")
+dendro_df <- dendro_df %>% 
+  rename(species_id = sp_id) %>% 
+  mutate(species_id = str_to_lower(species_id),
+         genus = substr(species_id, 1, 2)) # TODO: need to correct this
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -58,50 +68,39 @@ site_df <- site_df %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Calculate site-level annual climate
 clim_df = cwd_df %>%
-  rename(collection_id = site_id) %>% 
   group_by(collection_id, year) %>%
   summarise(aet.an = sum(aet),
-            cwd.an = sum(cwd),
-            pet.an = sum((aet+cwd)))
-
-dendro_df <- dendro_df %>% 
-  left_join(clim_df, by = c("collection_id", "year"))
+            pet.an = sum((aet+cwd)),
+            cwd.an = sum(cwd))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Clean up data  ------------------------------
-# TODO: should be integrated into dendro prep - 1b
+# Create lagged cwd  ------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#drop a couple spurious years
-dendro_df=dendro_df%>%
-  filter(year<2020)
-
-dendro_df <- dendro_df %>% 
-  rename(site = collection_id)
-
 nlags=30
 for(i in 1:nlags){
-  lagdf=dendro_df %>%
-    select(-c(width,pet.an,aet.an,site)) %>%
+  lagdf=clim_df %>%
+    select(c(collection_id,year,cwd.an)) %>%
     mutate(year = year + i)
-  colnames(lagdf)[5]=paste0("cwd_L",i)
-  if(i==1) dendro_lagged=left_join(dendro_df,lagdf)
-  if(i>1) dendro_lagged=left_join(dendro_lagged,lagdf)
+  colnames(lagdf)[3]=paste0("cwd_L",i)
+  if(i==1) clim_lagged=left_join(clim_df,lagdf, by = c("collection_id", "year"))
+  if(i>1) clim_lagged=left_join(clim_lagged,lagdf, by = c("collection_id", "year"))
   print(i)
 }
 
+dendro_lagged <- dendro_df %>% 
+  left_join(clim_lagged, by = c("collection_id", "year"))
+
 # fwrite(dendro_lagged,file="C:\\Users\\fmoore\\Desktop\\treedendrolagged.csv")
 
-#merge in species data
-dendro_lagged=left_join(dendro_lagged,site_df,by = "collection_id")
-dendro_lagged <- dendro_lagged %>% 
-  rename(species_id = sp_id) %>% 
-  mutate(species_id = str_to_lower(species_id),
-         genus = substr(species_id, 1, 2)) # TODO: need to correct this
 
 #log ring width for dependent variable
 dendro_lagged$ln_rwi=log(dendro_lagged$width)
 
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Cross basis analysis  ------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 relgenus=c("ju","pi","ps")
 genlist=list()
 cblim=c(1000,1400,900)
@@ -148,28 +147,30 @@ intmod=felm(ln_rwi~cwd.an*lag_5+cwd.an*lag_6_10+pet.an|id|0|collection_id,data=d
 
 #early life drought
 
-flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\tree_log_pet_cwd.csv')) %>%
-  select(collection_id,tree,young)
-young_trees=left_join(dendro_df,flm_df)%>%
+young_trees <- dendro_lagged %>% 
+  group_by(collection_id, tree) %>% 
+  summarise(min_year = min(year)) %>% 
+  mutate(young = min_year>1901)
+
+# flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\tree_log_pet_cwd.csv')) %>%
+#   select(collection_id,tree,young)
+young_trees <- young_trees %>%
+  select(-min_year) %>% 
+  right_join(dendro_lagged, by = c("collection_id", "tree")) %>%
   filter(young==TRUE)%>%
   select(collection_id,tree,year,cwd.an)%>%
   group_by(collection_id,tree)%>%
   filter(year<(min(year)+10))%>%
   summarize(earlylifecwd=mean(cwd.an))
 
-dendro_df=left_join(dendro_df,site_df,by = "collection_id")
-dendro_df <- dendro_df %>% 
-  rename(species_id = sp_id) %>% 
-  mutate(species_id = str_to_lower(species_id),
-         genus = substr(species_id, 1, 2))
-youngtrees_df=inner_join(dendro_df,young_trees)
+youngtrees_df=inner_join(dendro_lagged,young_trees)
 youngtrees_df$ln_rwi=log(youngtrees_df$width)
 
 earlylifelist=list()
 #interactions effect
 for(i in 1:length(relgenus)){
   gendat=youngtrees_df%>%
-    filter(genus%in%relgenus)%>%
+    filter(genus == relgenus[i])%>%
     filter(cwd.an<quantile(cwd.an,p=0.99,na.rm=T))
   gendat$id=interaction(gendat$collection_id,gendat$tree)
   intmod=felm(ln_rwi~cwd.an*I(earlylifecwd>300)+pet.an-I(earlylifecwd>300)|id|0|collection_id,data=gendat)
@@ -182,4 +183,5 @@ youngtrees_df=youngtrees_df%>%
   filter(earlylifecwd<quantile(earlylifecwd,p=0.99,na.rm=T))%>%
   filter(cwd.an<quantile(cwd.an,p=0.99,na.rm=T))
 earlylifemod=felm(ln_rwi~cwd.an*I(earlylifecwd>300)+pet.an-I(earlylifecwd>300)|id|0|collection_id,data=youngtrees_df)
+earlylifemod=felm(ln_rwi~cwd.an*earlylifecwd + pet.an - earlylifecwd|id|0|collection_id,data=youngtrees_df)
 
