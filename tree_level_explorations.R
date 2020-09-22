@@ -53,14 +53,21 @@ cwd_df <- cwd_df %>%
 # 3. Site summary data
 site_df <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
 site_df <- site_df %>% 
-  select(collection_id, sp_id)
+  select(collection_id, sp_id) %>% 
+  mutate(sp_id = str_to_lower(sp_id))
 
-dendro_df=left_join(dendro_df,site_df,by = "collection_id")
-dendro_df <- dendro_df %>% 
-  rename(species_id = sp_id) %>% 
-  mutate(species_id = str_to_lower(species_id),
-         genus = substr(species_id, 1, 2)) # TODO: need to correct this
+# 4. Species information
+sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
+sp_info <- sp_info %>% 
+  select(species_id, genus, gymno_angio, family) %>% 
+  rename(sp_id = species_id)
+site_df <- site_df %>% 
+  left_join(sp_info, by = "sp_id")
 
+# Merge site / species data back to dendro
+dendro_df <- dendro_df %>%  
+  left_join(site_df,by = "collection_id") %>% 
+  mutate(ln_rwi = log(width))
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Summarize and merge site historic climate ------------------------------
@@ -71,6 +78,16 @@ clim_df = cwd_df %>%
   summarise(aet.an = sum(aet),
             pet.an = sum((aet+cwd)),
             cwd.an = sum(cwd))
+
+
+# Calculate site-level historic climate
+hist_clim_df <- clim_df %>%
+  group_by(collection_id) %>%
+  filter(year<1980) %>%
+  summarise(aet.ave = mean(aet.an),
+            cwd.ave = mean(cwd.an),
+            pet.ave = mean(pet.an),
+            cwd.min = min(cwd.an))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -93,23 +110,20 @@ dendro_lagged <- dendro_df %>%
 # fwrite(dendro_lagged,file="C:\\Users\\fmoore\\Desktop\\treedendrolagged.csv")
 
 
-#log ring width for dependent variable
-dendro_lagged$ln_rwi=log(dendro_lagged$width)
-
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Cross basis analysis  ------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-relgenus=c("ju","pi","ps")
+relgenus=c("Juniperus", "Pinus", "Pseudotsuga", "Abies", "Fagus", "Picea", "Larix", "Quercus", "Tsuga")
 genlist=list()
-cblim=c(1000,1400,900)
+cblim=c(1000,1400,900, 1000, 1000, 1000, 1000, 1000, 1000)
 
 for(i in 1:length(relgenus)){
   gendat=dendro_lagged%>%
     filter(genus==relgenus[i])%>%
     filter(cwd.an<quantile(cwd.an,p=0.99,na.rm=T))
   lagged=data.frame(gendat$cwd.an,gendat[,grep("cwd_L",colnames(gendat))])
-  cblagged=crossbasis(lagged,lag=c(0,30),argvar=list("bs",degree=3),arglag=list(knots=logknots(30,4)))
+  cblagged=crossbasis(lagged,lag=c(0,nlags),argvar=list("bs",degree=3),arglag=list(knots=logknots(nlags,4)))
   gendat$id=interaction(gendat$collection_id,gendat$tree)
   lagmod=felm(gendat$ln_rwi~cblagged+gendat$pet.an|id|0|collection_id,data=gendat)
   genlist[[i]]=list(cblagged,lagmod)
@@ -118,12 +132,22 @@ for(i in 1:length(relgenus)){
 }
 
 x11()
-par(mfrow=c(2,2))
+par(mfrow=c(3,3))
 for(i in 1:length(relgenus)){
   plot(genlist[[i]][[3]],var=100,xlab="Lagged Effect of CWD=800",ylab="Log Ring Width Growth",main=paste("Genus=",relgenus[i]),cumul=FALSE)
 }
 
 intlist=list()
+
+# subset_dat <- dendro_lagged%>%
+#   filter(cwd.an<quantile(cwd.an,p=0.99,na.rm=T),
+#          genus %in% c("Juniperus", "Pinus", "Pseudotsuga", "Abies", "Fagus", "Picea", "Larix"))
+# lagged=data.frame(subset_dat$cwd.an,subset_dat[,grep("cwd_L",colnames(subset_dat))])
+# cblagged=crossbasis(lagged,lag=c(0,nlags),argvar=list("bs",degree=3),arglag=list(knots=logknots(nlags,4)))
+# subset_dat$id=interaction(subset_dat$collection_id,subset_dat$tree)
+# lagmod=felm(subset_dat$ln_rwi~cblagged+subset_dat$pet.an|id|0|collection_id,data=subset_dat)
+# prediction <- crosspred(cblagged,lagmod,cen=0,at=0:3000*1,cumul=TRUE)
+# plot(prediction, var = 100, xlab = "Lagged Effect of CWD=800", ylab = "log Ring Width Growth")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -142,12 +166,14 @@ for(i in 1:length(relgenus)){
 }
 
 #try interactions model for whole dataset
-dendro_lagged=dendro_lagged%>%
-  mutate(lag_5=rowMeans(select(.,cwd_L1,cwd_L2,cwd_L3,cwd_L4,cwd_L5)))%>%
-  mutate(lag_6_10=rowMeans(select(.,cwd_L6,cwd_L7,cwd_L8,cwd_L9,cwd_L10)))
+dendro_lagged <- dendro_lagged %>%
+  mutate(lag_5 = rowMeans(select(.,cwd_L1,cwd_L2,cwd_L3,cwd_L4,cwd_L5)),
+         lag_2_5 = rowMeans(select(.,cwd_L2,cwd_L3,cwd_L4,cwd_L5)),
+         lag_6_10 = rowMeans(select(.,cwd_L6,cwd_L7,cwd_L8,cwd_L9,cwd_L10)))
 dendro_lagged$id=interaction(dendro_lagged$collection_id,dendro_lagged$tree)
-intmod=felm(ln_rwi~cwd.an*lag_5+cwd.an*lag_6_10+pet.an|id|0|collection_id,data=dendro_lagged)
-
+intmod=felm(ln_rwi~cwd.an*lag_2_5+cwd.an*lag_6_10+pet.an|id|0|collection_id,data=dendro_lagged)
+intmod=felm(ln_rwi~cwd.an + lag_5 + lag_6_10 + pet.an|id|0|collection_id,data=dendro_lagged)
+summary(intmod)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Early life drought models  ------------------------------
@@ -168,8 +194,9 @@ young_trees <- young_trees %>%
   filter(year<(min(year)+10))%>%
   summarize(earlylifecwd=mean(cwd.an))
 
-youngtrees_df=inner_join(dendro_lagged,young_trees)
-youngtrees_df$ln_rwi=log(youngtrees_df$width)
+youngtrees_df <- dendro_lagged %>%
+  select(collection_id, tree, year, sp_id, ln_rwi, cwd.an, pet.an) %>% 
+  inner_join(young_trees, by = c("collection_id", "tree"))
 
 earlylifelist=list()
 #interactions effect
@@ -190,3 +217,49 @@ youngtrees_df=youngtrees_df%>%
 earlylifemod=felm(ln_rwi~cwd.an*I(earlylifecwd>300)+pet.an-I(earlylifecwd>300)|id|0|collection_id,data=youngtrees_df)
 earlylifemod=felm(ln_rwi~cwd.an*earlylifecwd + pet.an - earlylifecwd|id|0|collection_id,data=youngtrees_df)
 
+
+youngtrees_df <- youngtrees_df %>% 
+  left_join(hist_clim_df, by = "collection_id")
+
+subset <- youngtrees_df %>% 
+  filter(sp_id == "psme")
+earlylifemod=felm(ln_rwi~cwd.an*earlylifecwd + cwd.an*cwd.ave + pet.an |id|0|collection_id,data=subset)
+summary(earlylifemod)
+
+
+earlylifemod=felm(ln_rwi~cwd.an*cwd.ave + pet.an |id|0|collection_id,data=subset)
+summary(earlylifemod)
+
+
+hist_clim_temp <- hist_clim_df %>% 
+  left_join(site_df, by = "collection_id") 
+hist_clim_temp <- hist_clim_temp %>% 
+  group_by(sp_id) %>% 
+  summarise(sp.cwd.median = median(cwd.ave, na.rm = TRUE)) %>% 
+  right_join(hist_clim_temp, by = "sp_id") %>% 
+  mutate(high_cwd_site = cwd.ave > sp.cwd.median)
+
+cblim <- 1000
+subset_dat <- dendro_lagged %>%
+  left_join(hist_clim_temp %>% select(collection_id, high_cwd_site), by = "collection_id") %>% 
+  filter(cwd.an<quantile(cwd.an,p=0.99,na.rm=T),
+         sp_id =="pipo")
+lagged=data.frame(subset_dat$cwd.an,subset_dat[,grep("cwd_L",colnames(subset_dat))])
+cblagged=crossbasis(lagged,lag=c(0,nlags),argvar=list("bs",degree=3),arglag=list(knots=logknots(nlags,4)))
+subset_dat$id=interaction(subset_dat$collection_id,subset_dat$tree)
+lagmod=felm(subset_dat$ln_rwi~cblagged+subset_dat$pet.an|id|0|collection_id,data=subset_dat)
+prediction <- crosspred(cblagged,lagmod,cen=0,at=0:3000*1,cumul=TRUE)
+plot(prediction, var = 100, xlab = "Lagged Effect of CWD=800", ylab = "log Ring Width Growth")
+
+
+subset_dat <- dendro_lagged %>%
+  left_join(hist_clim_temp %>% select(collection_id, high_cwd_site), by = "collection_id") %>% 
+  filter(cwd.an<quantile(cwd.an,p=0.99,na.rm=T),
+         sp_id =="psme",
+         high_cwd_site==0)
+lagged=data.frame(subset_dat$cwd.an,subset_dat[,grep("cwd_L",colnames(subset_dat))])
+cblagged=crossbasis(lagged,lag=c(0,nlags),argvar=list("bs",degree=3),arglag=list(knots=logknots(nlags,4)))
+subset_dat$id=interaction(subset_dat$collection_id,subset_dat$tree)
+lagmod=felm(subset_dat$ln_rwi~cblagged+subset_dat$pet.an|id|0|collection_id,data=subset_dat)
+prediction <- crosspred(cblagged,lagmod,cen=0,at=0:3000*1,cumul=TRUE)
+plot(prediction, var = 100, xlab = "Lagged Effect of CWD=800", ylab = "log Ring Width Growth")
