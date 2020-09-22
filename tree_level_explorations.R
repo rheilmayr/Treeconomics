@@ -112,20 +112,21 @@ dendro_lagged <- dendro_df %>%
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Cross basis analysis  ------------------------------
+# Distributed lag model  ------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+shock <- 300
 relgenus=c("Juniperus", "Pinus", "Pseudotsuga", "Abies", "Fagus", "Picea", "Larix", "Quercus", "Tsuga")
 genlist=list()
-cblim=c(1000,1400,900, 1000, 1000, 1000, 1000, 1000, 1000)
+cblim=c(1000, 1400, 900, 1000, 1000, 1000, 1000, 1000, 1000)
 
 for(i in 1:length(relgenus)){
   gendat=dendro_lagged%>%
     filter(genus==relgenus[i])%>%
     filter(cwd.an<quantile(cwd.an,p=0.99,na.rm=T))
   lagged=data.frame(gendat$cwd.an,gendat[,grep("cwd_L",colnames(gendat))])
-  cblagged=crossbasis(lagged,lag=c(0,nlags),argvar=list("bs",degree=3),arglag=list(knots=logknots(nlags,4)))
+  cblagged=crossbasis(lagged,lag=c(0,nlags),argvar=list("bs",degree=3),arglag=list(knots=logknots(30,4)))
   gendat$id=interaction(gendat$collection_id,gendat$tree)
-  lagmod=felm(gendat$ln_rwi~cblagged+gendat$pet.an|id|0|collection_id,data=gendat)
+  lagmod=lm(gendat$width~cblagged+gendat$pet.an,data=gendat)
   genlist[[i]]=list(cblagged,lagmod)
   genlist[[i]][[3]]=crosspred(cblagged,lagmod,cen=0,at=0:cblim[i]*1,cumul=TRUE)
   print(i)
@@ -134,11 +135,44 @@ for(i in 1:length(relgenus)){
 x11()
 par(mfrow=c(3,3))
 for(i in 1:length(relgenus)){
-  plot(genlist[[i]][[3]],var=100,xlab="Lagged Effect of CWD=800",ylab="Log Ring Width Growth",main=paste("Genus=",relgenus[i]),cumul=FALSE)
+  plot(genlist[[i]][[3]],
+       var=shock,
+       xlab=paste0("Lagged Effect of CWD=", as.integer(shock)),
+       ylab="Log Ring Width Growth",main=paste("Genus=",relgenus[i]),cumul=FALSE)
 }
 
 intlist=list()
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Site-level distributed lag model  ------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+sites <- dendro_lagged %>% 
+  pull(collection_id) %>% 
+  unique()
+n_site = indices[i]
+indices = c(1703, 302, 1252, 1367, 2028)
+genlist=list()
+
+for(i in 1:length(indices)){
+  n_site <- indices[i]
+  gendat=dendro_lagged%>%
+    filter(collection_id==sites[n_site])%>%
+    filter(cwd.an<quantile(cwd.an,p=0.99,na.rm=T))
+  lagged=data.frame(gendat$cwd.an,gendat[,grep("cwd_L",colnames(gendat))])
+  cblagged=crossbasis(lagged,lag=c(0,nlags),argvar=list("bs",degree=3),arglag=list(knots=logknots(30,4)))
+  gendat$id=interaction(gendat$collection_id,gendat$tree)
+  lagmod=lm(gendat$width~cblagged+gendat$pet.an,data=gendat)
+  genlist[[i]]=list(cblagged,lagmod)
+  genlist[[i]][[3]]=crosspred(cblagged,lagmod,cen=0,at=0:cblim[i]*1,cumul=TRUE)
+  print(i)
+}
+
+
+x11()
+par(mfrow=c(3,3))
+for(i in 1:length(indices)){
+  plot(genlist[[i]][[3]],var=300,xlab="Lagged Effect of CWD=800",ylab="Log Ring Width Growth",main=paste("Genus=",relgenus[i]),cumul=FALSE)
+}
 # subset_dat <- dendro_lagged%>%
 #   filter(cwd.an<quantile(cwd.an,p=0.99,na.rm=T),
 #          genus %in% c("Juniperus", "Pinus", "Pseudotsuga", "Abies", "Fagus", "Picea", "Larix"))
@@ -263,3 +297,37 @@ subset_dat$id=interaction(subset_dat$collection_id,subset_dat$tree)
 lagmod=felm(subset_dat$ln_rwi~cblagged+subset_dat$pet.an|id|0|collection_id,data=subset_dat)
 prediction <- crosspred(cblagged,lagmod,cen=0,at=0:3000*1,cumul=TRUE)
 plot(prediction, var = 100, xlab = "Lagged Effect of CWD=800", ylab = "log Ring Width Growth")
+
+
+
+
+
+calc_germ_clim <- function(site, germ_year){
+  pre_germ_clim <- clim_df %>% 
+    filter(collection_id == site,
+           year < germ_year,
+           year < 1970) %>% 
+    summarise(pre_cwd = mean(cwd.an),
+              pre_pet = mean(cwd.an))
+  post_germ_clim <- clim_df %>% 
+    filter(collection_id == site,
+           year>germ_year,
+           year<1970) %>% 
+    summarise(post_cwd = mean(cwd.an),
+              post_pet = mean(pet.an))
+  germ_clim <- pre_germ_clim %>% 
+    left_join(post_germ_clim, by = "collection_id")
+  return(germ_clim)
+}
+
+young_trees <- young_trees %>% 
+  filter(young==TRUE) %>% 
+  mutate(germ_clim = map2(collection_id, min_year, calc_germ_clim))
+
+youngtrees_df <- dendro_lagged %>%
+  select(collection_id, tree, year, sp_id, ln_rwi, cwd.an, pet.an) %>% 
+  inner_join(young_trees, by = c("collection_id", "tree"))
+
+lagmod=felm(subset_dat$ln_rwi~cblagged+subset_dat$pet.an|id|0|collection_id,data=subset_dat)
+         
+         
