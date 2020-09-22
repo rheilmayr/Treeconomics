@@ -37,6 +37,8 @@ library(ggpubr)
 library(ggiraphExtra)
 library(modi)
 library(margins)
+library(tidylog)
+library(fixest)
 
 
 select <- dplyr::select
@@ -60,7 +62,7 @@ cwd_df <- cwd_df %>%
   select(-site)
 
 # 3a. Site-level regressions
-flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\site_log_pet_cwd.csv')) %>%
+flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\tree_log_pet_cwd.csv')) %>%
   select(-X1)
 
 # # 3b. Tree-level regressions
@@ -161,8 +163,8 @@ trim_df <- flm_df %>%
   filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
          abs(cwd.spstd)<5,
          abs(pet.spstd)<5,
-         abs(estimate_cwd.an)<1,
-         abs(estimate_pet.an)<1) %>% 
+         abs(std.error_cwd.an) < 50 * abs(estimate_cwd.an),
+         abs(std.error_cwd.an) < 50 * abs(estimate_cwd.an)) %>% 
   drop_na()
 
 
@@ -343,41 +345,32 @@ coeftest(subset_mod, vcov = vcovCL, cluster = subset_df$collection_id)
 subset_cluster_vcov <- vcovCL(subset_mod, cluster = subset_df$collection_id)
 
 
-# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# # Investigate mechanism - tree or site --------------------------------------------------------
-# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# # Focus on trees from genera with effect, and for which we have full weather history
-# trim_df <- flm_df %>%
-#   filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
-#          abs(cwd.spstd)<5,
-#          abs(pet.spstd)<5,
-#          # genus == "Pinus",
-#          abs(estimate_cwd.an)<1,
-#          young==TRUE) %>% 
-#   drop_na()
-# 
-# mod <- lm(estimate_cwd.an ~ cwd.spstd + cwd.trstd + pet.spstd + pet.trstd, weights = errorweights, data=trim_df)
-# cluster_vcov <- vcovCL(mod, cluster = trim_df$collection_id)
-# coeftest(mod, vcov = vcovCL, cluster = trim_df$collection_id)
-# 
-# # Could include all trees from sites with any variation in tree-level drought history (including trees born <1901) 
-# young_sites <- flm_df %>% 
-#   filter(young == T) %>% 
-#   pull(collection_id) %>% 
-#   unique()
-# trim_df <- flm_df %>%
-#   filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
-#          abs(cwd.spstd)<5,
-#          abs(pet.spstd)<5,
-#          # genus %in% c("ju", "pi", "ps"),
-#          collection_id %in% young_sites) %>% 
-#   drop_na()
-# mod <- lm(estimate_cwd.an ~ cwd.spstd + cwd.trstd + pet.spstd + pet.trstd, weights = errorweights, data=trim_df)
-# coeftest(mod, vcov = vcovCL, cluster = trim_df$collection_id)
-# 
-# # Include collection fixed effects
-# mod <- feols(estimate_cwd.an ~ cwd.trstd + pet.trstd | collection_id, weights = trim_df$errorweights, data=trim_df)
-# summary(mod)
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Investigate mechanism - tree or site --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Focus on trees from genera with effect, and for which we have full weather history
+young_df <- trim_df %>%
+  filter(young==TRUE) %>%
+  drop_na()
+
+mod <- lm(estimate_cwd.an ~ cwd.spstd + cwd.trstd + pet.spstd + pet.trstd, weights = errorweights, data=young_df)
+cluster_vcov <- vcovCL(mod, cluster = young_df$collection_id)
+coeftest(mod, vcov = vcovCL, cluster = young_df$collection_id)
+
+# Could include all trees from sites with any variation in tree-level drought history (including trees born <1901)
+young_sites <- trim_df %>%
+  filter(young == T) %>%
+  pull(collection_id) %>%
+  unique()
+youngsite_df <- trim_df %>%
+  filter(collection_id %in% young_sites) %>%
+  drop_na()
+mod <- lm(estimate_cwd.an ~ cwd.spstd + cwd.trstd + pet.spstd + pet.trstd, weights = errorweights, data=youngsite_df)
+coeftest(mod, vcov = vcovCL, cluster = youngsite_df$collection_id)
+
+# Include collection fixed effects
+mod <- feols(estimate_cwd.an ~ cwd.trstd + pet.trstd | collection_id, weights = trim_df$errorweights, data=trim_df)
+summary(mod)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
