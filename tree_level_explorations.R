@@ -126,7 +126,7 @@ for(i in 1:length(relgenus)){
   lagged=data.frame(gendat$cwd.an,gendat[,grep("cwd_L",colnames(gendat))])
   cblagged=crossbasis(lagged,lag=c(0,nlags),argvar=list("bs",degree=3),arglag=list(knots=logknots(30,4)))
   gendat$id=interaction(gendat$collection_id,gendat$tree)
-  lagmod=lm(gendat$width~cblagged+gendat$pet.an,data=gendat)
+  lagmod=lm(gendat$ln_rwi~cblagged+gendat$pet.an,data=gendat)
   genlist[[i]]=list(cblagged,lagmod)
   genlist[[i]][[3]]=crosspred(cblagged,lagmod,cen=0,at=0:cblim[i]*1,cumul=TRUE)
   print(i)
