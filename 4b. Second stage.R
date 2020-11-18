@@ -62,7 +62,7 @@ cwd_df <- cwd_df %>%
   select(-site)
 
 # 3a. Site-level regressions
-flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\tree_log_pet_cwd.csv')) %>%
+flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd.csv')) %>%
   select(-X1)
 
 # # 3b. Tree-level regressions
@@ -138,10 +138,10 @@ flm_df <- flm_df %>%
   mutate(pet.spstd = (pet.ave - sp_pet_mean) / sp_pet_sd,
          cwd.spstd = (cwd.ave - sp_cwd_mean) / sp_cwd_sd)
 
-# Calculate tree-species-niche standardized climate
-flm_df <- flm_df %>%
-  mutate(pet.trstd = (pet.trmean - sp_pet_mean) / sp_pet_sd,
-         cwd.trstd = (cwd.trmean - sp_cwd_mean) / sp_cwd_sd)
+# # Calculate tree-species-niche standardized climate
+# flm_df <- flm_df %>%
+#   mutate(pet.trstd = (pet.trmean - sp_pet_mean) / sp_pet_sd,
+#          cwd.trstd = (cwd.trmean - sp_cwd_mean) / sp_cwd_sd)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -276,7 +276,7 @@ predictions <- prediction(mod, at = list(cwd.spstd = seq(xmin, xmax, .1)), vcov 
   rename(cwd.spstd = "at(cwd.spstd)")
 
 margins_plot <- ggplot(predictions, aes(x = cwd.spstd)) + 
-  geom_line(aes(y = Prediction), color = "#404788FF") +
+  geom_line(aes(y = Prediction), color = "#404788FF", size = 2) +
   geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.8, fill = "#404788FF") +
   geom_line(aes(y = upper), linetype = 3) +
   geom_line(aes(y = lower), linetype = 3) +
@@ -313,13 +313,13 @@ sq_predictions <- prediction(sq_mod, at = list(cwd.spstd = seq(xmin, xmax, .1)),
   summary() %>% 
   rename(cwd.spstd = "at(cwd.spstd)")
 margins_plot <- ggplot(sq_predictions, aes(x = cwd.spstd)) + 
-  geom_line(aes(y = Prediction)) +
+  geom_line(aes(y = Prediction), size = 2) +
   geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
   geom_line(aes(y = upper), linetype = 3) +
   geom_line(aes(y = lower), linetype = 3) +
   geom_hline(yintercept = 0, linetype = 2) +
   xlab("Historic CWD\n(Deviation from species mean)") + 
-  ylab("Predicted sensitivity to CWD") + 
+  ylab("Predicted sensitivity\nto CWD") + 
   theme_bw(base_size = 22) +
   scale_y_continuous(labels = scales::scientific)
 margins_plot
@@ -335,7 +335,7 @@ coeftest(allobs_mod, vcov = vcovCL, cluster = flm_df$collection_id)
 allobs_cluster_vcov <- vcovCL(allobs_mod, cluster = flm_df$collection_id)
 
 # Limit to gymnosperms
-subset_df <- trim_df %>% filter(gymno_angio=="angio")
+subset_df <- trim_df %>% filter(gymno_angio=="gymno")
 # subset_df <- trim_df %>% filter(gymno_angio=="gymno") %>% filter(collection_id %in% old_sites)
 subset_df <- trim_df %>% filter(genus=="Juniperus")
 # subset_df <- trim_df %>% filter(genus=="Pinus") %>% filter(collection_id %in% old_sites)
@@ -521,17 +521,21 @@ genus_predictions <- genus_df %>%
 margins_plot <- ggplot(genus_predictions, aes(x = cwd.spstd)) + 
   geom_line(aes(y = Prediction)) +
   geom_ribbon(aes(ymin=lower, ymax=upper, fill = gymno_angio), alpha=0.2) +
+  theme_bw(base_size = 22) + 
   facet_wrap(~genus, scales = "free") +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black", fill = NA)) +
   geom_line(aes(y = upper), linetype = 3) +
   geom_line(aes(y = lower), linetype = 3) +
   geom_hline(yintercept = 0, linetype = 2) +
   xlab("Historic CWD\n(Deviation from species mean)") + 
   ylab("Predicted sensitivity to CWD") + 
-  theme_bw(base_size = 22) +
   scale_y_continuous(labels = scales::scientific)
   
-margins_plot <- margins_plot +
-  geom_text(data = genus_coefs, aes(x = -1.8, y = 0, label = lab))
+# margins_plot <- margins_plot +
+#   geom_text(data = genus_coefs, aes(x = -1.8, y = 0, label = lab))
 
 margins_plot
 

@@ -25,7 +25,7 @@ library(fixest)
 library(dlnm)
 library(tidyverse)
 library(data.table)
-library(tidylog)
+# library(tidylog)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -36,10 +36,11 @@ wdir <- 'remote\\'
 
 # 1. Dendrochronologies
 dendro_dir <- paste0(wdir, "out\\dendro\\")
-dendro_df <- read_csv(paste0(dendro_dir, "rwi_long.csv"))
+dendro_df <- read.csv(paste0(dendro_dir, "rwi_long.csv")) %>% 
+  as_tibble()
 dendro_df <- dendro_df %>% 
   select(-core_id) %>% 
-  filter(year>1900) %>% 
+  filter(year>=1900) %>% 
   filter(year<2020)
   # TODO: should be debugged in dendro prep - 1b
 
@@ -110,33 +111,76 @@ dendro_lagged <- dendro_df %>%
 # fwrite(dendro_lagged,file="C:\\Users\\fmoore\\Desktop\\treedendrolagged.csv")
 
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Expore site-level DLNM  ------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+keep_sites = dendro_df %>% 
+  group_by(collection_id) %>% 
+  tally() %>% 
+  arrange(desc(n))
+
+site = "NETH031"
+site = "AUST115"
+site = "RUSS223"
+site = "CA667"
+site = "MONG039"
+site = "SWIT285"
+site = "WV006"
+
+i = 203
+site = keep_sites[i,1] %>% pull()
+
+gendat=dendro_lagged%>%
+  filter(collection_id==site)
+  
+shock = gendat$cwd.an %>% quantile(.9, na.rm = TRUE)
+at_vals = (shock - 50):(shock + 50)
+
+lagged=data.frame(gendat$cwd.an,gendat[,grep("cwd_L",colnames(gendat))])
+cblagged=crossbasis(lagged,lag=c(0,nlags),argvar=list("bs",degree=2),arglag=list(knots=logknots(30, 3)))
+gendat$id=interaction(gendat$collection_id,gendat$tree)
+lagmod=lm(gendat$width~cblagged+gendat$pet.an,data=gendat)
+crosspredict = crosspred(cblagged, lagmod, cen=0, at = at_vals, cumul = TRUE)
+plot(crosspredict,
+     var=shock,
+     xlab=paste0("Lagged Effect of CWD=", as.integer(shock)),
+     ylab="Ring Width Growth",main=paste("Site=",site),cumul=FALSE)
+
+
+
+
+
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Distributed lag model  ------------------------------
+# Genus-specific distributed lag models  ------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 shock <- 300
+at_vals = 0:1000
 relgenus=c("Juniperus", "Pinus", "Pseudotsuga", "Abies", "Fagus", "Picea", "Larix", "Quercus", "Tsuga")
 genlist=list()
-cblim=c(1000, 1400, 900, 1000, 1000, 1000, 1000, 1000, 1000)
 
+i = 1
 for(i in 1:length(relgenus)){
   gendat=dendro_lagged%>%
     filter(genus==relgenus[i])%>%
     filter(cwd.an<quantile(cwd.an,p=0.99,na.rm=T))
+  # shock = gendat$cwd.an %>% quantile(.9, na.rm = TRUE)
+  # at_vals = (shock - 50):(shock + 50)
   lagged=data.frame(gendat$cwd.an,gendat[,grep("cwd_L",colnames(gendat))])
   cblagged=crossbasis(lagged,lag=c(0,nlags),argvar=list("bs",degree=3),arglag=list(knots=logknots(30,4)))
   gendat$id=interaction(gendat$collection_id,gendat$tree)
-  lagmod=lm(gendat$ln_rwi~cblagged+gendat$pet.an,data=gendat)
+  lagmod=lm(gendat$width~cblagged+gendat$pet.an,data=gendat)
+  # crosspredict = crosspred(cblagged, lagmod, cen=0, at=0:cblim[i]*1, cumul = FALSE)
   genlist[[i]]=list(cblagged,lagmod)
-  genlist[[i]][[3]]=crosspred(cblagged,lagmod,cen=0,at=0:cblim[i]*1,cumul=TRUE)
+  genlist[[i]][[3]]=crosspred(cblagged,lagmod,cen=0,at=at_vals,cumul=FALSE)
   print(i)
 }
 
-x11()
++x11()
 par(mfrow=c(3,3))
 for(i in 1:length(relgenus)){
   plot(genlist[[i]][[3]],
-       var=shock,
+       var=300,
        xlab=paste0("Lagged Effect of CWD=", as.integer(shock)),
        ylab="Log Ring Width Growth",main=paste("Genus=",relgenus[i]),cumul=FALSE)
 }

@@ -38,6 +38,12 @@ library(fixest)
 # Define path
 wdir <- 'remote\\'
 
+# 2. Site-specific weather history
+cwd_csv <- paste0(wdir, 'out\\climate\\essentialcwd_data.csv')
+cwd_df <- read_csv(cwd_csv)
+cwd_df <- cwd_df %>% 
+  mutate("site_id" = as.character(site))
+
 # 1. Dendrochronologies
 dendro_dir <- paste0(wdir, "out\\dendro\\")
 dendro_df <- read_csv(paste0(dendro_dir, "rwi_long.csv"))
@@ -52,11 +58,7 @@ dendro_df <- dendro_df %>%
 #   select(-X) %>% 
 #   mutate(file_name = paste0('sid-', site_id, '_spid-', species_id, '.csv'))
 
-# 2. Site-specific weather history
-cwd_csv <- paste0(wdir, 'out\\climate\\essentialcwd_data.csv')
-cwd_df <- read_csv(cwd_csv)
-cwd_df <- cwd_df %>% 
-  mutate("site_id" = as.character(site))
+
 
 # cwd_sites <- cwd_df %>% 
 #   select(site) %>% 
@@ -109,34 +111,34 @@ tree_clim <- tree_clim %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define regression model and helper funcs -------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-dendro_lm <- function(s_id, sp_id){
-  dendro_file <- paste0('sid-', s_id, '_spid-', sp_id, '.csv')
-  dendro_dat <- read.csv(paste0(dendro_dir, dendro_file)) %>% 
-    mutate(site_id = as.character(s_id))
-  dendro_dat <- dendro_dat %>% 
-    inner_join(clim_df, by = c("site_id", "year"))
-  
-  failed <- F
-  # Try to run felm. Typically fails if missing cwd / aet data 
-  tryCatch(
-    expr = {
-      dendro_dat <- dendro_dat %>%
-        mutate(ln_rwi = log(rwi))
-      mod <- felm(ln_rwi ~ pet.an + cwd.an |tree_id|0|tree_id+year, data = dendro_dat)
-    },
-    error = function(e){ 
-      message("Returned error on site ",s_id, " and species ", sp_id)
-      print(e)
-      failed <<- T
-    }
-  )
-  if (failed){
-    return(NULL)
-  }
-  return(mod)
-}
-
-
+# dendro_lm <- function(s_id, sp_id){
+#   dendro_file <- paste0('sid-', s_id, '_spid-', sp_id, '.csv')
+#   dendro_dat <- read.csv(paste0(dendro_dir, dendro_file)) %>% 
+#     mutate(site_id = as.character(s_id))
+#   dendro_dat <- dendro_dat %>% 
+#     inner_join(clim_df, by = c("site_id", "year"))
+#   
+#   failed <- F
+#   # Try to run felm. Typically fails if missing cwd / aet data 
+#   tryCatch(
+#     expr = {
+#       dendro_dat <- dendro_dat %>%
+#         mutate(ln_rwi = log(rwi))
+#       mod <- felm(ln_rwi ~ pet.an + cwd.an |tree_id|0|tree_id+year, data = dendro_dat)
+#     },
+#     error = function(e){ 
+#       message("Returned error on site ",s_id, " and species ", sp_id)
+#       print(e)
+#       failed <<- T
+#     }
+#   )
+#   if (failed){
+#     return(NULL)
+#   }
+#   return(mod)
+# }
+# 
+# 
 # getcov <- function(felm_mod, cov_vars = c("pet.an", "cwd.an")){
 #   failed <- F
 #   tryCatch(
@@ -208,9 +210,19 @@ fs_mod <- function(site_data){
   femod <- NA
   pet_cwd_cov <- NA
   nobs <- NA
-  ncores <- site_data %>% select(core) %>%  n_distinct()
+  ntrees <- site_data %>% select(tree) %>%  n_distinct()
   no_cwd_var <- (site_data %>% select(cwd.an) %>% n_distinct() == 1)
   no_pet_var <- (site_data %>% select(pet.an) %>% n_distinct() == 1)
+  
+  # TODO: Update to integrate lags over three years of cwd data?
+  # site_data <- site_data %>% 
+  #   arrange(tree, core, year) %>% 
+  #   group_by(tree, core) %>% 
+  #   mutate(lag1_cwd = lag(cwd.an, order_by = year),
+  #          lag2_cwd = lag(cwd.an, n = 2, order_by = year))
+  # femod <- feols(width ~ cwd.an + lag1_cwd + lag2_cwd + pet.an | tree, site_data)
+  # 
+  
   if (no_cwd_var | no_pet_var) {
     message("Site has no variation in CWD or PET")
     failed <- T
@@ -219,10 +231,10 @@ fs_mod <- function(site_data){
     tryCatch(
       expr = {
         # mod <- lm(ln_rwi ~ pet.an + cwd.an, data = tree_data)
-        if (ncores==1){
-          femod <- feols(ln_rwi ~ cwd.an + pet.an, site_data)
+        if (ntrees==1){
+          femod <- feols(width ~ cwd.an + pet.an, site_data)
         } else{
-          femod <- feols(ln_rwi ~ cwd.an + pet.an | tree, site_data)
+          femod <- feols(width ~ cwd.an + pet.an | tree, site_data)
         }
         vcov <- femod$cov.unscaled
         pet_cwd_cov <- vcov %>% 
@@ -270,7 +282,7 @@ site_df <- site_df %>%
 site_df <- site_df %>% 
   select(-error)
 
-site_df %>% write.csv(paste0(wdir, 'out\\first_stage\\site_log_pet_cwd.csv'))
+site_df %>% write.csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd.csv'))
 
 
 ## TODO: add error reports to site_summary document?

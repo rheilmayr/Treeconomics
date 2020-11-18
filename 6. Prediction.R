@@ -291,10 +291,10 @@ group_dat <- plot_dat %>%
 binned_margins <- group_dat %>% 
   ggplot(aes(x = cwd.q, y = pet.q, fill = ln_rwi)) +
   geom_tile() +
-  scale_fill_viridis_c() +
+  scale_fill_viridis_c(direction = -1) +
   theme_bw(base_size = 22)+
   theme(legend.position = "right") +
-  labs(fill = "Mean ln(RWI)\nin 2100") +
+  labs(fill = "Predicted impact\nof climate change\non RWI") +
   scale_x_continuous(labels = cwd.quantiles[label_pattern], breaks = cwd.breaks[label_pattern]) +
   scale_y_continuous(labels = pet.quantiles[label_pattern], breaks = pet.breaks[label_pattern]) +
   ylab("Historic PET\n(Deviation from species mean)") +
