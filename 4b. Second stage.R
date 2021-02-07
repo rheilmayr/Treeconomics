@@ -62,7 +62,7 @@ cwd_df <- cwd_df %>%
   select(-site)
 
 # 3a. Site-level regressions
-flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd.csv')) %>%
+flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv')) %>%
   select(-X1)
 
 # # 3b. Tree-level regressions
@@ -150,7 +150,9 @@ flm_df <- flm_df %>%
 # Add weighting based on inverse of first stage variance
 flm_df <- flm_df %>% 
   mutate(errorweights = 1 / (std.error_cwd.an),
-         pet_errorweights = 1 / (std.error_pet.an))
+         errorweights2 = sqrt(ntrees),
+         pet_errorweights = 1 / (std.error_pet.an),
+         pet_errorweights2 = sqrt(n))
 
 # Identify and trim extreme outliers
 flm_df <- flm_df %>%
@@ -171,10 +173,8 @@ trim_df <- flm_df %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Summary plots --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-xmin <- -2.5
-xmax <- 2.5
-increment <- 0.5
-breaks <- seq(xmin, xmax, increment)
+xmin <- -3
+xmax <- 3
 
 ### Summary plot of sample distribution
 hex <- flm_df %>% ggplot(aes(x = cwd.spstd, y = pet.spstd, weight = nobs)) +
@@ -197,9 +197,12 @@ plot_dat <- flm_df %>%
   filter(((abs(cwd.spstd)<3) & (abs(pet.spstd<3)))) %>%
   drop_na()
 
-# plot_dat <- plot_dat %>%
-#   mutate(cwd.q = as.numeric(cut(cwd.spstd, breaks = breaks)),
-#          pet.q = as.numeric(cut(pet.spstd, breaks = breaks)))
+
+
+plot_dat <- flm_df %>%
+  filter(abs(estimate_cwd.an)<10) %>%
+  filter(((abs(cwd.spstd)<3) & (abs(pet.spstd<3)))) %>%
+  drop_na()
 
 plot_dat <- plot_dat %>%
   mutate(cwd.q = as.numeric(ntile(cwd.spstd, nbins)),
@@ -210,6 +213,17 @@ pet.quantiles = quantile(plot_dat$pet.spstd, probs = seq(0, 1, 1/nbins), names =
 cwd.breaks = seq(0.5, nbins+0.5, 1)
 pet.breaks = seq(0.5, nbins+0.5, 1)
 
+
+group_dat <- plot_dat %>% 
+  group_by(cwd.q, pet.q) %>% 
+  dplyr::summarize(wvar = wtd.var(std.error_cwd.an, na.rm = TRUE),
+                   wsd = sqrt(wvar),
+                   wmean = weighted.mean(std.error_cwd.an, na.rm = TRUE),
+                   n = n(),
+                   error = qt(0.975, df = n-1)*wsd/sqrt(n),
+                   lower = wmean - error,
+                   upper = wmean + error) %>% 
+  filter(n>30)
 
 group_dat <- plot_dat %>% 
   group_by(cwd.q, pet.q) %>% 
@@ -247,6 +261,59 @@ binned_margins
 # ggsave(paste0(wdir, 'figures\\binned_margins.svg'), plot = binned_margins)
 
 
+
+
+
+# increment <- 0.25
+# breaks <- seq(xmin, xmax, increment)
+# 
+# plot_dat <- flm_df %>%
+#   filter(abs(estimate_cwd.an)<10) %>% 
+#   drop_na()
+# 
+# plot_dat <- plot_dat %>%
+#   mutate(cwd.q = as.numeric(cut(cwd.spstd, breaks = breaks)),
+#          pet.q = as.numeric(cut(pet.spstd, breaks = breaks)))
+# cwd.quantiles = breaks
+# pet.quantiles = breaks
+# cwd.breaks = breaks
+# pet.breaks = breaks
+# 
+# 
+# group_dat <- plot_dat %>% 
+#   group_by(cwd.q, pet.q) %>% 
+#   dplyr::summarize(wvar = wtd.var(estimate_cwd.an, errorweights, na.rm = TRUE),
+#                    wsd = sqrt(wvar),
+#                    wmean = weighted.mean(estimate_cwd.an, errorweights, na.rm = TRUE),
+#                    n = n(),
+#                    error = qt(0.975, df = n-1)*wsd/sqrt(n),
+#                    lower = wmean - error,
+#                    upper = wmean + error) %>% 
+#   filter(n>10)
+# 
+# 
+# binned_margins <- group_dat %>% 
+#   ggplot(aes(x = cwd.q, y = pet.q, fill = wmean)) +
+#   geom_tile() +
+#   # xlim(c(-3, 4)) +
+#   #ylim(c(-1.5, 1.5))+
+#   # scale_fill_gradientn (colours = c("darkblue","lightblue")) +
+#   scale_fill_viridis_c(direction = -1) +
+#   theme_bw(base_size = 22)+
+#   ylab("Deviation from mean PET")+
+#   xlab("Deviation from mean CWD")+
+#   theme(legend.position = "left") +
+#   labs(fill = "Marginal effect\nof CWD") +
+#   # scale_x_continuous(labels = cwd.quantiles[label_pattern], breaks = cwd.breaks[label_pattern]) +
+#   # scale_y_continuous(labels = pet.quantiles[label_pattern], breaks = pet.breaks[label_pattern]) +
+#   # scale_x_continuous(labels = cwd.quantiles, breaks = breaks) +
+#   # scale_y_continuous(labels = pet.quantiles, breaks = breaks) +
+#   ylab("Historic PET\n(Deviation from species mean)") +
+#   xlab("Historic CWD\n(Deviation from species mean)") + 
+#   coord_fixed()
+# 
+# binned_margins
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Primary second stage model --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -255,11 +322,14 @@ binned_margins
 # trim_df <- trim_df %>% 
 #   filter(gymno_angio=="gymno")
 
+mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=flm_df)
+coeftest(mod, vcov = vcovCL, cluster = flm_df$collection_id)
+
+
 mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=trim_df)
 cluster_vcov <- vcovCL(mod, cluster = trim_df$collection_id)
-coeftest(mod, cluster = trim_df$collection_id)
+coeftest(mod, vcov = vcovCL, cluster = trim_df$collection_id)
 saveRDS(mod, paste0(wdir, "out\\second_stage\\ss_mod.rds"))
-
 
 
 pet_mod <- lm(estimate_pet.an ~ cwd.spstd + pet.spstd, weights = pet_errorweights, data=flm_df)
@@ -326,23 +396,23 @@ margins_plot
 
 # Drop PET
 nopet_mod <- lm(estimate_cwd.an ~ cwd.spstd, weights = errorweights, data=trim_df)
-coeftest(nopet_mod, vcov = vcovCL, cluster = trim_df$collection_id)
 nopet_cluster_vcov <- vcovCL(nopet_mod, cluster = trim_df$collection_id)
+coeftest(nopet_mod, vcov = nopet_cluster_vcov)
 
 # Don't trim dataset
 allobs_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=flm_df)
-coeftest(allobs_mod, vcov = vcovCL, cluster = flm_df$collection_id)
 allobs_cluster_vcov <- vcovCL(allobs_mod, cluster = flm_df$collection_id)
+coeftest(allobs_mod, vcov = allobs_cluster_vcov)
 
 # Limit to gymnosperms
 subset_df <- trim_df %>% filter(gymno_angio=="gymno")
 # subset_df <- trim_df %>% filter(gymno_angio=="gymno") %>% filter(collection_id %in% old_sites)
-subset_df <- trim_df %>% filter(genus=="Juniperus")
+subset_df <- trim_df %>% filter(genus=="Pinus")
 # subset_df <- trim_df %>% filter(genus=="Pinus") %>% filter(collection_id %in% old_sites)
 subset_df %>% dim()
 subset_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=subset_df)
-coeftest(subset_mod, vcov = vcovCL, cluster = subset_df$collection_id)
 subset_cluster_vcov <- vcovCL(subset_mod, cluster = subset_df$collection_id)
+coeftest(subset_mod, vcov = subset_cluster_vcov)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -736,3 +806,21 @@ p4 <- plot_dat %>% ggplot(aes(x=pet.q, y=estimate_pet.an)) +
 
 (p1 | p2) / (p3 | p4)
 
+
+
+
+
+sp <- "pipo"
+sp_data <- flm_df %>% filter(species_id == sp)
+sp_data %>% filter(cwd.spstd<1) %>% 
+  ggplot(aes(x = cwd.spstd, y = estimate_cwd.an)) + 
+  geom_point() + 
+  geom_point(data = sp_data %>% filter(collection_id=="CO559"), color = 'red', alpha = 1, size = 5) + 
+  geom_smooth(method = lm) +
+  theme_bw(base_size = 25) +
+  ylab("Sensitivity to CWD (\U03B2)")+
+  xlab("Historic CWD\n(Deviation from species mean)") +
+  geom_hline(yintercept = 0)
+
+sp_data %>% arrange(estimate_cwd.an) %>% select(collection_id, estimate_cwd.an, p.value_cwd.an, cwd.ave, cwd.spstd)
+(sp_data %>% arrange(desc(estimate_cwd.an)) %>% select(collection_id, estimate_cwd.an, p.value_cwd.an, cwd.ave, cwd.spstd))[10:20,]
