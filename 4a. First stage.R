@@ -331,6 +331,9 @@ ihsTransform <- function(y) {log(y + (y ^ 2 + 1) ^ 0.5)}
 # Run site-level regressions --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 fs_mod <- function(site_data){
+  rwl_mean <- site_data$rwl %>% mean(na.rm = TRUE)
+  rwl_sd <- site_data$rwl %>% sd(na.rm = TRUE)
+  
   failed <- F
   reg_error <- NA
   femod <- NA
@@ -381,11 +384,10 @@ fs_mod <- function(site_data){
     )    
   }
   if (failed){
-    return(tibble(mod = list(femod), cov = pet_cwd_cov, nobs = nobs, ncores = ncores, ntrees = ntrees, error = reg_error))
+    return(tibble(mod = list(femod), cov = pet_cwd_cov, nobs = nobs, ncores = ncores, ntrees = ntrees, rwl_mean = rwl_mean, rwl_sd = rwl_sd, error = reg_error))
   }
-  return(tibble(mod = list(femod), cov = pet_cwd_cov, nobs = nobs, ncores = ncores, ntrees = ntrees, error = reg_error))
+  return(tibble(mod = list(femod), cov = pet_cwd_cov, nobs = nobs, ncores = ncores, ntrees = ntrees, rwl_mean = rwl_mean, rwl_sd = rwl_sd, error = reg_error))
 }
-
 
 site_df <- dendro_df %>% 
   drop_na() %>% 
