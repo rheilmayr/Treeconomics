@@ -46,9 +46,8 @@ cwd_df <- cwd_df %>%
 
 # 1. Dendrochronologies
 dendro_dir <- paste0(wdir, "out\\dendro\\")
-dendro_df <- read_csv(paste0(dendro_dir, "rwi_long.csv"))
+dendro_df <- read.csv(paste0(dendro_dir, "rwi_long.csv"))
 dendro_df <- dendro_df %>% 
-  filter(year>1900) %>% 
   select(-core_id)
 # old_dendro_df <- read_csv(paste0(dendro_dir, "rwi_long_old.csv"))
 # old_dendro_df <- old_dendro_df %>% 
@@ -65,6 +64,33 @@ dendro_df <- dendro_df %>%
 #   distinct()
 # cwd_dendro_sites <- dendro_sites %>% 
 #   inner_join(cwd_sites, by = c("site_id" = "site"))
+
+# 4. Site information
+site_smry <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
+site_smry <- site_smry %>% 
+  select(collection_id, sp_id) %>% 
+  mutate(species_id = tolower(sp_id)) %>% 
+  select(-sp_id)
+
+dendro_df <- dendro_df %>% 
+  left_join(site_smry, by = 'collection_id')
+
+# 5. Species information
+sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
+sp_info <- sp_info %>% 
+  select(species_id, genus, gymno_angio, family)
+site_smry <- site_smry %>% 
+  left_join(sp_info, by = c("species_id"))
+psme_list <- site_smry %>% 
+  filter(species_id == "psme") %>% 
+  pull(collection_id)
+
+
+# 6. Historic species niche data
+niche_csv <- paste0(wdir, 'out/climate/clim_niche.csv')
+niche_df <- read_csv(niche_csv) %>% 
+  select(-X1)
+
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -85,27 +111,127 @@ dendro_df <- dendro_df %>%
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Identify tree-level weather history ------------------------------
+# Standardize annual weather by species niche  ------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-tree_clim <- dendro_df %>% 
-  select(collection_id, year, tree, aet.an, cwd.an, pet.an) %>% 
-  distinct()
+niche_df <- niche_df %>% 
+  select(species_id = sp_code, sp_pet_mean = pet_mean, sp_pet_sd = pet_sd, sp_cwd_mean = cwd_mean, sp_cwd_sd = cwd_sd)
 
-tree_clim <- tree_clim %>%
-  filter(year<1980) %>% 
-  group_by(collection_id, tree) %>% 
-  summarize(first_year = min(year),
-            young = first_year > 1901,
-            cwd.trmean = mean(cwd.an),
-            cwd.trsd = sd(cwd.an),
-            pet.trmean = mean(pet.an),
-            pet.trsd = sd(pet.an))
+dendro_df <- dendro_df %>% 
+  left_join(niche_df, by = c("species_id")) %>% 
+  mutate(pet.an.spstd = (pet.an - sp_pet_mean) / sp_pet_sd,
+         cwd.an.spstd = (cwd.an - sp_cwd_mean) / sp_cwd_sd)
 
-# tree_clim %>% 
-#   filter(young == T) %>% 
-#   group_by(collection_id) %>% 
-#   tally() %>% 
-#   filter(n>1)
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Explore variance by site ------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Calculate site-level historic climate
+hist_clim_df <- clim_df %>%
+  group_by(collection_id) %>%
+  filter(year<1980) %>%
+  summarise(aet.ave = mean(aet.an),
+            cwd.ave = mean(cwd.an),
+            pet.ave = mean(pet.an),
+            cwd.min = min(cwd.an)) %>% 
+  left_join(site_smry, by = "collection_id") %>% 
+  select(-genus, -gymno_angio, -species_id)
+
+
+hist_clim_df <- hist_clim_df %>% 
+  left_join(niche_df, by = c("species_id" = "sp_code")) %>% 
+  mutate(pet.spstd = (pet.ave - sp_pet_mean) / sp_pet_sd,
+         cwd.spstd = (cwd.ave - sp_cwd_mean) / sp_cwd_sd)
+
+
+site_stats <- dendro_df %>% 
+  group_by(collection_id) %>% 
+  summarise(rwi_var = var(rwi),
+            rwi_mean = mean(rwi)) %>% 
+  left_join(hist_clim_df, by = c("collection_id"))
+
+site_stats %>% ggplot(aes(x = cwd.spstd, y = rwi_var)) +
+  geom_point(shape = 23) +
+  geom_smooth(method=lm) +
+  theme_bw(base_size = 25) +
+  ylab("Variance in RWI")+
+  xlab("Historic CWD\n(Deviation from species mean)") +
+  ylim(0, 0.5) +
+  xlim(-3, 3)
+
+site_stats %>% ggplot(aes(x = cwd.spstd, y = rwi_mean)) +
+  geom_point(shape = 23) +
+  geom_smooth(method=lm) +
+  theme_bw(base_size = 25) +
+  ylab("Mean RWI")+
+  xlab("Historic CWD\n(Deviation from species mean)") +
+  ylim(0.9, 1.1) +
+  xlim(-3, 3)
+
+
+var_mod <- lm(rwi_var ~ cwd.spstd + pet.spstd, data = site_stats)
+mean_mod <- lm(rwi_mean ~ cwd.spstd + pet.spstd, data = site_stats)
+
+
+
+
+# flm_df <- flm_df %>% 
+#   left_join(hist_clim_df, by = c("collection_id"))
+# 
+# trim_df %>% 
+#   filter(errorweights>5300) %>% 
+#   ggplot(aes(x = cwd.spstd, y = estimate_cwd.an)) +
+#   geom_point(shape = 23) +
+#   geom_smooth(method=lm) +
+#   theme_bw(base_size = 25) +
+#   ylab("Sensitivity to CWD")+
+#   xlab("Historic CWD\n(Deviation from species mean)") +
+#   ylim(-0.001, 0.0005) +
+#   xlim(-3, 3)
+# 
+# flm_df <- flm_df %>% 
+#   mutate(errorweights = 1 / (std.error_cwd.an),
+#          pet_errorweights = 1 / (std.error_pet.an))
+# 
+# flm_df <- flm_df %>%
+#   group_by(species_id) %>%
+#   mutate(cwd.qhigh=quantile(estimate_cwd.an,0.99,na.rm=T),
+#          cwd.qlow=quantile(estimate_cwd.an,0.01,na.rm=T)) %>%
+#   ungroup()
+# 
+# trim_df <- flm_df %>%
+#   filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
+#          abs(cwd.spstd)<5,
+#          abs(pet.spstd)<5,
+#          abs(std.error_cwd.an) < 50 * abs(estimate_cwd.an),
+#          abs(std.error_cwd.an) < 50 * abs(estimate_cwd.an)) %>% 
+#   drop_na()
+# coef_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, data = trim_df, weights = errorweights)
+# coef_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, data = trim_df %>% filter(errorweights>5300))
+# summary(coef_mod)
+
+
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# # Identify tree-level weather history ------------------------------
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# tree_clim <- dendro_df %>% 
+#   select(collection_id, year, tree, aet.an, cwd.an, pet.an) %>% 
+#   distinct()
+# 
+# tree_clim <- tree_clim %>%
+#   filter(year<1980) %>% 
+#   group_by(collection_id, tree) %>% 
+#   summarize(first_year = min(year),
+#             young = first_year > 1901,
+#             cwd.trmean = mean(cwd.an),
+#             cwd.trsd = sd(cwd.an),
+#             pet.trmean = mean(pet.an),
+#             pet.trsd = sd(pet.an))
+# 
+# # tree_clim %>% 
+# #   filter(young == T) %>% 
+# #   group_by(collection_id) %>% 
+# #   tally() %>% 
+# #   filter(n>1)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -211,6 +337,7 @@ fs_mod <- function(site_data){
   pet_cwd_cov <- NA
   nobs <- NA
   ntrees <- site_data %>% select(tree) %>%  n_distinct()
+  ncores <- site_data %>% select(core) %>%  n_distinct()
   no_cwd_var <- (site_data %>% select(cwd.an) %>% n_distinct() == 1)
   no_pet_var <- (site_data %>% select(pet.an) %>% n_distinct() == 1)
   
@@ -232,9 +359,9 @@ fs_mod <- function(site_data){
       expr = {
         # mod <- lm(ln_rwi ~ pet.an + cwd.an, data = tree_data)
         if (ntrees==1){
-          femod <- feols(width ~ cwd.an + pet.an, site_data)
+          femod <- feols(rwi ~ cwd.an + pet.an, site_data)
         } else{
-          femod <- feols(width ~ cwd.an + pet.an | tree, site_data)
+          femod <- feols(rwi ~ cwd.an + pet.an | tree, site_data)
         }
         vcov <- femod$cov.unscaled
         pet_cwd_cov <- vcov %>% 
@@ -254,15 +381,17 @@ fs_mod <- function(site_data){
     )    
   }
   if (failed){
-    return(tibble(mod = list(femod), cov = pet_cwd_cov, nobs = nobs, ncores = ncores, error = reg_error))
+    return(tibble(mod = list(femod), cov = pet_cwd_cov, nobs = nobs, ncores = ncores, ntrees = ntrees, error = reg_error))
   }
-  return(tibble(mod = list(femod), cov = pet_cwd_cov, nobs = nobs, ncores = ncores, error = reg_error))
+  return(tibble(mod = list(femod), cov = pet_cwd_cov, nobs = nobs, ncores = ncores, ntrees = ntrees, error = reg_error))
 }
 
 
 site_df <- dendro_df %>% 
   drop_na() %>% 
-  mutate(ln_rwi = log(width)) %>% 
+  mutate(cwd.an = cwd.an.spstd,
+         pet.an = pet.an.spstd) %>% 
+  mutate(ln_rwi = log(rwi)) %>% 
   group_by(collection_id) %>%
   add_tally(name = 'nobs') %>% 
   filter(nobs>10) %>% 
@@ -282,8 +411,26 @@ site_df <- site_df %>%
 site_df <- site_df %>% 
   select(-error)
 
-site_df %>% write.csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd.csv'))
+site_df %>% write.csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv'))
 
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Create illustrative figure --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+high_sens = "CO559"
+low_sens = "CA585"
+site_data <- dendro_df %>% 
+  filter(collection_id == high_sens)
+
+site_data %>% ggplot(aes(x = cwd.an, y = rwi)) +
+  geom_point(shape = 23) +
+  geom_smooth(method=lm) +
+  theme_bw(base_size = 25) +
+  ylab("Ring width index")+
+  xlab("Climatic water deficit")
+
+  
 
 ## TODO: add error reports to site_summary document?
 
@@ -378,7 +525,7 @@ fs_mod <- function(tree_data){
 
 tree_df <- dendro_df %>% 
   drop_na() %>% 
-  mutate(ln_rwi = log(width)) %>% 
+  mutate(ln_rwi = log(rwi)) %>% 
   group_by(collection_id, tree) %>%
   add_tally(name = 'nobs') %>% 
   filter(nobs>10) %>% 
