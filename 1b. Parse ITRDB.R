@@ -156,7 +156,7 @@ open_rwl <- function(file){
   rwl <- NA
   tryCatch(
     expr = {
-      rwl <- read.tucson(paste0(data_dir, file))
+      rwl <- read.tucson(paste0(data_dir, file)) # NOTE: Any way to extract RWL units at this point?
     },
     error = function(e){
       tryCatch(
@@ -336,6 +336,7 @@ detrend_rwl <- function(rwl_dat) {
 
 clean_data$rwi <- map(clean_data$rwl, detrend_rwl)
 
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Pivot to long --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -359,9 +360,12 @@ pivot_rw <- function(rw, ids){
 }
 
 clean_data$rwi_long <- map2(clean_data$rwi, clean_data$ids, pivot_rw)
+clean_data$rwl_long <- map2(clean_data$rwl, clean_data$ids, pivot_rw)
 clean_data <- clean_data %>% 
-  select(collection_id, rwi_long) %>% 
-  unnest(rwi_long) %>% 
+  select(collection_id, rwi_long, rwl_long) %>% 
+  unnest(c(rwi_long, rwl_long), names_sep = '_') %>% 
+  select(collection_id, year = rwi_long_year, tree = rwi_long_tree, core = rwi_long_core, 
+         core_id = rwi_long_core_id, site = rwi_long_site, rwi = rwi_long_width, rwl = rwl_long_width) %>% 
   mutate(site = replace_na(1))
 
 test_that("No collections contain multiple sites",{
@@ -370,16 +374,17 @@ test_that("No collections contain multiple sites",{
 
 clean_data <- clean_data  %>% 
   mutate(tree = vctrs::vec_group_id(tree),
-         core = vctrs::vec_group_id(core)) %>% 
-  select(collection_id, core_id, tree, core, year, width)
+         core = vctrs::vec_group_id(core),
+         year = as.integer(year)) %>% 
+  select(collection_id, core_id, tree, core, year, rwi, rwl)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Add parsed data summary to site summary --------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-site_summary <- site_data %>% 
-  select(collection_id, site_name, location, latitude, longitude, elevation, start_year, end_year, time_unit, sp_id, sp_scient, sp_common) %>% 
-  distinct() %>% 
+site_summary <- site_data %>%
+  select(collection_id, site_name, location, latitude, longitude, elevation, start_year, end_year, time_unit, sp_id, sp_scient, sp_common) %>%
+  distinct() %>%
   filter(collection_id %in% keep_sites)
 
 data_summary <- clean_data %>% 
@@ -407,8 +412,16 @@ site_summary <- site_summary %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Filter to usable data and run final checks --------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+drop_sites <- clean_data %>% 
+  group_by(collection_id) %>% 
+  summarise(max_year = max(year)) %>% 
+  mutate(error_year = max_year>2020) %>% 
+  filter(error_year==TRUE) %>% 
+  pull(collection_id)
+
 clean_data <- clean_data %>% 
-  filter(year>=1900)
+  filter(year>=1900,
+         !(collection_id %in% drop_sites))
 
 n_check <- clean_data %>% 
   group_by(collection_id, tree, core, year) %>% 
@@ -462,22 +475,23 @@ n_usable_obs <- clean_data %>%
   distinct() %>% 
   dim()
 
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-n = 2
-errors[((n-1)*10+1):(n*10),]
-warnings <- site_df %>% select(collection_id, warning) %>% drop_na()
-site <- "ak006"
-file <- paste0(site, ".rwl")
-read.tucson(paste0(data_dir, file))
-rwl <- open_rwl(file)
+# n = 2
+# errors[((n-1)*10+1):(n*10),]
+# warnings <- site_df %>% select(collection_id, warning) %>% drop_na()
+# site <- "ak006"
+# file <- paste0(site, ".rwl")
+# read.tucson(paste0(data_dir, file))
+# rwl <- open_rwl(file)
+# 
+# 
+# file <- "remote\\in\\itrdb\\cana008.rwl"
+# rwl <- read.tucson(file)
+# ids <- autoread.ids(rwl)
 
 
-file <- "remote\\in\\itrdb\\cana008.rwl"
-rwl <- read.tucson(file)
-ids <- autoread.ids(rwl)
 
-# TODO: Why are there some years >2020?
 
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # NOTES:
 # NOAA header files  missing species data block and collection name. Added manually
 #   cana575-cana586; paki041
