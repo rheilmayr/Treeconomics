@@ -32,8 +32,41 @@ library(sf)
 library(rgeos)
 library(stringr)
 library(raster)
+library(rgdal)
+library(viridis)
+
+
 select <- dplyr::select
 
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Load data ------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+# 2. Species range maps
+range_file <- paste0(wdir, 'in//species_ranges//merged_ranges.shp')
+range_sf <- st_read(range_file)
+
+# 4. Site information
+site_smry <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
+site_smry <- site_smry %>% 
+  select(collection_id, sp_id, latitude, longitude) %>% 
+  mutate(species_id = tolower(sp_id)) %>% 
+  select(-sp_id)
+
+# 5. Species information
+sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
+sp_info <- sp_info %>% 
+  select(species_id, genus, gymno_angio, family)
+site_smry <- site_smry %>% 
+  left_join(sp_info, by = c("species_id"))
+
+
+# 1. Historic climate raster
+clim_file <- paste0(wdir, 'in//CRUData//historic_raster//HistoricCWD_AETGrids_Annual.Rdat')
+load(clim_file)
+cwd_historic <- cwd_historic %>% mean(na.rm = TRUE)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Summarize ITRDB species frequencies ------------------------------------
@@ -94,17 +127,11 @@ write.csv2(site_count, paste0(wdir, "species_summary.csv"))
 # Map overlap between ITRDB and range ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define species
-spp_code <- 'psme'
+spp_code <- 'pipo'
 
 # Pull relevant ITRDB sites
-site_list <- tree_db %>%
-  filter(species_id == spp_code) %>% 
-  pull(site_id) %>% 
-  unique()
-
-sites <- site_db %>%
-  filter(site_id %in% site_list) %>%
-  select(site_id, latitude, longitude) %>%
+sites <- site_smry %>%
+  filter(species_id %in% spp_code) %>%
   drop_na() %>%
   st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
 
@@ -114,14 +141,14 @@ sp_range <- range_sf %>%
   filter(sp_code == spp_code)
 
 
-xlims <- c(-132, -102)
-ylims <- c(26, 56)
+xlims <- c(-126, -98)
+ylims <- c(20, 53)
 
 # Plot species ranges
 world <- ne_coastline(scale = "medium", returnclass = "sf")
 map <- ggplot() +
   geom_sf(data = world) +
-  geom_sf(data = sp_range, fill = 'lightblue', alpha = .9) +
+  geom_sf(data = sp_range, fill = 'lightblue', alpha = .9, colour = NA) +
   geom_sf(data = sites, color = 'darkblue', fill = 'red', alpha = .8) +
   theme_bw(base_size = 22)+
   ylab("Latitude")+
@@ -130,9 +157,6 @@ map <- ggplot() +
 map
 
 
-library(raster)
-library(rgdal)
-library(viridis)
 
 
 cwd_historic_df <- cwd_historic %>% 
@@ -146,14 +170,15 @@ cwd_historic_df <- cwd_historic %>%
          std_cwd = (layer - cwd.mean) / cwd.sd)
 map <- ggplot() +
   geom_raster(data = cwd_historic_df, aes(x = x, y = y, fill = CWD)) +
-  # geom_sf(data = sp_range, fill = 'lightblue', alpha = .9) +
+  geom_sf(data = sp_range, fill = NA, colour = "white") +
   scale_fill_viridis_c() +
-  geom_sf(data = sites, color = 'red', alpha = 1) +
+  geom_sf(data = sites %>% filter(collection_id=="CO559"), color = 'red', alpha = 1, size = 5) +
+  # geom_sf(data = sites, color = 'red', alpha = 1) +
   theme_bw(base_size = 22)+
   ylab("Latitude")+
   xlab("Longitude")+
   geom_sf(data = world, color = 'white') +
-  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE) ## Western US
+  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE) ## Western US 
 
 map
 
