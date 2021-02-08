@@ -151,8 +151,7 @@ flm_df <- flm_df %>%
 flm_df <- flm_df %>% 
   mutate(errorweights = 1 / (std.error_cwd.an),
          errorweights2 = sqrt(ntrees),
-         pet_errorweights = 1 / (std.error_pet.an),
-         pet_errorweights2 = sqrt(n))
+         pet_errorweights = 1 / (std.error_pet.an))
 
 # Identify and trim extreme outliers
 flm_df <- flm_df %>%
@@ -197,13 +196,6 @@ plot_dat <- flm_df %>%
   filter(((abs(cwd.spstd)<3) & (abs(pet.spstd<3)))) %>%
   drop_na()
 
-
-
-plot_dat <- flm_df %>%
-  filter(abs(estimate_cwd.an)<10) %>%
-  filter(((abs(cwd.spstd)<3) & (abs(pet.spstd<3)))) %>%
-  drop_na()
-
 plot_dat <- plot_dat %>%
   mutate(cwd.q = as.numeric(ntile(cwd.spstd, nbins)),
          pet.q = as.numeric(ntile(pet.spstd, nbins)))
@@ -213,17 +205,6 @@ pet.quantiles = quantile(plot_dat$pet.spstd, probs = seq(0, 1, 1/nbins), names =
 cwd.breaks = seq(0.5, nbins+0.5, 1)
 pet.breaks = seq(0.5, nbins+0.5, 1)
 
-
-group_dat <- plot_dat %>% 
-  group_by(cwd.q, pet.q) %>% 
-  dplyr::summarize(wvar = wtd.var(std.error_cwd.an, na.rm = TRUE),
-                   wsd = sqrt(wvar),
-                   wmean = weighted.mean(std.error_cwd.an, na.rm = TRUE),
-                   n = n(),
-                   error = qt(0.975, df = n-1)*wsd/sqrt(n),
-                   lower = wmean - error,
-                   upper = wmean + error) %>% 
-  filter(n>30)
 
 group_dat <- plot_dat %>% 
   group_by(cwd.q, pet.q) %>% 
@@ -262,7 +243,75 @@ binned_margins
 
 
 
+## Plot to show relative variation
+plot_dat <- plot_dat %>% 
+  mutate(site_variation = rwl_sd / rwl_mean)
+group_dat <- plot_dat %>% 
+  group_by(cwd.q, pet.q) %>% 
+  dplyr::summarize(wvar = wtd.var(site_variation, na.rm = TRUE),
+                   wsd = sqrt(wvar),
+                   wmean = weighted.mean(site_variation, na.rm = TRUE),
+                   n = n(),
+                   error = qt(0.975, df = n-1)*wsd/sqrt(n),
+                   lower = wmean - error,
+                   upper = wmean + error) %>% 
+  filter(n>30)
 
+binned_margins <- group_dat %>% 
+  ggplot(aes(x = cwd.q, y = pet.q, fill = wmean)) +
+  geom_tile() +
+  # xlim(c(-3, 4)) +
+  #ylim(c(-1.5, 1.5))+
+  # scale_fill_gradientn (colours = c("darkblue","lightblue")) +
+  scale_fill_viridis_c(direction = -1) +
+  theme_bw(base_size = 22)+
+  ylab("Deviation from mean PET")+
+  xlab("Deviation from mean CWD")+
+  theme(legend.position = "left") +
+  labs(fill = "SD / Mean RWL") +
+  scale_x_continuous(labels = cwd.quantiles[label_pattern], breaks = cwd.breaks[label_pattern]) +
+  scale_y_continuous(labels = pet.quantiles[label_pattern], breaks = pet.breaks[label_pattern]) +
+  # scale_x_continuous(labels = cwd.quantiles, breaks = seq(0.5, nbins+0.5, 1)) +
+  # scale_y_continuous(labels = pet.quantiles, breaks = seq(0.5, nbins+0.5, 1)) +
+  ylab("Historic PET\n(Deviation from species mean)") +
+  xlab("Historic CWD\n(Deviation from species mean)") + 
+  coord_fixed()
+binned_margins
+
+
+plot_dat <- plot_dat %>% 
+  mutate(site_variation = rwl_sd / rwl_mean)
+group_dat <- plot_dat %>% 
+  group_by(cwd.q, pet.q) %>% 
+  dplyr::summarize(wvar = wtd.var(rwl_mean, na.rm = TRUE),
+                   wsd = sqrt(wvar),
+                   wmean = weighted.mean(rwl_mean, na.rm = TRUE),
+                   n = n(),
+                   error = qt(0.975, df = n-1)*wsd/sqrt(n),
+                   lower = wmean - error,
+                   upper = wmean + error) %>% 
+  filter(n>30)
+
+binned_margins <- group_dat %>% 
+  ggplot(aes(x = cwd.q, y = pet.q, fill = wmean)) +
+  geom_tile() +
+  # xlim(c(-3, 4)) +
+  #ylim(c(-1.5, 1.5))+
+  # scale_fill_gradientn (colours = c("darkblue","lightblue")) +
+  scale_fill_viridis_c(direction = -1) +
+  theme_bw(base_size = 22)+
+  ylab("Deviation from mean PET")+
+  xlab("Deviation from mean CWD")+
+  theme(legend.position = "left") +
+  labs(fill = "SD / Mean RWL") +
+  scale_x_continuous(labels = cwd.quantiles[label_pattern], breaks = cwd.breaks[label_pattern]) +
+  scale_y_continuous(labels = pet.quantiles[label_pattern], breaks = pet.breaks[label_pattern]) +
+  # scale_x_continuous(labels = cwd.quantiles, breaks = seq(0.5, nbins+0.5, 1)) +
+  # scale_y_continuous(labels = pet.quantiles, breaks = seq(0.5, nbins+0.5, 1)) +
+  ylab("Historic PET\n(Deviation from species mean)") +
+  xlab("Historic CWD\n(Deviation from species mean)") + 
+  coord_fixed()
+binned_margins
 
 # increment <- 0.25
 # breaks <- seq(xmin, xmax, increment)
