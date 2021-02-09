@@ -154,26 +154,38 @@ flm_df <- flm_df %>%
          pet_errorweights = 1 / (std.error_pet.an))
 
 # Identify and trim extreme outliers
-flm_df <- flm_df %>%
-  group_by(species_id) %>%
-  mutate(cwd.qhigh=quantile(estimate_cwd.an,0.99,na.rm=T),
-         cwd.qlow=quantile(estimate_cwd.an,0.01,na.rm=T)) %>%
-  ungroup()
+cwd_est_bounds = quantile(flm_df$estimate_cwd.an, c(0.01, 0.99),na.rm=T)
+cwd_spstd_bounds = quantile(flm_df$cwd.spstd, c(0.01, 0.99), na.rm = T)
+pet_spstd_bounds = quantile(flm_df$pet.spstd, c(0.01, 0.99), na.rm = T)
+
+# flm_df <- flm_df %>%
+#   # group_by(species_id) %>%
+#   mutate() %>%
+#   ungroup()
 
 trim_df <- flm_df %>%
-  filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
-         abs(cwd.spstd)<5,
-         abs(pet.spstd)<5,
-         abs(std.error_cwd.an) < 50 * abs(estimate_cwd.an),
-         abs(std.error_cwd.an) < 50 * abs(estimate_cwd.an)) %>% 
+  filter(estimate_cwd.an>cwd_est_bounds[1],
+         estimate_cwd.an<cwd_est_bounds[2],
+         cwd.spstd>cwd_spstd_bounds[1],
+         cwd.spstd<cwd_spstd_bounds[2],
+         pet.spstd>pet_spstd_bounds[1],
+         pet.spstd<pet_spstd_bounds[2]) %>% 
   drop_na()
+
+
+
+  #        abs(cwd.spstd)<5,
+  #        abs(pet.spstd)<5,
+  #        abs(std.error_cwd.an) < 50 * abs(estimate_cwd.an),
+  #        abs(std.error_cwd.an) < 50 * abs(estimate_cwd.an)) %>% 
+  # drop_na()
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Summary plots --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-xmin <- -3
-xmax <- 3
+xmin <- -2.5
+xmax <- 2.5
 
 ### Summary plot of sample distribution
 hex <- flm_df %>% ggplot(aes(x = cwd.spstd, y = pet.spstd, weight = nobs)) +
@@ -192,7 +204,7 @@ hex
 nbins = 8
 label_gaps <- 1
 label_pattern <- seq(1, nbins + 1,label_gaps)
-plot_dat <- flm_df %>%
+plot_dat <- trim_df %>%
   filter(((abs(cwd.spstd)<3) & (abs(pet.spstd<3)))) %>%
   drop_na()
 
@@ -215,7 +227,7 @@ group_dat <- plot_dat %>%
             error = qt(0.975, df = n-1)*wsd/sqrt(n),
             lower = wmean - error,
             upper = wmean + error) %>% 
-  filter(n>20)
+  filter(n>15)
 
 
 binned_margins <- group_dat %>% 
@@ -255,7 +267,7 @@ group_dat <- plot_dat %>%
                    error = qt(0.975, df = n-1)*wsd/sqrt(n),
                    lower = wmean - error,
                    upper = wmean + error) %>% 
-  filter(n>30)
+  filter(n>10)
 
 binned_margins <- group_dat %>% 
   ggplot(aes(x = cwd.q, y = pet.q, fill = wmean)) +
@@ -279,31 +291,25 @@ binned_margins <- group_dat %>%
 binned_margins
 
 
-plot_dat <- plot_dat %>% 
-  mutate(site_variation = rwl_sd / rwl_mean)
 group_dat <- plot_dat %>% 
   group_by(cwd.q, pet.q) %>% 
-  dplyr::summarize(wvar = wtd.var(rwl_mean, na.rm = TRUE),
-                   wsd = sqrt(wvar),
-                   wmean = weighted.mean(rwl_mean, na.rm = TRUE),
-                   n = n(),
-                   error = qt(0.975, df = n-1)*wsd/sqrt(n),
-                   lower = wmean - error,
-                   upper = wmean + error) %>% 
-  filter(n>30)
+  dplyr::summarize(sum_weight = sum(errorweights, na.rm = TRUE),
+                   mean_weight = mean(errorweights, na.rm = TRUE),
+                   n = n()) %>% 
+  filter(n>15)
 
 binned_margins <- group_dat %>% 
-  ggplot(aes(x = cwd.q, y = pet.q, fill = wmean)) +
+  ggplot(aes(x = cwd.q, y = pet.q, fill = mean_weight)) +
   geom_tile() +
   # xlim(c(-3, 4)) +
   #ylim(c(-1.5, 1.5))+
   # scale_fill_gradientn (colours = c("darkblue","lightblue")) +
-  scale_fill_viridis_c(direction = -1) +
+  scale_fill_viridis_c(direction = 1) +
   theme_bw(base_size = 22)+
   ylab("Deviation from mean PET")+
   xlab("Deviation from mean CWD")+
   theme(legend.position = "left") +
-  labs(fill = "SD / Mean RWL") +
+  labs(fill = "Sum of weights") +
   scale_x_continuous(labels = cwd.quantiles[label_pattern], breaks = cwd.breaks[label_pattern]) +
   scale_y_continuous(labels = pet.quantiles[label_pattern], breaks = pet.breaks[label_pattern]) +
   # scale_x_continuous(labels = cwd.quantiles, breaks = seq(0.5, nbins+0.5, 1)) +
@@ -312,6 +318,11 @@ binned_margins <- group_dat %>%
   xlab("Historic CWD\n(Deviation from species mean)") + 
   coord_fixed()
 binned_margins
+
+trim_df %>%
+  ggplot(aes(x = cwd.spstd, y = estimate_cwd.an)) + 
+  geom_smooth() +
+  theme_minimal()
 
 # increment <- 0.25
 # breaks <- seq(xmin, xmax, increment)
@@ -372,12 +383,13 @@ binned_margins
 #   filter(gymno_angio=="gymno")
 
 mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=flm_df)
+cluster_vcov <- vcovCL(mod, cluster = flm_df$collection_id)
 coeftest(mod, vcov = vcovCL, cluster = flm_df$collection_id)
 
-
-mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=trim_df)
-cluster_vcov <- vcovCL(mod, cluster = trim_df$collection_id)
-coeftest(mod, vcov = vcovCL, cluster = trim_df$collection_id)
+mod_df = trim_df
+mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=mod_df)
+cluster_vcov <- vcovCL(mod, cluster = mod_df$species_id)
+coeftest(mod, vcov = vcovCL, cluster = mod_df$species_id)
 saveRDS(mod, paste0(wdir, "out\\second_stage\\ss_mod.rds"))
 
 
@@ -405,7 +417,7 @@ margins_plot <- ggplot(predictions, aes(x = cwd.spstd)) +
   ylab("Predicted sensitivity\nto CWD") + 
   theme_bw(base_size = 22) +
   scale_y_continuous(labels = scales::scientific)
-
+margins_plot
 
 histogram <- ggplot(plot_dat, aes(x = cwd.spstd)) + 
   geom_histogram(bins = 40, alpha=0.8, fill = "#404788FF") +
@@ -424,6 +436,95 @@ ggsave(paste0(wdir, 'figures\\cwd_margins.svg'), plot = out_fig, width = 15, hei
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Robustness tests --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# No weights
+flm_df <- flm_df %>% 
+  mutate(equal_weights = 1)
+
+# Trimming
+flm_df <- flm_df %>% 
+  mutate(trim_y = estimate_cwd.an>cwd_est_bounds[1] & estimate_cwd.an<cwd_est_bounds[2],
+         trim_x = cwd.spstd>cwd_spstd_bounds[1] & cwd.spstd<cwd_spstd_bounds[2] & 
+                  pet.spstd>pet_spstd_bounds[1] & pet.spstd<pet_spstd_bounds[2])
+
+trim_y <- list(TRUE)
+trim_x <- list(TRUE, FALSE)
+# cluster_level <- list(list(TRUE, "species_id"), list(FALSE, "collection_id"))
+cluster_level <- list(list(FALSE, "collection_id"))
+weighting <- list(list(TRUE, FALSE, "errorweights"), list(FALSE, TRUE, "errorweights2"), list(FALSE, FALSE, "equalweights"))
+# gymno_angio <- list(list(TRUE, FALSE, "gymno"), list(FALSE, TRUE, "angio"), list(TRUE, TRUE, c("gymno", "angio")))
+gymno_angio <- list(list(TRUE, TRUE, c("gymno", "angio")))
+equations <- list(list(FALSE, FALSE, "estimate_cwd.an ~ cwd.spstd + pet.spstd"), 
+                  list(FALSE, TRUE, "estimate_cwd.an ~ cwd.spstd + pet.spstd + I(cwd.spstd**2) + I(pet.spstd**2)"), 
+                  list(TRUE, FALSE, "estimate_cwd.an ~ cwd.spstd + pet.spstd + factor(species_id)"),
+                  list(TRUE, TRUE, "estimate_cwd.an ~ cwd.spstd + pet.spstd + I(cwd.spstd**2) + I(pet.spstd**2) + factor(species_id)"))
+
+
+specs <- data.frame(coef=NaN, 
+                    se=NaN, 
+                    trim_x = NaN, trim_y = NaN, 
+                    weight_se = NaN, weight_n = NaN,
+                    include_gymno = NaN, include_angio = NaN,
+                    species_control = NaN, squared_term = NaN,
+                    species_cluster = NaN)
+i = 1
+for (t_y in trim_y){
+  for (t_x in trim_x){
+    for(wght in weighting){
+      for (g_a in gymno_angio){
+        for (eqn in equations){
+          for(c_lvl in cluster_level){
+            data <- flm_df %>% filter(gymno_angio %in% g_a[[3]])
+            if (t_x) {data <- data %>% filter(trim_x==TRUE)}
+            if (t_y) {data <- data %>% filter(trim_y==TRUE)}
+            mod <- lm(eqn[[3]], weights = data[[wght[[3]]]], data=data)
+            cluster_vcov <- vcovCL(mod, cluster = data[[c_lvl[[2]]]])
+            mod <- coeftest(mod, vcov = vcovCL, cluster = data[[c_lvl[[2]]]])
+            specs[i,] <- data_frame(coef = mod[2,1],
+                                    se = mod[2,2],
+                                    trim_x = t_x,
+                                    trim_y = t_y,
+                                    weight_se = wght[[1]],
+                                    weight_n = wght[[2]],
+                                    include_gymno = g_a[[1]],
+                                    include_angio = g_a[[2]],
+                                    species_control = eqn[[1]],
+                                    squared_term = eqn[[2]],
+                                    species_cluster = c_lvl[[1]])
+            i <- i+1
+          }
+        }
+      }
+    }
+  }
+}
+
+specs <- specs %>% drop_na()
+specs <- specs %>% 
+  select(-include_gymno, -include_angio, -trim_y)
+
+specs <- specs %>% 
+  select(-species_cluster)
+
+highlight_n <- which(specs$trim_x == TRUE  &
+                     # specs$species_cluster == FALSE &
+                     # specs$trim_y == TRUE &
+                     specs$weight_se == TRUE &
+                     specs$weight_n == FALSE &
+                     specs$species_control == FALSE &
+                     specs$squared_term == FALSE)
+
+
+schart(specs, highlight=highlight_n, order = "increasing", ci = c(.95, .99))
+
+
+labels <- list("Trimming:" = c("Trim outliers"),
+               "Weighting:" = c("Inverse s.e.", "Square root of n"),
+               "Controls" = c("Squared CWD and PET", "Species fixed effects"))
+
+schart(specs, labels, highlight=highlight_n, order = "increasing", ci = c(.95, .99), adj=c(0,0), offset=c(5.5,5), ylab = "Slope of line relating\nsites' historic CWD to\nCWD's impact on growth")
+
+
+
 # Squared terms
 sq_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd + I(cwd.spstd^2) + I(pet.spstd^2), weights = errorweights, data=trim_df)
 coeftest(sq_mod, vcov = vcovCL, cluster = trim_df$collection_id)
@@ -442,6 +543,9 @@ margins_plot <- ggplot(sq_predictions, aes(x = cwd.spstd)) +
   theme_bw(base_size = 22) +
   scale_y_continuous(labels = scales::scientific)
 margins_plot
+
+
+
 
 # Drop PET
 nopet_mod <- lm(estimate_cwd.an ~ cwd.spstd, weights = errorweights, data=trim_df)
