@@ -393,7 +393,7 @@ coeftest(mod, vcov = vcovCL, cluster = mod_df$species_id)
 saveRDS(mod, paste0(wdir, "out\\second_stage\\ss_mod.rds"))
 
 
-pet_mod <- lm(estimate_pet.an ~ cwd.spstd + pet.spstd, weights = pet_errorweights, data=flm_df)
+pet_mod <- lm(estimate_pet.an ~ cwd.spstd + pet.spstd, weights = pet_errorweights, data=mod_df)
 cluster_vcov <- vcovCL(pet_mod, cluster = flm_df$collection_id)
 coeftest(pet_mod, cluster = flm_df$collection_id)
 saveRDS(pet_mod, paste0(wdir, "out\\second_stage\\pet_ss_mod.rds"))

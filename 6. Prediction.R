@@ -44,6 +44,9 @@ load(clim_file)
 cwd_historic <- sum(cwd_historic)
 aet_historic <- sum(aet_historic)
 pet_historic <- aet_historic + cwd_historic
+names(cwd_historic) = "cwd"
+names(pet_historic) = "pet"
+clim_historic <- raster::brick(list(cwd_historic, pet_historic))
 
 # 3. Climate projections from CMIP5
 cmip <- load(paste0(wdir, 'in\\CMIP5 CWD\\cmip5_cwdaet_end.Rdat'))
@@ -153,16 +156,13 @@ ggsave(paste0(wdir, 'figures\\cwd_change.svg'), plot = binned_change)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Calculate deviation from species' historic range ---------------
+# Rescale CMIP predictions into species standardized climate ---------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Define species
-# spp_code <- "pipo"
 species_list <- niche %>% 
   select(sp_code) %>% 
   left_join(sp_info, by = "sp_code")
-# species_list <- species_list %>% 
-#   filter(genus == "Pinus")
-rasterize_spstd <- function(spp_code){
+
+rasterize_spstd <- function(spp_code, clim_raster){
   sp_niche <- niche %>%
     drop_na() %>% 
     filter(sp_code == spp_code) %>% 
@@ -170,22 +170,33 @@ rasterize_spstd <- function(spp_code){
   
   sp_range <- range_sf %>% 
     filter(sp_code == spp_code)
-  pet_historic_sp <- pet_historic %>%  
+  pet_sp <- clim_raster %>%
+    subset("pet") %>% 
     mask(sp_range)
-  pet_historic_spstd <- (pet_historic_sp - sp_niche$pet_mean) / sp_niche$pet_sd
-  names(pet_historic_spstd) = "pet.spstd"
+  pet_spstd <- (pet_sp - sp_niche$pet_mean) / sp_niche$pet_sd
+  names(pet_spstd) = "pet.spstd"
   
-  cwd_historic_sp <- cwd_historic %>% 
+  cwd_sp <- clim_raster %>% 
+    subset("cwd") %>% 
     mask(sp_range)
-  cwd_historic_spstd <- (cwd_historic_sp - sp_niche$cwd_mean) / sp_niche$cwd_sd
-  names(cwd_historic_spstd) = "cwd.spstd"
+  cwd_spstd <- (cwd_sp - sp_niche$cwd_mean) / sp_niche$cwd_sd
+  names(cwd_spstd) = "cwd.spstd"
   
-  clim.spstd <- raster::brick(list(cwd_historic_spstd, pet_historic_spstd))
+  clim.spstd <- raster::brick(list(cwd_spstd, pet_spstd))
   return(clim.spstd)
 }
 
-sp_predictions <- species_list %>% 
-  mutate(clim_historic_sp = map(sp_code, rasterize_spstd))
+clim_future <- (cmip_projections[1,2] %>% pull())[[1]]  # TODO: Should iterate across all CMIP models. How best to represent both intra- and intermodel variation?
+
+species_predictions <- species_list %>% 
+  mutate(clim_future_sp = map(.x = sp_code, clim_raster = clim_future, .f = rasterize_spstd))
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Calculate deviation from species' historic range ---------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+sp_predictions <- species_predictions %>% 
+  mutate(clim_historic_sp = map(.x = sp_code, clim_raster = clim_historic, .f = rasterize_spstd))
 
 # sp_niche <- niche %>%
 #   drop_na() %>% 
@@ -233,19 +244,23 @@ sp_predictions <- sp_predictions %>%
 calc_rwi <- function(cmip_rast, sensitivity){
   cwd_sens = sensitivity %>% subset("cwd_sens")
   pet_sens = sensitivity %>% subset("pet_sens")
-  rwi_rast <- cmip_rast$cwd * cwd_sens + cmip_rast$pet * pet_sens
+  rwi_rast <- cmip_rast$cwd.spstd * cwd_sens + cmip_rast$pet.spstd * pet_sens
   return(rwi_rast)
 }
 
-rwi_cmip_predict <- function(sensitivity){
-  sp_predictions <- cmip_projections %>% 
-    mutate(rwi_rast = map(cmip_rast, calc_rwi, sensitivity = sensitivity)) %>% 
-    pull(rwi_rast)
-  return(sp_predictions)
-}
-
 sp_predictions <- sp_predictions %>% 
-  mutate(rwi_predictions = map(sensitivity, rwi_cmip_predict))
+  mutate(rwi_predictions = map2(.x = clim_future_sp, .y = sensitivity, calc_rwi))
+
+
+# rwi_cmip_predict <- function(sensitivity){
+#   sp_predictions <- cmip_projections %>% 
+#     mutate(rwi_rast = map(cmip_rast, calc_rwi, sensitivity = sensitivity)) %>% 
+#     pull(rwi_rast)
+#   return(sp_predictions)
+# }
+# 
+# sp_predictions <- sp_predictions %>% 
+#   mutate(rwi_predictions = map(sensitivity, rwi_cmip_predict))
 
 extract_predictions <- function(clim_historic_sp, rwi_predictions){
   predict_rasters <- raster::brick(c(clim_historic_sp, rwi_predictions))
@@ -258,10 +273,10 @@ extract_predictions <- function(clim_historic_sp, rwi_predictions){
 sp_predictions <- sp_predictions %>% 
   mutate(predict_df = map2(clim_historic_sp, rwi_predictions, extract_predictions))
 
-sp_predictions <- sp_predictions %>% 
+sp_predictions_df <- sp_predictions %>% 
   select(sp_code, predict_df) %>% 
   unnest(predict_df) %>% 
-  pivot_longer(c(-sp_code, -cwd.spstd, -pet.spstd), names_to = "cmip_run", values_to = "ln_rwi")
+  pivot_longer(c(-sp_code, -cwd.spstd, -pet.spstd), names_to = "cmip_run", values_to = "rwi")
 
 
 ### Binned plot of cwd sensitivity
@@ -269,6 +284,7 @@ nbins = 21
 label_gaps <- 5
 label_pattern <- seq(1,nbins,label_gaps)
 plot_dat <- sp_predictions %>% 
+  # filter(sp_code == "pila") %>% 
   mutate(cwd.q = as.numeric(ntile(cwd.spstd, nbins)),
          pet.q = as.numeric(ntile(pet.spstd, nbins)))
 
@@ -285,7 +301,7 @@ group_dat <- plot_dat %>%
   group_by(cwd.q, pet.q) %>% 
   dplyr::summarize(ln_rwi = mean(ln_rwi, na.rm = TRUE),
                    n = n()) %>% 
-  filter(n>1000)
+  filter(n>100)
 
 
 binned_margins <- group_dat %>% 
@@ -302,10 +318,9 @@ binned_margins <- group_dat %>%
   coord_fixed()
 
 binned_margins 
-ggsave(paste0(wdir, 'figures\\predicted_rwi.svg'), plot = binned_margins)
-
-
 combined_plot <- binned_change / binned_margins
+
+ggsave(paste0(wdir, 'figures\\predicted_rwi.svg'), plot = binned_margins)
 ggsave(paste0(wdir, 'figures\\climate_change.svg'), plot = combined_plot, width = 7, height = 11, units = "in")
 
 
