@@ -34,7 +34,6 @@ library(prediction)
 wdir <- 'remote\\'
 
 # 1. Second stage model
-mod <- readRDS(paste0(wdir, "out\\second_stage\\psme_mod.rds"))
 mod <- readRDS(paste0(wdir, "out\\second_stage\\ss_mod.rds"))
 pet_mod <- readRDS(paste0(wdir, "out\\second_stage\\pet_ss_mod.rds"))
 
@@ -111,7 +110,8 @@ clim_smry <- clim_smry %>%
   as.data.frame() %>% 
   drop_na() %>% 
   pivot_longer(c(-cwd.hist, -pet.hist), names_to = "cmip_mod", values_to = "future_cwd") %>% 
-  mutate(cwd_change = (future_cwd - cwd.hist))
+  mutate(cwd_change = (future_cwd - cwd.hist),
+         cwd_pct_change = 100 * cwd_change / cwd.hist)
 
 # Plot change in cwd
 nbins = 26
@@ -131,10 +131,12 @@ cwd.breaks = seq(0.5, nbins+0.5, 1)
 pet.breaks = seq(0.5, nbins+0.5, 1)
 
 group_dat <- plot_dat %>% 
+  filter(cwd.hist>100) %>% 
   group_by(cwd.q, pet.q) %>% 
-  dplyr::summarize(cwd_change = mean(cwd_change, na.rm = TRUE),
+  dplyr::summarize(cwd_pct_change = mean(cwd_pct_change, na.rm = TRUE),
+                   cwd_change = mean(cwd_change, na.rm = TRUE),
                    n = n()) %>% 
-  filter(n>100)
+  filter(n>1000)
 
 binned_change <- group_dat %>% 
   ggplot(aes(x = cwd.q, y = pet.q, fill = cwd_change)) +
@@ -151,7 +153,7 @@ binned_change <- group_dat %>%
   xlab(bquote("Historic CWD (mmH"[2]*"O)")) + 
   coord_fixed()
 
-binned_change 
+binned_change
 ggsave(paste0(wdir, 'figures\\cwd_change.svg'), plot = binned_change)
 
 
@@ -232,6 +234,81 @@ predict_sens <- function(clim_historic_sp){
 
 sp_predictions <- sp_predictions %>% 
   mutate(sensitivity = map(clim_historic_sp, predict_sens))
+
+sp_select = "tsca"
+sens  <- (sp_predictions %>% filter(sp_code == sp_select) %>% pull(sensitivity))[[1]]
+sens <- sens %>% subset("pet_sens")
+data <- as.data.frame(sens,xy = TRUE)
+data <- data %>% drop_na()
+xlims <- c(round(min(data$x) - 1), round(max(data$x) + 1))
+ylims <- c(round(min(data$y) - 1), round(max(data$y) + 1))
+
+# Plot species ranges
+world <- ne_coastline(scale = "medium", returnclass = "sf")
+map <- ggplot() +
+  geom_sf(data = world) +
+  geom_raster(data = data, aes(x = x, y = y, fill = pet_sens)) +
+  theme_bw(base_size = 22)+
+  ylab("Latitude")+
+  xlab("Longitude")+
+  scale_fill_viridis_c(direction = -1) +
+  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE)
+map
+
+
+sens  <- (sp_predictions %>% filter(sp_code == "tsca") %>% pull(sensitivity))[[1]]
+sens <- sens %>% subset("cwd_sens")
+data <- as.data.frame(sens,xy = TRUE)
+data <- data %>% drop_na()
+
+# Plot species ranges
+world <- ne_coastline(scale = "medium", returnclass = "sf")
+map <- ggplot() +
+  geom_sf(data = world) +
+  geom_raster(data = data, aes(x = x, y = y, fill = cwd_sens)) +
+  theme_bw(base_size = 22)+
+  ylab("Latitude")+
+  xlab("Longitude")+
+  scale_fill_viridis_c(direction = -1) +
+  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE)
+map
+
+
+
+sens  <- (sp_predictions %>% filter(sp_code == "tsca") %>% pull(clim_historic_sp))[[1]]
+sens <- sens %>% subset("cwd.spstd")
+data <- as.data.frame(sens,xy = TRUE)
+data <- data %>% drop_na()
+
+# Plot species ranges
+map <- ggplot() +
+  geom_sf(data = world) +
+  geom_raster(data = data, aes(x = x, y = y, fill = cwd.spstd)) +
+  theme_bw(base_size = 22)+
+  ylab("Latitude")+
+  xlab("Longitude")+
+  scale_fill_viridis_c(direction = -1) +
+  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE)
+map
+
+
+sens  <- (sp_predictions %>% filter(sp_code == "tsca") %>% pull(clim_historic_sp))[[1]]
+sens <- sens %>% subset("pet.spstd")
+data <- as.data.frame(sens,xy = TRUE)
+data <- data %>% drop_na()
+
+# Plot species ranges
+world <- ne_coastline(scale = "medium", returnclass = "sf")
+map <- ggplot() +
+  geom_sf(data = world) +
+  geom_raster(data = data, aes(x = x, y = y, fill = pet.spstd)) +
+  theme_bw(base_size = 22)+
+  ylab("Latitude")+
+  xlab("Longitude")+
+  scale_fill_viridis_c(direction = -1) +
+  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE)
+map
+
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Predict growth deviation from future climate ---------------
