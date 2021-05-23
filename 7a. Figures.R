@@ -43,30 +43,66 @@ select <- dplyr::select
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+### Define path
+wdir <- 'remote\\'
+
+# 1. Site-level regressions
+flm_df <- read_csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv")) %>%
+  select(-X1)
 
 # 2. Species range maps
 range_file <- paste0(wdir, 'in//species_ranges//merged_ranges.shp')
 range_sf <- st_read(range_file)
 
-# 4. Site information
+# 3. Site information
 site_smry <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
 site_smry <- site_smry %>% 
   select(collection_id, sp_id, latitude, longitude) %>% 
   mutate(species_id = tolower(sp_id)) %>% 
   select(-sp_id)
+site_loc <- site_smry %>% 
+  select(collection_id, latitude, longitude)
+flm_df <- flm_df %>% 
+  left_join(site_loc, by = "collection_id")
 
-# 5. Species information
+# 4. Species information
 sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
 sp_info <- sp_info %>% 
   select(species_id, genus, gymno_angio, family)
 site_smry <- site_smry %>% 
   left_join(sp_info, by = c("species_id"))
 
+# 5. Prediction rasters
+sp_predictions <- readRDS(paste0(wdir, "out/predictions/sq_sp_predictions.rds"))
 
-# 1. Historic climate raster
-clim_file <- paste0(wdir, 'in//CRUData//historic_raster//HistoricCWD_AETGrids_Annual.Rdat')
-load(clim_file)
-cwd_historic <- cwd_historic %>% mean(na.rm = TRUE)
+
+
+# # 2. Species range maps
+# range_file <- paste0(wdir, 'in//species_ranges//merged_ranges.shp')
+# range_sf <- st_read(range_file)
+# 
+# # 4. Site information
+# site_smry <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
+# site_smry <- site_smry %>% 
+#   select(collection_id, sp_id, latitude, longitude) %>% 
+#   mutate(species_id = tolower(sp_id)) %>% 
+#   select(-sp_id)
+# 
+# # 5. Species information
+# sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
+# sp_info <- sp_info %>% 
+#   select(species_id, genus, gymno_angio, family)
+# site_smry <- site_smry %>% 
+#   left_join(sp_info, by = c("species_id"))
+# 
+# # 5. Prediction rasters
+# sp_predictions <- readRDS(paste0(wdir, "out/predictions/sq_sp_predictions.rds"))
+# 
+# 
+# # 1. Historic climate raster
+# clim_file <- paste0(wdir, 'in//CRUData//historic_raster//HistoricCWD_AETGrids_Annual.Rdat')
+# load(clim_file)
+# cwd_historic <- cwd_historic %>% mean(na.rm = TRUE)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Summarize ITRDB species frequencies ------------------------------------
@@ -216,21 +252,7 @@ map
 # coord_sf(xlim = c(-10, 60), ylim = c(30, 55), expand = FALSE) ## Europe
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Plot climate overlap of observations and species range -----------------
+# Plot change in RWI across all species in climatic space -----------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-plot(cwd_historic)
-plot(pet_historic)
-plot(aet_historic)
-
-
-ggplot(data = aet_vals %>% as.data.frame(), aes(x=.)) +
-  geom_histogram()
-ggplot(data = cwd_vals %>% as.data.frame(), aes(x=.)) +
-  geom_histogram()
-
-hex <- clim_df %>% 
-  ggplot(aes(x = cwd, y = aet)) +
-  geom_hex()
-hex
 
 
