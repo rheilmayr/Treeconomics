@@ -105,6 +105,186 @@ sp_predictions <- readRDS(paste0(wdir, "out/predictions/sq_sp_predictions.rds"))
 # cwd_historic <- cwd_historic %>% mean(na.rm = TRUE)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Stack rasters ------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+create_prediction_df <- function(spp_predictions){
+  sp_fut <- (spp_predictions %>% 
+               pull(clim_future_sp))[[1]]
+  names(sp_fut) <- c("cwd.fut", "pet.fut")
+  
+  sp_hist <- (spp_predictions %>% 
+                pull(clim_historic_sp))[[1]]
+  sp_sens  <- (spp_predictions %>% 
+                 pull(sensitivity))[[1]]
+  sp_rwi  <- (spp_predictions %>% 
+                pull(rwi_predictions))[[1]]
+  names(sp_rwi) <- "rwi"
+  
+  clim_compare <- brick(c(sp_fut, sp_hist, sp_sens, sp_rwi))
+  clim_compare <- clim_compare %>% 
+    as.data.frame(xy = TRUE) %>% 
+    drop_na()
+  return(clim_compare)
+}
+
+sp_predictions <- sp_predictions %>% 
+  group_by(sp_code) %>% 
+  nest() %>% 
+  mutate(pred_df = map(data, create_prediction_df)) %>% 
+  select(-data) %>% 
+  unnest(cols = pred_df) %>% 
+  mutate(cwd_change = cwd.fut - cwd.spstd,
+         pet_change = pet.fut - pet.spstd)
+
+sp_predictions %>% 
+  ggplot(aes(x = cwd.spstd, y = cwd_sens)) +
+  geom_point(color = "dark blue", alpha = 0.5) +
+  xlim(c(-2,2)) +
+  # ylim(c(-.5,.3)) +
+  theme_bw() +
+  stat_smooth(method = "gam", formula = y ~ s(x), size = 1, color = "red")
+
+
+sp_predictions %>% 
+  ggplot(aes(x = cwd.spstd, y = rwi)) +
+  geom_point(color = "dark blue", alpha = 0.5) +
+  xlim(c(-2,2)) +
+  ylim(c(-.3,.3)) +
+  theme_bw() +
+  stat_smooth(method = "gam", formula = y ~ s(x), size = 1, color = "red")
+
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Main summary figure ------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+plot_dat <- sp_predictions %>%
+  filter(((abs(cwd.spstd)<2.5) & (abs(pet.spstd<2.5)))) %>%
+  drop_na()
+
+seq_min <- -2.625
+seq_max <- 2.625
+seq_inc <- 0.25
+sequence <- seq(seq_min, seq_max, seq_inc)
+convert_bin <- function(n){
+  sequence[n] + 0.125
+}
+plot_dat <- plot_dat %>% 
+  mutate(cwd.q = cut(cwd.spstd, breaks = sequence, labels = FALSE),
+         cwd.q = convert_bin(cwd.q),
+         pet.q = cut(pet.spstd, breaks = sequence, labels = FALSE),
+         pet.q = convert_bin(pet.q))
+
+
+plot_dat <- plot_dat %>% 
+  group_by(cwd.q, pet.q) %>% 
+  summarize(rwi = mean(rwi, na.rm = TRUE),
+            cwd_sens = mean(cwd_sens, na.rm = TRUE),
+            pet_sens = mean(pet_sens, na.rm = TRUE),
+            cwd_change = mean(cwd_change, na.rm = TRUE),
+            pet_change = mean(pet_change, na.rm = TRUE),
+            n = n()) %>% 
+  filter(n>15)
+
+
+### CWD sensitivity
+cwd_sens_bin <- plot_dat %>% 
+  ggplot(aes(x = cwd.q, y = pet.q, fill = cwd_sens)) +
+  geom_tile() +
+  xlim(c(-2.5, 2.5)) +
+  ylim(c(-2.5, 2.5)) +
+  scale_fill_viridis_c(direction = -1, option = "viridis") +
+  theme_bw(base_size = 10)+
+  ylab("Deviation from mean PET")+
+  xlab("Deviation from mean CWD")+
+  theme(legend.position = "left") +
+  labs(fill = "Predicted\nsensitivity\nto CWD") +
+  ylab("Historic PET\n(Deviation from species mean)") +
+  xlab("Historic CWD\n(Deviation from species mean)") + 
+  coord_fixed()
+cwd_sens_bin
+
+### PET sensitivity
+pet_sens_bin <- plot_dat %>% 
+  ggplot(aes(x = cwd.q, y = pet.q, fill = pet_sens)) +
+  geom_tile() +
+  xlim(c(-2.5, 2.5)) +
+  ylim(c(-2.5, 2.5)) +
+  scale_fill_viridis_c(direction = -1, option = "viridis") +
+  theme_bw(base_size = 10)+
+  ylab("Deviation from mean PET")+
+  xlab("Deviation from mean CWD")+
+  theme(legend.position = "left") +
+  labs(fill = "Predicted\nsensitivity\nto PET") +
+  ylab("Historic PET\n(Deviation from species mean)") +
+  xlab("Historic CWD\n(Deviation from species mean)") + 
+  coord_fixed()
+pet_sens_bin
+
+
+### CWD change
+cwd_change_bin <- plot_dat %>% 
+  ggplot(aes(x = cwd.q, y = pet.q, fill = cwd_change)) +
+  geom_tile() +
+  xlim(c(-2.5, 2.5)) +
+  ylim(c(-2.5, 2.5)) +
+  scale_fill_viridis_c(direction = 1, option = "plasma") +
+  theme_bw(base_size = 10)+
+  ylab("Deviation from mean PET")+
+  xlab("Deviation from mean CWD")+
+  theme(legend.position = "left") +
+  labs(fill = "Predicted change\nin CWD (std)") +
+  ylab("Historic PET\n(Deviation from species mean)") +
+  xlab("Historic CWD\n(Deviation from species mean)") + 
+  coord_fixed()
+cwd_change_bin
+
+### PET change
+pet_change_bin <- plot_dat %>% 
+  ggplot(aes(x = cwd.q, y = pet.q, fill = pet_change)) +
+  geom_tile() +
+  xlim(c(-2.5, 2.5)) +
+  ylim(c(-2.5, 2.5)) +
+  scale_fill_viridis_c(direction = 1, option = "plasma") +
+  theme_bw(base_size = 10)+
+  ylab("Deviation from mean PET")+
+  xlab("Deviation from mean CWD")+
+  theme(legend.position = "left") +
+  labs(fill = "Predicted change\nin PET (std)") +
+  ylab("Historic PET\n(Deviation from species mean)") +
+  xlab("Historic CWD\n(Deviation from species mean)") + 
+  coord_fixed()
+pet_change_bin
+
+
+### RWI change
+rwi_bin <- plot_dat %>% 
+  ggplot(aes(x = cwd.q, y = pet.q, fill = rwi)) +
+  geom_tile() +
+  xlim(c(-2.5, 2.5)) +
+  ylim(c(-2.5, 2.5)) +
+  scale_fill_viridis_c(direction = -1, option = "magma") +
+  theme_bw(base_size = 10)+
+  ylab("Deviation from mean PET")+
+  xlab("Deviation from mean CWD")+
+  theme(legend.position = "left") +
+  labs(fill = "Predicted change\nin RWI") +
+  ylab("Historic PET\n(Deviation from species mean)") +
+  xlab("Historic CWD\n(Deviation from species mean)") + 
+  coord_fixed()
+rwi_bin
+
+
+((cwd_sens_bin | pet_sens_bin) / (cwd_change_bin | pet_change_bin)) / rwi_bin
+
+
+
+
+
+
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Summarize ITRDB species frequencies ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
