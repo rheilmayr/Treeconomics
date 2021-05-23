@@ -158,20 +158,26 @@ cwd_est_bounds = quantile(flm_df$estimate_cwd.an, c(0.01, 0.99),na.rm=T)
 cwd_spstd_bounds = quantile(flm_df$cwd.spstd, c(0.01, 0.99), na.rm = T)
 pet_spstd_bounds = quantile(flm_df$pet.spstd, c(0.01, 0.99), na.rm = T)
 
+
+flm_df <- flm_df %>% 
+  mutate(outlier = (estimate_cwd.an<cwd_est_bounds[1]) |
+           (estimate_cwd.an>cwd_est_bounds[2]) |
+           (cwd.spstd<cwd_spstd_bounds[1]) |
+           (cwd.spstd>cwd_spstd_bounds[2]) |
+           (pet.spstd<pet_spstd_bounds[1]) |
+           (pet.spstd>pet_spstd_bounds[2]))
+           
+
+flm_df %>% write.csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv"))
+
 # flm_df <- flm_df %>%
 #   # group_by(species_id) %>%
 #   mutate() %>%
 #   ungroup()
 
-trim_df <- flm_df %>%
-  filter(estimate_cwd.an>cwd_est_bounds[1],
-         estimate_cwd.an<cwd_est_bounds[2],
-         cwd.spstd>cwd_spstd_bounds[1],
-         cwd.spstd<cwd_spstd_bounds[2],
-         pet.spstd>pet_spstd_bounds[1],
-         pet.spstd<pet_spstd_bounds[2]) %>% 
+trim_df <- flm_df %>% 
+  filter(outlier==0) %>% 
   drop_na()
-
 
 
   #        abs(cwd.spstd)<5,
@@ -392,6 +398,8 @@ cluster_vcov <- vcovCL(mod, cluster = mod_df$species_id)
 coeftest(mod, vcov = vcovCL, cluster = mod_df$species_id)
 saveRDS(mod, paste0(wdir, "out\\second_stage\\ss_mod.rds"))
 
+# saveRDS(sq_pet_mod, paste0(wdir, "out\\second_stage\\ss_sq_pet_mod.rds"))
+
 
 pet_mod <- lm(estimate_pet.an ~ cwd.spstd + pet.spstd, weights = pet_errorweights, data=mod_df)
 cluster_vcov <- vcovCL(pet_mod, cluster = flm_df$collection_id)
@@ -543,6 +551,31 @@ margins_plot <- ggplot(sq_predictions, aes(x = cwd.spstd)) +
   theme_bw(base_size = 22) +
   scale_y_continuous(labels = scales::scientific)
 margins_plot
+
+
+sq_pet_mod <- lm(estimate_pet.an ~ cwd.spstd + pet.spstd + I(cwd.spstd^2) + I(pet.spstd^2), weights = errorweights, data=trim_df)
+
+
+# sq_pet_predictions <- prediction(sq_mod, at = list(pet.spstd = seq(xmin, xmax, .1)), vcov = sq_cluster_vcov, calculate_se = T) %>%
+#   summary() %>%
+#   rename(pet.spstd = "at(pet.spstd)")
+# 
+# margins_plot <- ggplot(sq_pet_predictions, aes(x = cwd.spstd)) +
+#   geom_line(aes(y = Prediction), size = 2) +
+#   geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
+#   geom_line(aes(y = upper), linetype = 3) +
+#   geom_line(aes(y = lower), linetype = 3) +
+#   geom_hline(yintercept = 0, linetype = 2) +
+#   xlab("Historic PET\n(Deviation from species mean)") +
+#   ylab("Predicted sensitivity\nto CWD") +
+#   theme_bw(base_size = 22) +
+#   scale_y_continuous(labels = scales::scientific)
+# margins_plot
+# 
+# sq_all_predictions = sq_pet_predictions %>% rename(cwd.spstd = pet.spstd) + sq_predictions
+# 
+# flm_df %>% filter(species_id == "tsme") %>%  ggplot(aes(x = cwd.spstd, y = estimate_cwd.an)) + geom_point() + ylim(c(-.5,.5))
+
 
 
 
