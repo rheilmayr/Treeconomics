@@ -37,6 +37,10 @@ wdir <- 'remote\\'
 mod <- readRDS(paste0(wdir, "out\\second_stage\\ss_mod.rds"))
 pet_mod <- readRDS(paste0(wdir, "out\\second_stage\\pet_ss_mod.rds"))
 
+# mod <- readRDS(paste0(wdir, "out\\second_stage\\ss_sq_mod.rds"))
+# pet_mod <- readRDS(paste0(wdir, "out\\second_stage\\ss_sq_pet_mod.rds"))
+
+
 # 2. Historic climate raster
 clim_file <- paste0(wdir, 'in\\CRUData\\historic_raster\\HistoricCWD_AETGrids.Rdat')
 load(clim_file)
@@ -188,16 +192,34 @@ rasterize_spstd <- function(spp_code, clim_raster){
   return(clim.spstd)
 }
 
-clim_future <- (cmip_projections[1,2] %>% pull())[[1]]  # TODO: Should iterate across all CMIP models. How best to represent both intra- and intermodel variation?
+select_lyr <- function(brick, layer_name){
+  lyr <- brick %>% subset(layer_name)
+  return(lyr)
+}
 
-species_predictions <- species_list %>% 
+cmip_projections <- cmip_projections %>% 
+  mutate(cwd_rast = map(.x = cmip_rast, subset = "cwd", .f = subset),
+         pet_rast = map(.x = cmip_rast, subset = "pet", .f = subset))
+
+
+cwd_proj_mean <- brick(cmip_projections$cwd_rast) %>%  
+  calc(mean)
+
+pet_proj_mean <- brick(cmip_projections$pet_rast) %>% 
+  calc(mean)
+  
+clim_future <- brick(c(cwd_proj_mean, pet_proj_mean))  # TODO: In future, should incorporate variation across CMIP models rather than just mean. MC based off std in models? Bootstrap individual CMIP models?
+names(clim_future) = c("cwd", "pet")
+# clim_future <- (cmip_projections[1,2] %>% pull())[[1]]  
+
+sp_predictions <- species_list %>% 
   mutate(clim_future_sp = map(.x = sp_code, clim_raster = clim_future, .f = rasterize_spstd))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Calculate deviation from species' historic range ---------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-sp_predictions <- species_predictions %>% 
+sp_predictions <- sp_predictions %>% 
   mutate(clim_historic_sp = map(.x = sp_code, clim_raster = clim_historic, .f = rasterize_spstd))
 
 # sp_niche <- niche %>%
@@ -234,80 +256,6 @@ predict_sens <- function(clim_historic_sp){
 
 sp_predictions <- sp_predictions %>% 
   mutate(sensitivity = map(clim_historic_sp, predict_sens))
-
-sp_select = "tsca"
-sens  <- (sp_predictions %>% filter(sp_code == sp_select) %>% pull(sensitivity))[[1]]
-sens <- sens %>% subset("pet_sens")
-data <- as.data.frame(sens,xy = TRUE)
-data <- data %>% drop_na()
-xlims <- c(round(min(data$x) - 1), round(max(data$x) + 1))
-ylims <- c(round(min(data$y) - 1), round(max(data$y) + 1))
-
-# Plot species ranges
-world <- ne_coastline(scale = "medium", returnclass = "sf")
-map <- ggplot() +
-  geom_sf(data = world) +
-  geom_raster(data = data, aes(x = x, y = y, fill = pet_sens)) +
-  theme_bw(base_size = 22)+
-  ylab("Latitude")+
-  xlab("Longitude")+
-  scale_fill_viridis_c(direction = -1) +
-  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE)
-map
-
-
-sens  <- (sp_predictions %>% filter(sp_code == "tsca") %>% pull(sensitivity))[[1]]
-sens <- sens %>% subset("cwd_sens")
-data <- as.data.frame(sens,xy = TRUE)
-data <- data %>% drop_na()
-
-# Plot species ranges
-world <- ne_coastline(scale = "medium", returnclass = "sf")
-map <- ggplot() +
-  geom_sf(data = world) +
-  geom_raster(data = data, aes(x = x, y = y, fill = cwd_sens)) +
-  theme_bw(base_size = 22)+
-  ylab("Latitude")+
-  xlab("Longitude")+
-  scale_fill_viridis_c(direction = -1) +
-  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE)
-map
-
-
-
-sens  <- (sp_predictions %>% filter(sp_code == "tsca") %>% pull(clim_historic_sp))[[1]]
-sens <- sens %>% subset("cwd.spstd")
-data <- as.data.frame(sens,xy = TRUE)
-data <- data %>% drop_na()
-
-# Plot species ranges
-map <- ggplot() +
-  geom_sf(data = world) +
-  geom_raster(data = data, aes(x = x, y = y, fill = cwd.spstd)) +
-  theme_bw(base_size = 22)+
-  ylab("Latitude")+
-  xlab("Longitude")+
-  scale_fill_viridis_c(direction = -1) +
-  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE)
-map
-
-
-sens  <- (sp_predictions %>% filter(sp_code == "tsca") %>% pull(clim_historic_sp))[[1]]
-sens <- sens %>% subset("pet.spstd")
-data <- as.data.frame(sens,xy = TRUE)
-data <- data %>% drop_na()
-
-# Plot species ranges
-world <- ne_coastline(scale = "medium", returnclass = "sf")
-map <- ggplot() +
-  geom_sf(data = world) +
-  geom_raster(data = data, aes(x = x, y = y, fill = pet.spstd)) +
-  theme_bw(base_size = 22)+
-  ylab("Latitude")+
-  xlab("Longitude")+
-  scale_fill_viridis_c(direction = -1) +
-  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE)
-map
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -350,11 +298,26 @@ extract_predictions <- function(clim_historic_sp, rwi_predictions){
 sp_predictions <- sp_predictions %>% 
   mutate(predict_df = map2(clim_historic_sp, rwi_predictions, extract_predictions))
 
+sp_predictions %>% 
+  saveRDS(file = paste0(wdir,"out/predictions/sp_predictions.rds") )
+
+
+
+
+
+
+
+
 sp_predictions_df <- sp_predictions %>% 
   select(sp_code, predict_df) %>% 
   unnest(predict_df) %>% 
   pivot_longer(c(-sp_code, -cwd.spstd, -pet.spstd), names_to = "cmip_run", values_to = "rwi")
 
+
+sp_predictions_df %>% 
+  filter(sp_code == "pisy") %>% 
+  ggplot(aes(x = cwd.spstd, y = rwi)) +
+  geom_point()
 
 ### Binned plot of cwd sensitivity
 nbins = 21
@@ -408,7 +371,7 @@ ggsave(paste0(wdir, 'figures\\climate_change.svg'), plot = combined_plot, width 
 #   return(mean_rwi)
 # }
 # 
-# sp_predictions <- sp_predictions %>% 
+# sp_predictions <- sp_predictions %>%
 #   mutate(rwi_2100 = map(rwi_predictions, calc_mean_rwi))
 
 
@@ -519,6 +482,146 @@ binned_margins <- group_dat %>%
   coord_fixed()
 
 binned_margins 
+
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Explore species-level climate / sensitivity ---------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Plot cwd deviation against historic cwd
+# Example species: East Coast - tsca; West coast - pipo; Mediterranean -  
+example_species <- "pila" # TODO: Dig into weird CWD censoring for ABAL, TSHE - guessing this is due to 0 CWD values
+sp_fut <- (sp_predictions %>% 
+             filter(sp_code == example_species) %>% 
+             pull(clim_future_sp))[[1]]
+sp_hist <- (sp_predictions %>% 
+              filter(sp_code == example_species) %>% 
+              pull(clim_historic_sp))[[1]]
+sp_sens  <- (sp_predictions %>% 
+               filter(sp_code == example_species) %>% 
+               pull(sensitivity))[[1]]
+
+names(sp_fut) <- c("cwd.fut", "pet.fut")
+clim_compare <- brick(c(sp_fut, sp_hist, sp_sens))
+clim_compare <- clim_compare %>% 
+  as.data.frame(xy = TRUE)
+
+clim_compare %>% 
+  ggplot(aes(x = cwd.spstd, y = cwd_sens)) +
+  geom_point() +
+  xlim(c(-2,2)) +
+  ylim(c(-.3,.3)) +
+  theme_bw()
+
+
+clim_compare %>% 
+  ggplot(aes(x = cwd.spstd, y = pet_sens)) +
+  geom_point() +
+  xlim(c(-2,2)) +
+  ylim(c(-.3,.3)) +
+  theme_bw()
+
+clim_compare %>% 
+  ggplot(aes(x = cwd.spstd, y = pet.spstd)) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0) +
+  coord_fixed() +
+  xlim(c(-2,2)) +
+  ylim(c(-2,2)) +
+  theme_bw()
+
+
+clim_compare %>% 
+  ggplot(aes(x = cwd.spstd, y = cwd.fut)) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0) +
+  coord_fixed() +
+  xlim(c(-4,4)) +
+  ylim(c(-4,4)) +
+  theme_bw()
+
+clim_compare %>% 
+  ggplot(aes(x = pet.spstd, y = pet.fut)) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0) +
+  coord_fixed() +
+  xlim(c(-2,2)) +
+  ylim(c(-2,2)) +
+  theme_bw()
+
+sens  <- (sp_predictions %>% filter(sp_code == example_species) %>% pull(sensitivity))[[1]]
+sens <- sens %>% subset("pet_sens")
+data <- as.data.frame(sens,xy = TRUE)
+data <- data %>% drop_na()
+xlims <- c(round(min(data$x) - 1), round(max(data$x) + 1))
+ylims <- c(round(min(data$y) - 1), round(max(data$y) + 1))
+
+# Plot species ranges
+world <- ne_coastline(scale = "medium", returnclass = "sf")
+map <- ggplot() +
+  geom_sf(data = world) +
+  geom_raster(data = data, aes(x = x, y = y, fill = pet_sens)) +
+  theme_bw(base_size = 22)+
+  ylab("Latitude")+
+  xlab("Longitude")+
+  scale_fill_viridis_c(direction = -1) +
+  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE)
+map
+
+
+sens  <- (sp_predictions %>% filter(sp_code == "tsca") %>% pull(sensitivity))[[1]]
+sens <- sens %>% subset("cwd_sens")
+data <- as.data.frame(sens,xy = TRUE)
+data <- data %>% drop_na()
+
+# Plot species ranges
+world <- ne_coastline(scale = "medium", returnclass = "sf")
+map <- ggplot() +
+  geom_sf(data = world) +
+  geom_raster(data = data, aes(x = x, y = y, fill = cwd_sens)) +
+  theme_bw(base_size = 22)+
+  ylab("Latitude")+
+  xlab("Longitude")+
+  scale_fill_viridis_c(direction = -1) +
+  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE)
+map
+
+
+
+sens  <- (sp_predictions %>% filter(sp_code == "tsca") %>% pull(clim_historic_sp))[[1]]
+sens <- sens %>% subset("cwd.spstd")
+data <- as.data.frame(sens,xy = TRUE)
+data <- data %>% drop_na()
+
+# Plot species ranges
+map <- ggplot() +
+  geom_sf(data = world) +
+  geom_raster(data = data, aes(x = x, y = y, fill = cwd.spstd)) +
+  theme_bw(base_size = 22)+
+  ylab("Latitude")+
+  xlab("Longitude")+
+  scale_fill_viridis_c(direction = -1) +
+  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE)
+map
+
+
+sens  <- (sp_predictions %>% filter(sp_code == "tsca") %>% pull(clim_historic_sp))[[1]]
+sens <- sens %>% subset("pet.spstd")
+data <- as.data.frame(sens,xy = TRUE)
+data <- data %>% drop_na()
+
+# Plot species ranges
+world <- ne_coastline(scale = "medium", returnclass = "sf")
+map <- ggplot() +
+  geom_sf(data = world) +
+  geom_raster(data = data, aes(x = x, y = y, fill = pet.spstd)) +
+  theme_bw(base_size = 22)+
+  ylab("Latitude")+
+  xlab("Longitude")+
+  scale_fill_viridis_c(direction = -1) +
+  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE)
+map
+
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
