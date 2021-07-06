@@ -19,6 +19,8 @@ library(stringr)
 library(raster)
 library(rgdal)
 library(viridis)
+library(patchwork)
+library(effects)
 select <- dplyr::select
 
 
@@ -58,6 +60,8 @@ site_smry <- site_smry %>%
 # 5. Prediction rasters
 sp_predictions <- readRDS(paste0(wdir, "out/predictions/sq_sp_predictions.rds"))
 
+# 6. Dendro examples - note: currently just exporting two pipo sites in first stage script
+dendro_ex <- read.csv(paste0(wdir, "out\\dendro\\example_sites.csv"))
 
 
 #===============================================================================
@@ -142,6 +146,79 @@ hex
 
 
 #===============================================================================
+# Plot of first stage for several sites  ---------
+#===============================================================================
+high_sens = "CO559"
+low_sens = "CA585"
+
+high_coords <- trim_df %>% 
+  filter(collection_id == high_sens) %>% 
+  pull(geometry)
+low_coords <- trim_df %>% 
+  filter(collection_id == low_sens) %>% 
+  pull(geometry)
+
+high_val <- trim_df %>% 
+  filter(collection_id == high_sens) %>% 
+  pull(estimate_cwd.an) %>% 
+  round(digits = 3)
+
+low_val <- trim_df %>% 
+  filter(collection_id == low_sens) %>% 
+  pull(estimate_cwd.an) %>% 
+  round(digits = 3)
+
+high_lab <- paste0("Sensitivity = ", as.character(high_val))
+low_lab <- paste0("Sensitivity = ", as.character(low_val))
+
+# ex_plots <- trim_df %>% 
+#   filter(collection_id == high_sens | collection_id == low_sens)
+map_ex <- ggplot() +
+  geom_sf(data = world) +
+  geom_sf(data = sp_range, fill = 'lightgrey', alpha = 1, colour = NA) +
+  geom_sf(data = trim_df, color = 'darkblue', alpha = 1) +
+  annotate("text", x = high_coords[[1]][1], y = high_coords[[1]][2], label = "A", color = "darkred", size = 12) +
+  annotate("text", x = low_coords[[1]][1], y = low_coords[[1]][2], label = "B", color = "darkred", size = 12) +
+    # geom_sf(data = ex_plots, color = 'red', fill = 'red', alpha = .8) +
+  theme_bw(base_size = 20)+
+  theme(axis.title.x=element_blank(),
+        axis.title.y=element_blank()) +
+  # ylab("Latitude")+
+  # xlab("Longitude")+
+  coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
+
+
+high_ex <- dendro_ex %>% 
+  filter(collection_id == high_sens) %>% 
+  ggplot(aes(x = cwd.an.spstd, y = rwi)) +
+  geom_point(shape = 23) +
+  geom_smooth(method=lm, color = "darkblue", fill = "darkblue") +
+  theme_bw(base_size = 20) +
+  ylab("Ring width\nindex")+
+  xlab("Climatic water deficit") +
+  ylim(c(0,3)) +
+  xlim(c(-1.25, 0)) +
+  ggtitle("Site A") +
+  annotate("text", x = -0.85, y = 1.25, label = high_lab, size = 7)
+
+
+low_ex <- dendro_ex %>% 
+  filter(collection_id == low_sens) %>% 
+  ggplot(aes(x = cwd.an.spstd, y = rwi)) +
+  geom_point(shape = 23) +
+  geom_smooth(method=lm, color = "darkblue", fill = "darkblue") +
+  theme_bw(base_size = 20) +
+  ylab("Ring width\nindex")+
+  xlab("Climatic water deficit") +
+  ylim(c(0,3)) +
+  xlim(c(-1.25, 0)) +
+  ggtitle("Site B") +
+  annotate("text", x = -1.1, y = 1.3, label = low_lab, size = 7)
+
+(map_ex | high_ex / low_ex) +
+  plot_layout(widths = c(2,1))
+
+#===============================================================================
 # 4) Observed sensitivity  ---------
 #===============================================================================
 ### Map of CWD sensitivity
@@ -158,6 +235,7 @@ sens_map
 
 
 ### Plot of observed CWD sensitivity on climatic range 
+lgd_pos <- c(.25, .75)
 sens_niche <- clim_compare %>% ggplot(aes(x = cwd.spstd, y = pet.spstd)) +
   geom_density_2d(colour = "black") +
   # geom_density_2d_filled(alpha = 0.5) +
@@ -166,25 +244,41 @@ sens_niche <- clim_compare %>% ggplot(aes(x = cwd.spstd, y = pet.spstd)) +
   # labs(fill = "Number of cells") +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") + 
-  theme_bw(base_size = 22) +
+  theme_bw(base_size = 20) +
   coord_fixed() +
-  geom_point(data = trim_df, aes(x = cwd.spstd, y = pet.spstd, color = estimate_cwd.an)) +
-  scale_color_viridis(direction = -1)
+  geom_point(data = trim_df, aes(x = cwd.spstd, y = pet.spstd, color = estimate_cwd.an), size = 3) +
+  scale_color_viridis(direction = -1)+
+  labs(color = "Sensitivity to\nCWD") +
+  theme(legend.position = c(lgd_pos),
+        legend.key = element_blank(),
+        legend.background = element_blank())
 sens_niche
 
 
-### Plot of cwd sensitivity against cwd.spstd
-trim_df <- trim_df %>% 
-  mutate(significant =   p.value_cwd.an<0.05)
-trim_df %>% 
-  ggplot(aes(x = cwd.spstd, y = estimate_cwd.an, color = std.error_cwd.an)) +
-  scale_color_viridis() +
-  geom_point() +
-  ylim(c(-.5, .1)) +
-  xlim(c(-2,2)) +
-  stat_smooth(method = "gam", formula = y ~ s(x), size = 1, color = "black") +
-  theme_bw()
 
+### Plot of cwd sensitivity against cwd.spstd
+mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd + I(cwd.spstd^2) + I(pet.spstd^2), data = trim_df)
+eff = effect("cwd.spstd", mod, partial.residuals=T)
+closest <- function(x, x0) apply(outer(x, x0, FUN=function(x, x0) abs(x - x0)), 1, which.min)
+x.fit <- unlist(eff$x.all)
+trans <- I
+x <- data.frame(lower = eff$lower, upper = eff$upper, fit = eff$fit, cwd = eff$x$cwd.spstd)
+xy <- data.frame(x = x.fit, y = x$fit[closest(trans(x.fit), x$cwd)] + eff$residuals)
+
+partial_plot <- ggplot(x, aes(x = cwd, y = fit)) +
+  theme_bw() +
+  geom_line(size = 1, color = "darkblue") +
+  geom_point(data = xy, aes(x = x, y = y), shape = 1, col = "black", size = 2) +
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.5, fill = "darkblue") +
+  xlab("Historic CWD\n(Deviation from species mean)") +
+  ylab("Partial effect of historical CWD\non CWD sensitivity") +
+  theme_bw(base_size = 20)
+  # geom_smooth(data = xy, aes(x = trans(x), y = y), 
+  #             method = "loess", span = 2/3, linetype = "dashed", se = FALSE)
+
+
+combined_plot <- (map_ex | high_ex / low_ex) / (sens_niche | partial_plot)
+ggsave(paste0(wdir, "figures\\", "sp_example.svg"), combined_plot, width = 15, height = 12)
 
 #===============================================================================
 # 5) Predictions  ---------
