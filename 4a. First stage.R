@@ -121,6 +121,10 @@ dendro_df <- dendro_df %>%
   mutate(pet.an.spstd = (pet.an - sp_pet_mean) / sp_pet_sd,
          cwd.an.spstd = (cwd.an - sp_cwd_mean) / sp_cwd_sd)
 
+ex_sites <- c("CO559", "CA585")
+dendro_df %>% 
+  filter(collection_id %in% ex_sites) %>% 
+  write.csv(paste0(wdir, "out\\dendro\\example_sites.csv"))
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Explore variance by site ------------------------------
