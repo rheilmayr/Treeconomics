@@ -34,8 +34,9 @@ library(prediction)
 wdir <- 'remote\\'
 
 # 1. Second stage model
-mod <- readRDS(paste0(wdir, "out\\second_stage\\ss_mod.rds"))
-pet_mod <- readRDS(paste0(wdir, "out\\second_stage\\pet_ss_mod.rds"))
+mod <- readRDS(paste0(wdir, "out\\second_stage\\sq_cwd_mod.rds"))
+pet_mod <- readRDS(paste0(wdir, "out\\second_stage\\sq_pet_mod.rds"))
+int_mod <- readRDS(paste0(wdir, "out\\second_stage\\sq_int_mod.rds"))
 
 # mod <- readRDS(paste0(wdir, "out\\second_stage\\ss_sq_mod.rds"))
 # pet_mod <- readRDS(paste0(wdir, "out\\second_stage\\ss_sq_pet_mod.rds"))
@@ -250,7 +251,9 @@ predict_sens <- function(clim_historic_sp){
   names(cwd_sens) = "cwd_sens"
   pet_sens <- raster::predict(clim_historic_sp, pet_mod)
   names(pet_sens) = "pet_sens"
-  sensitivity <- raster::brick(cwd_sens, pet_sens) 
+  intercept <- raster::predict(clim_historic_sp, int_mod)
+  names(intercept) = "intercept"
+  sensitivity <- raster::brick(cwd_sens, pet_sens, intercept) 
   return(sensitivity)
 }
 
@@ -259,7 +262,7 @@ sp_predictions <- sp_predictions %>%
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Predict growth deviation from future climate ---------------
+# Predict growth under future climate ---------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # sp_clip <- function(rast){
 #   rast_clip <- mask(rast, sp_range)
@@ -269,7 +272,8 @@ sp_predictions <- sp_predictions %>%
 calc_rwi <- function(cmip_rast, sensitivity){
   cwd_sens = sensitivity %>% subset("cwd_sens")
   pet_sens = sensitivity %>% subset("pet_sens")
-  rwi_rast <- cmip_rast$cwd.spstd * cwd_sens + cmip_rast$pet.spstd * pet_sens
+  intercept = sensitivity %>% subset("intercept")
+  rwi_rast <- intercept + (cmip_rast$cwd.spstd * cwd_sens) + (cmip_rast$pet.spstd * pet_sens)
   return(rwi_rast)
 }
 
@@ -318,6 +322,12 @@ sp_predictions_df %>%
   filter(sp_code == "pisy") %>% 
   ggplot(aes(x = cwd.spstd, y = rwi)) +
   geom_point()
+
+sp_predictions_df %>% 
+  filter(sp_code == "pila") %>% 
+  ggplot(aes(x = cwd.spstd, y = rwi)) +
+  geom_point()
+
 
 ### Binned plot of cwd sensitivity
 nbins = 21

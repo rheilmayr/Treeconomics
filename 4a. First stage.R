@@ -126,54 +126,58 @@ dendro_df %>%
   filter(collection_id %in% ex_sites) %>% 
   write.csv(paste0(wdir, "out\\dendro\\example_sites.csv"))
 
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Explore variance by site ------------------------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Calculate site-level historic climate
-hist_clim_df <- clim_df %>%
-  group_by(collection_id) %>%
-  filter(year<1980) %>%
-  summarise(aet.ave = mean(aet.an),
-            cwd.ave = mean(cwd.an),
-            pet.ave = mean(pet.an),
-            cwd.min = min(cwd.an)) %>% 
-  left_join(site_smry, by = "collection_id") %>% 
-  select(-genus, -gymno_angio, -species_id)
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# # Explore variance by site ------------------------------
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# # Calculate site-level historic climate
+# hist_clim_df <- clim_df %>%
+#   group_by(collection_id) %>%
+#   filter(year<1980) %>%
+#   summarise(aet.ave = mean(aet.an),
+#             cwd.ave = mean(cwd.an),
+#             pet.ave = mean(pet.an),
+#             cwd.min = min(cwd.an)) %>% 
+#   left_join(site_smry, by = "collection_id") %>% 
+#   select(-genus, -gymno_angio, -species_id)
+# 
+# 
+# hist_clim_df <- hist_clim_df %>% 
+#   left_join(niche_df, by = c("species_id" = "sp_code")) %>% 
+#   mutate(pet.spstd = (pet.ave - sp_pet_mean) / sp_pet_sd,
+#          cwd.spstd = (cwd.ave - sp_cwd_mean) / sp_cwd_sd)
+# 
+# 
+# site_stats <- dendro_df %>% 
+#   group_by(collection_id) %>% 
+#   summarise(rwi_var = var(rwi),
+#             rwi_mean = mean(rwi)) %>% 
+#   left_join(hist_clim_df, by = c("collection_id"))
+# 
+# site_stats %>% ggplot(aes(x = cwd.spstd, y = rwi_var)) +
+#   geom_point(shape = 23) +
+#   geom_smooth(method=lm) +
+#   theme_bw(base_size = 25) +
+#   ylab("Variance in RWI")+
+#   xlab("Historic CWD\n(Deviation from species mean)") +
+#   ylim(0, 0.5) +
+#   xlim(-3, 3)
+# 
+# site_stats %>% ggplot(aes(x = cwd.spstd, y = rwi_mean)) +
+#   geom_point(shape = 23) +
+#   geom_smooth(method=lm) +
+#   theme_bw(base_size = 25) +
+#   ylab("Mean RWI")+
+#   xlab("Historic CWD\n(Deviation from species mean)") +
+#   ylim(0.9, 1.1) +
+#   xlim(-3, 3)
+# 
+# 
+# var_mod <- lm(rwi_var ~ cwd.spstd + pet.spstd, data = site_stats)
+# mean_mod <- lm(rwi_mean ~ cwd.spstd + pet.spstd, data = site_stats)
 
 
-hist_clim_df <- hist_clim_df %>% 
-  left_join(niche_df, by = c("species_id" = "sp_code")) %>% 
-  mutate(pet.spstd = (pet.ave - sp_pet_mean) / sp_pet_sd,
-         cwd.spstd = (cwd.ave - sp_cwd_mean) / sp_cwd_sd)
 
 
-site_stats <- dendro_df %>% 
-  group_by(collection_id) %>% 
-  summarise(rwi_var = var(rwi),
-            rwi_mean = mean(rwi)) %>% 
-  left_join(hist_clim_df, by = c("collection_id"))
-
-site_stats %>% ggplot(aes(x = cwd.spstd, y = rwi_var)) +
-  geom_point(shape = 23) +
-  geom_smooth(method=lm) +
-  theme_bw(base_size = 25) +
-  ylab("Variance in RWI")+
-  xlab("Historic CWD\n(Deviation from species mean)") +
-  ylim(0, 0.5) +
-  xlim(-3, 3)
-
-site_stats %>% ggplot(aes(x = cwd.spstd, y = rwi_mean)) +
-  geom_point(shape = 23) +
-  geom_smooth(method=lm) +
-  theme_bw(base_size = 25) +
-  ylab("Mean RWI")+
-  xlab("Historic CWD\n(Deviation from species mean)") +
-  ylim(0.9, 1.1) +
-  xlim(-3, 3)
-
-
-var_mod <- lm(rwi_var ~ cwd.spstd + pet.spstd, data = site_stats)
-mean_mod <- lm(rwi_mean ~ cwd.spstd + pet.spstd, data = site_stats)
 
 
 
@@ -344,7 +348,7 @@ fs_mod <- function(site_data){
   pet_cwd_cov <- NA
   nobs <- NA
   ntrees <- site_data %>% select(tree) %>%  n_distinct()
-  ncores <- site_data %>% select(core) %>%  n_distinct()
+  ncores <- site_data %>% select(tree, core) %>%  n_distinct()
   no_cwd_var <- (site_data %>% select(cwd.an) %>% n_distinct() == 1)
   no_pet_var <- (site_data %>% select(pet.an) %>% n_distinct() == 1)
   
@@ -364,21 +368,25 @@ fs_mod <- function(site_data){
     # Try to run felm. Typically fails if missing cwd / aet data 
     tryCatch(
       expr = {
-        # mod <- lm(ln_rwi ~ pet.an + cwd.an, data = tree_data)
-        if (ntrees==1){
-          femod <- feols(rwi ~ cwd.an + pet.an, site_data)
-        } else{
-          femod <- feols(rwi ~ cwd.an + pet.an | tree, site_data)
-        }
-        vcov <- femod$cov.unscaled
-        pet_cwd_cov <- vcov %>% 
-          subset(rownames(vcov) == "cwd.an") %>% 
-          as_tibble() %>% 
-          pull("pet.an")
-        nobs <- femod$nobs
-        femod <- tidy(femod) %>%
-          filter(term %in% c('cwd.an', 'pet.an')) %>% 
+        # TODO: 7-9-21; Should we switch back to tree-level FE model? Complicates intercepts...
+        mod <- lm(rwi ~ pet.an + cwd.an, data = site_data)
+        # if (ntrees==1){
+        #   mod <- lm(rwi ~ cwd.an + pet.an, site_data)
+        # } else{
+        #   mod <- lm(rwi ~ cwd.an + pet.an, site_data)
+        # }
+        mod_vcov <- vcov(mod)
+        cov <- list(int_cwd = mod_vcov[1, 2], 
+                    int_pet = mod_vcov[1, 3], 
+                    pet_cwd = mod_vcov[2, 3])
+        nobs <- nobs(mod)
+        mod <- tidy(mod) %>%
+          mutate(term = term %>% str_replace("\\(Intercept\\)", "intercept")) %>% 
+          filter(term %in% c('intercept', 'cwd.an', 'pet.an')) %>% 
           pivot_wider(names_from = "term", values_from = c("estimate", "std.error", "statistic", "p.value"))
+        mod$cov_int_cwd = mod_vcov[c("(Intercept)"), c("cwd.an")]
+        mod$cov_int_pet = mod_vcov[c("(Intercept)"), c("pet.an")]
+        mod$cov_cwd_pet = mod_vcov[c("cwd.an"), c("pet.an")]
       },
       error = function(e){ 
         message("Returned regression error")
@@ -388,9 +396,9 @@ fs_mod <- function(site_data){
     )    
   }
   if (failed){
-    return(tibble(mod = list(femod), cov = pet_cwd_cov, nobs = nobs, ncores = ncores, ntrees = ntrees, rwl_mean = rwl_mean, rwl_sd = rwl_sd, error = reg_error))
+    return(tibble(mod = list(mod), nobs = nobs, ncores = ncores, ntrees = ntrees, rwl_mean = rwl_mean, rwl_sd = rwl_sd, error = reg_error))
   }
-  return(tibble(mod = list(femod), cov = pet_cwd_cov, nobs = nobs, ncores = ncores, ntrees = ntrees, rwl_mean = rwl_mean, rwl_sd = rwl_sd, error = reg_error))
+  return(tibble(mod = list(mod), nobs = nobs, ncores = ncores, ntrees = ntrees, rwl_mean = rwl_mean, rwl_sd = rwl_sd, error = reg_error))
 }
 
 site_df <- dendro_df %>% 
@@ -403,8 +411,12 @@ site_df <- dendro_df %>%
   filter(nobs>10) %>% 
   nest()
 
+
 site_df <- site_df %>% 
   mutate(fs_result = map(data, fs_mod))
+
+data_df <- site_df %>% 
+  select(collection_id,data)
 
 site_df <- site_df %>% 
   select(collection_id, fs_result) %>% 
@@ -421,6 +433,21 @@ site_df %>% write.csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv'))
 
 
 
+# # test some results
+# cid <- "CA585"
+# 
+# coefs <- site_df %>% 
+#   filter(collection_id==cid)
+# data <- (data_df %>% 
+#   filter(collection_id==cid) %>% 
+#   pull(data))[[1]]
+# 
+# data <- data %>% 
+#   mutate(pred = coefs$estimate_intercept + (coefs$estimate_cwd.an * cwd.an) + (coefs$estimate_pet.an * pet.an))
+# 
+# data %>% 
+#   ggplot(aes(x = rwi, y = pred)) +
+#   geom_point()
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Create illustrative figure --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
