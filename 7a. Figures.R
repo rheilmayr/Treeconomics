@@ -166,22 +166,22 @@ sp_predictions <- sp_predictions %>%
   mutate(cwd_change = cwd.fut - cwd.spstd,
          pet_change = pet.fut - pet.spstd)
 
-sp_predictions %>% 
-  ggplot(aes(x = cwd.spstd, y = cwd_sens)) +
-  geom_point(color = "dark blue", alpha = 0.5) +
-  xlim(c(-2,2)) +
-  # ylim(c(-.5,.3)) +
-  theme_bw() +
-  stat_smooth(method = "gam", formula = y ~ s(x), size = 1, color = "red")
+# sp_predictions %>% 
+#   ggplot(aes(x = cwd.spstd, y = cwd_sens)) +
+#   geom_point(color = "dark blue", alpha = 0.5) +
+#   xlim(c(-2,2)) +
+#   # ylim(c(-.5,.3)) +
+#   theme_bw() +
+#   stat_smooth(method = "gam", formula = y ~ s(x), size = 1, color = "red")
 
 
-sp_predictions %>% 
-  ggplot(aes(x = cwd.spstd, y = rwi)) +
-  geom_point(color = "dark blue", alpha = 0.5) +
-  xlim(c(-2,2)) +
-  ylim(c(-.3,.3)) +
-  theme_bw() +
-  stat_smooth(method = "gam", formula = y ~ s(x), size = 1, color = "red")
+# sp_predictions %>% 
+#   ggplot(aes(x = cwd.spstd, y = rwi)) +
+#   geom_point(color = "dark blue", alpha = 0.5) +
+#   xlim(c(-2,2)) +
+#   ylim(c(-.3,.3)) +
+#   theme_bw() +
+#   stat_smooth(method = "gam", formula = y ~ s(x), size = 1, color = "red")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
