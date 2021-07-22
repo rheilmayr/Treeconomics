@@ -38,6 +38,7 @@ library(patchwork)
 library(Hmisc)
 library(prediction)
 library(colorspace)
+library(ggnewscale)
 
 
 
@@ -131,11 +132,6 @@ int_mod <- readRDS(paste0(wdir, "out\\second_stage\\int_mod.rds"))
 clim_file <- paste0(wdir, 'in\\CRUData\\historic_raster\\HistoricCWD_AETGrids.Rdat')
 load(clim_file)
 cwd_historic <- sum(cwd_historic)
-aet_historic <- sum(aet_historic)
-pet_historic <- aet_historic + cwd_historic
-names(cwd_historic) = "cwd"
-names(pet_historic) = "pet"
-clim_historic <- raster::brick(list(cwd_historic, pet_historic))
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define palettes ------------------------------------
@@ -237,9 +233,7 @@ ggsave(paste0(wdir, 'figures\\1c_hist_conceptual.svg'), plot = histogram_concept
 # plot(cwd_clip)
 
 
-
-
-# Pull relevant range map
+### Generate plot illustrating range maps against historic CWD
 sp_codes <- list("pipo", "tsca", "tadi", "pisy", "qust", "qual")
 sp_codes <- list("pipo", "tsca", "tadi", "qust", "qual")
 sp_range <- range_sf %>% 
@@ -248,20 +242,26 @@ sp_bbox <- st_bbox(sp_range)
 lon_lims <- c(sp_bbox$xmin - 1, sp_bbox$xmax + 1)
 lat_lims <- c(sp_bbox$ymin - 1, sp_bbox$ymax + 1)
 
-# Plot species ranges
-### Need to implement two scale trick - see https://eliocamp.github.io/codigo-r/2018/09/multiple-color-and-fill-scales-with-ggplot2/
 cwd_historic_df <- as.data.frame(cwd_historic, xy = TRUE)
+cwd_historic_df <- cwd_historic_df %>% 
+  filter(x >= lon_lims[1],
+         x <= lon_lims[2],
+         y >= lat_lims[1],
+         y <= lat_lims[2])
 world <- ne_coastline(scale = "medium", returnclass = "sf")
-map <- ggplot() +
+range_map <- ggplot() +
   geom_tile(data = cwd_historic_df, aes(x = x, y = y, fill = cwd)) +
+  scale_fill_viridis_c(name = bquote('Historic CWD (mmH2O)')) +
   geom_sf(data = world) +
-  geom_sf(data = sp_range, aes(color = sp_code, fill = sp_code), alpha = .1) +
-  # geom_sf(data = sp_range, aes(color = sp_code, fill = sp_code)) +
+  new_scale_fill() +
+  geom_sf(data = sp_range, aes(colour = sp_code), fill = NA) +
+  # geom_sf(data = sp_range, aes(color = sp_code, fill = sp_code), alpha = .1) +
+  scale_colour_discrete(name = "Species") +
   theme_bw(base_size = 22) +
   ylab("Latitude")+
   xlab("Longitude")+
   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
-map
+range_map
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
