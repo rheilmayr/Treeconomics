@@ -91,9 +91,11 @@ sp_sens  <- (spp_predictions %>%
 sp_rwi  <- (spp_predictions %>% 
               pull(rwi_predictions))[[1]]
 names(sp_rwi) <- "rwi"
+sp_rwi_null <- sp_hist$cwd.spstd * sp_sens$cwd_sens + sp_hist$pet.spstd * sp_sens$pet_sens + sp_sens$intercept
+sp_rwi_change <- sp_rwi - sp_rwi_null
+names(sp_rwi_change) <- "rwi"
 
-
-clim_compare <- brick(c(sp_fut, sp_hist, sp_sens, sp_rwi))
+clim_compare <- brick(c(sp_fut, sp_hist, sp_sens, sp_rwi_change))
 clim_compare <- clim_compare %>% 
   as.data.frame(xy = TRUE)
 
@@ -218,6 +220,18 @@ low_ex <- dendro_ex %>%
 (map_ex | high_ex / low_ex) +
   plot_layout(widths = c(2,1))
 
+
+# high_ex <- dendro_ex %>% 
+#   filter(collection_id == high_sens) %>% 
+#   ggplot(aes(x = cwd.an.spstd, y = rwi)) +
+#   geom_point(shape = 23) +
+#   geom_smooth(method=lm, color = "darkblue", fill = "darkblue") +
+#   theme_bw(base_size = 20) +
+#   ylab("Ring width index")+
+#   xlab("Annual CWD\n(Deviation from species mean)")
+# 
+# ggsave(paste0(wdir, 'figures\\pres_site_example.svg'), plot = high_ex, width = 9, height = 6, units = "in")
+
 #===============================================================================
 # 4) Observed sensitivity  ---------
 #===============================================================================
@@ -257,13 +271,14 @@ sens_niche
 
 
 ### Plot of cwd sensitivity against cwd.spstd
-mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd + I(cwd.spstd^2) + I(pet.spstd^2), data = trim_df)
+mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, data = trim_df)
 eff = effect("cwd.spstd", mod, partial.residuals=T)
 closest <- function(x, x0) apply(outer(x, x0, FUN=function(x, x0) abs(x - x0)), 1, which.min)
 x.fit <- unlist(eff$x.all)
 trans <- I
 x <- data.frame(lower = eff$lower, upper = eff$upper, fit = eff$fit, cwd = eff$x$cwd.spstd)
 xy <- data.frame(x = x.fit, y = x$fit[closest(trans(x.fit), x$cwd)] + eff$residuals)
+# xy <- data.frame(x = trim_df$cwd.spstd, y = trim_df$estimate_cwd.an)
 
 partial_plot <- ggplot(x, aes(x = cwd, y = fit)) +
   theme_bw() +
@@ -276,9 +291,12 @@ partial_plot <- ggplot(x, aes(x = cwd, y = fit)) +
   # geom_smooth(data = xy, aes(x = trans(x), y = y), 
   #             method = "loess", span = 2/3, linetype = "dashed", se = FALSE)
 
-
+partial_plot
 combined_plot <- (map_ex | high_ex / low_ex) / (sens_niche | partial_plot)
 ggsave(paste0(wdir, "figures\\", "sp_example.svg"), combined_plot, width = 15, height = 12)
+
+
+# ggsave(paste0(wdir, "figures\\", "pres_partial_cwd.svg"), partial_plot, width = 10, height = 6)
 
 #===============================================================================
 # 5) Predictions  ---------
