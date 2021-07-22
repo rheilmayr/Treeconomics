@@ -52,7 +52,6 @@ pull_clim <- function(spp_code){
   # Pull relevant range map
   sp_range <- range_sf %>%
     filter(sp_code == spp_code)
-  print(sp_range)
   # Pull cwd and aet values
   cwd_vals <- raster::extract(cwd_historic, sp_range) %>% 
     unlist()
@@ -76,7 +75,10 @@ clim_df <- range_sf %>%
   rename(sp_code = value) %>% 
   drop_na()
 
-clim_df$clim_vals <- map(clim_df$sp_code, pull_clim) %>% 
+clim_df <- clim_df %>% 
+  mutate(clim_vals = map(clim_df$sp_code, pull_clim))
+
+clim_df <- clim_df %>% 
   unnest(clim_vals)
 
 clim_df <- clim_df %>% 
