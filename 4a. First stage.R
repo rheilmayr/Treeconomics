@@ -121,6 +121,17 @@ dendro_df <- dendro_df %>%
   mutate(pet.an.spstd = (pet.an - sp_pet_mean) / sp_pet_sd,
          cwd.an.spstd = (cwd.an - sp_cwd_mean) / sp_cwd_sd)
 
+# determine bounds for species projections
+sp_bounds <- dendro_df %>% 
+  group_by(species_id) %>% 
+  summarise(pet_01 = quantile(pet.an, 0.01),
+            pet_99 = quantile(pet.an, 0.99),
+            cwd_01 = quantile(cwd.an, 0.01),
+            cwd_99 = quantile(cwd.an, 0.99))
+
+sp_bounds %>% 
+  write.csv(paste0(wdir, "out\\dendro\\clim_bounds.csv"))
+
 ex_sites <- c("CO559", "CA585")
 dendro_df %>% 
   filter(collection_id %in% ex_sites) %>% 
