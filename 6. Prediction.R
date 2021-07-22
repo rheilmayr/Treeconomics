@@ -34,9 +34,12 @@ library(prediction)
 wdir <- 'remote\\'
 
 # 1. Second stage model
-mod <- readRDS(paste0(wdir, "out\\second_stage\\sq_cwd_mod.rds"))
-pet_mod <- readRDS(paste0(wdir, "out\\second_stage\\sq_pet_mod.rds"))
-int_mod <- readRDS(paste0(wdir, "out\\second_stage\\sq_int_mod.rds"))
+mod <- readRDS(paste0(wdir, "out\\second_stage\\cwd_mod.rds"))
+pet_mod <- readRDS(paste0(wdir, "out\\second_stage\\pet_mod.rds"))
+int_mod <- readRDS(paste0(wdir, "out\\second_stage\\int_mod.rds"))
+# mod <- readRDS(paste0(wdir, "out\\second_stage\\sq_cwd_mod.rds"))
+# pet_mod <- readRDS(paste0(wdir, "out\\second_stage\\sq_pet_mod.rds"))
+# int_mod <- readRDS(paste0(wdir, "out\\second_stage\\sq_int_mod.rds"))
 
 # mod <- readRDS(paste0(wdir, "out\\second_stage\\ss_sq_mod.rds"))
 # pet_mod <- readRDS(paste0(wdir, "out\\second_stage\\ss_sq_pet_mod.rds"))
@@ -324,10 +327,12 @@ sp_predictions_df %>%
   geom_point()
 
 sp_predictions_df %>% 
-  filter(sp_code == "pila") %>% 
+  filter(sp_code == "psme") %>% 
   ggplot(aes(x = cwd.spstd, y = rwi)) +
-  geom_point()
-
+  geom_point() +
+  xlim(c(-1.5, 1.5)) +
+  ylim(c(0.8, 1.3))
+         
 
 ### Binned plot of cwd sensitivity
 nbins = 21
