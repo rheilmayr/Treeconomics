@@ -90,9 +90,12 @@ sp_predictions <- readRDS(paste0(wdir, "out/predictions/sp_predictions.rds"))
 
 
 # 6. Second stage model
-cwd_mod <- readRDS(paste0(wdir, "out\\second_stage\\sq_cwd_mod.rds"))
-cwd_vcov <- readRDS(paste0(wdir, "out\\second_stage\\sq_cwd_mod_vcov.rds"))
+cwd_mod <- readRDS(paste0(wdir, "out\\second_stage\\cwd_mod.rds"))
+cwd_vcov <- readRDS(paste0(wdir, "out\\second_stage\\cwd_mod_vcov.rds"))
 mod_df <- trim_df
+
+pet_mod <- readRDS(paste0(wdir, "out\\second_stage\\pet_mod.rds"))
+int_mod <- readRDS(paste0(wdir, "out\\second_stage\\int_mod.rds"))
   
 # # 2. Species range maps
 # range_file <- paste0(wdir, 'in//species_ranges//merged_ranges.shp')
@@ -165,6 +168,10 @@ sp_predictions <- sp_predictions %>%
   unnest(cols = pred_df) %>% 
   mutate(cwd_change = cwd.fut - cwd.spstd,
          pet_change = pet.fut - pet.spstd)
+
+sp_predictions <- sp_predictions %>% 
+  mutate(rwi_null = cwd.spstd * cwd_sens + pet.spstd * pet_sens + intercept,
+         rwi_change = rwi - rwi_null)
 
 # sp_predictions %>% 
 #   ggplot(aes(x = cwd.spstd, y = cwd_sens)) +
@@ -343,17 +350,28 @@ plot_dat <- plot_dat %>%
 binned_margins <- plot_dat %>%
   ggplot(aes(x = cwd.q, y = pet.q, fill = cwd_sens)) +
   geom_tile() +
-  scale_fill_viridis_c(direction = -1) +
-  theme_bw(base_size = 22)+
   xlim(c(-2, 1.1))+
   ylim(c(-2,1.1))+
   ylab("Deviation from mean PET")+
   xlab("Deviation from mean CWD")+
+  theme_bw(base_size = 22)+
   theme(
     legend.position = c(.15,.85),
     legend.key = element_blank(),
     legend.background = element_blank()
   ) +
+  scale_fill_viridis_c(direction = -1) +
+  scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
+  # theme_bw(base_size = 30)+
+  # theme(
+  #   legend.position = c(.25,.85),
+  #   legend.key = element_blank(),
+  #   legend.background = element_blank()
+  # ) +
+  # scale_fill_continuous_diverging(rev = TRUE, mid = 0,
+  #                                 limits = c(-.5, .2),
+  #                                 breaks = c(.2, 0, -.2, -.4),
+  #                                 labels = c(.2, 0, -.2, -.4)) +
   labs(fill = "Marginal effect\nof CWD") +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") +
@@ -365,6 +383,32 @@ binned_margins <- plot_dat %>%
 binned_margins
 ggsave(paste0(wdir, 'figures\\binned_margins.svg'), plot = binned_margins)
 
+
+### Binned plot of pet sensitivity
+binned_margins <- plot_dat %>%
+  ggplot(aes(x = cwd.q, y = pet.q, fill = pet_sens)) +
+  geom_tile() +
+  # scale_fill_viridis_c(direction = -1) +
+  scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
+  theme_bw(base_size = 22)+
+  xlim(c(-2, 1.1))+
+  ylim(c(-2,1.1))+
+  ylab("Deviation from mean PET")+
+  xlab("Deviation from mean CWD")+
+  theme(
+    legend.position = c(.15,.85),
+    legend.key = element_blank(),
+    legend.background = element_blank()
+  ) +
+  labs(fill = "Marginal effect\nof PET") +
+  ylab("Historic PET\n(Deviation from species mean)") +
+  xlab("Historic CWD\n(Deviation from species mean)") +
+  coord_fixed() +
+  geom_hline(yintercept = 0, size = 1, linetype = 2) +
+  geom_vline(xintercept = 0, size = 1, linetype = 2)
+
+
+binned_margins
 
 
 
@@ -463,6 +507,9 @@ ggsave(paste0(wdir, 'figures\\2_cwd_margins.png'), plot = out_fig, width = 20, h
 
 
 
+ggsave(paste0(wdir, 'figures\\2_cwd_margins_only.svg'), plot = margins_plot, width = 15, height = 9, units = "in")
+
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Main summary figure ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -487,12 +534,13 @@ plot_dat <- plot_dat %>%
 plot_dat <- plot_dat %>% 
   group_by(cwd.q, pet.q) %>% 
   summarize(rwi = mean(rwi, na.rm = TRUE),
+            rwi_change = mean(rwi_change, na.rm = TRUE),
             cwd_sens = mean(cwd_sens, na.rm = TRUE),
             pet_sens = mean(pet_sens, na.rm = TRUE),
             cwd_change = mean(cwd_change, na.rm = TRUE),
             pet_change = mean(pet_change, na.rm = TRUE),
             n = n()) %>% 
-  filter(n>15)
+  filter(n>10)
 
 
 ### CWD sensitivity
@@ -504,7 +552,7 @@ cwd_sens_bin <- plot_dat %>%
   scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
   # scale_fill_distiller(type = "div") +
   # scale_fill_viridis_c(direction = -1, option = "viridis") +
-  theme_bw(base_size = 10)+
+  theme_bw(base_size = 20)+
   labs(fill = "Predicted\nsensitivity\nto CWD") +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") + 
@@ -520,7 +568,7 @@ pet_sens_bin <- plot_dat %>%
   ylim(c(-2.5, 2.5)) +
   scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
   # scale_fill_viridis_c(direction = -1, option = "viridis") +
-  theme_bw(base_size = 10)+
+  theme_bw(base_size = 20)+
   labs(fill = "Predicted\nsensitivity\nto PET") +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") + 
@@ -535,7 +583,7 @@ cwd_change_bin <- plot_dat %>%
   xlim(c(-2.5, 2.5)) +
   ylim(c(-2.5, 2.5)) +
   scale_fill_viridis_c(direction = 1, option = "magma") +
-  theme_bw(base_size = 10)+
+  theme_bw(base_size = 20)+
   labs(fill = "Predicted change\nin CWD (std)") +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") + 
@@ -549,7 +597,7 @@ pet_change_bin <- plot_dat %>%
   xlim(c(-2.5, 2.5)) +
   ylim(c(-2.5, 2.5)) +
   scale_fill_viridis_c(direction = 1, option = "magma") +
-  theme_bw(base_size = 10)+
+  theme_bw(base_size = 20)+
   labs(fill = "Predicted change\nin PET (std)") +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") + 
@@ -559,12 +607,13 @@ pet_change_bin
 
 ### RWI change
 rwi_bin <- plot_dat %>% 
-  ggplot(aes(x = cwd.q, y = pet.q, fill = rwi)) +
+  ggplot(aes(x = cwd.q, y = pet.q, fill = rwi_change)) +
   geom_tile() +
   xlim(c(-2.5, 2.5)) +
   ylim(c(-2.5, 2.5)) +
   scale_fill_viridis_c(direction = -1, option = "viridis") +
-  theme_bw(base_size = 10)+
+  # scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
+  theme_bw(base_size = 25)+
   labs(fill = "Predicted change\nin RWI") +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") + 
@@ -591,18 +640,15 @@ pet_sens_bin <- pet_sens_bin +
     legend.background = element_blank())
 
 sens_plot <- cwd_sens_bin / pet_sens_bin
-ggsave(paste0(wdir, "figures\\", "pred_full_a.svg"), sens_plot, width = 6, height = 10)
+ggsave(paste0(wdir, "figures\\", "pred_full_a.svg"), sens_plot, width = 9, height = 15)
 
 
-
+lgd_pos <- c(.15, .8)
 cwd_change_bin <- cwd_change_bin +
   theme(
     legend.position = c(lgd_pos),
     legend.key = element_blank(),
     legend.background = element_blank(),
-    axis.text.x = element_blank(),
-    axis.title.x = element_blank(),
-    axis.ticks.x = element_blank(),
     plot.margin = margin(t=0, r=0, b=0, l=0, "cm"),
     axis.text.y = element_blank(),
     axis.title.y = element_blank(),
@@ -619,15 +665,62 @@ pet_change_bin <- pet_change_bin +
     axis.title.y = element_blank(),
     axis.ticks.y = element_blank())
 
-change_plot <- cwd_change_bin / pet_change_bin
-ggsave(paste0(wdir, "figures\\", "pred_full_b.svg"), change_plot, width = 6, height = 10)
 
-
+lgd_pos <- c(.23, .8)
 rwi_bin <- rwi_bin +
   theme(
     legend.position = c(lgd_pos),
     legend.key = element_blank(),
     legend.background = element_blank()
   )
-ggsave(paste0(wdir, "figures\\", "pred_full_c.svg"), rwi_bin, width = 6, height = 10)
+ggsave(paste0(wdir, "figures\\", "pred_full_c.svg"), rwi_bin, width = 9, height = 9)
 
+
+
+# 
+# lgd_pos <- c(.2, .8)
+# cwd_sens_bin <- cwd_sens_bin +
+#   theme(
+#     legend.position = c(lgd_pos),
+#     legend.key = element_blank(),
+#     legend.background = element_blank(),
+#     plot.margin = margin(t=0, r=0, b=0, l=0, "cm"))
+# ggsave(paste0(wdir, "figures\\", "pres_cwd_sens.svg"), cwd_sens_bin, width = 9, height = 9)
+# 
+# pet_sens_bin <- pet_sens_bin +
+#   theme(
+#     plot.margin = margin(t=0, r=0, b=0, l=0, "cm"),
+#     legend.position = c(lgd_pos),
+#     legend.key = element_blank(),
+#     legend.background = element_blank(),
+#     axis.text.y = element_blank(),
+#     axis.title.y = element_blank(),
+#     axis.ticks.y = element_blank())
+# ggsave(paste0(wdir, "figures\\", "pres_pet_sens.svg"), pet_sens_bin, width = 9, height = 9)
+# 
+
+# cwd_change_bin <- cwd_change_bin +
+#   theme(
+#     legend.position = c(lgd_pos),
+#     legend.key = element_blank(),
+#     legend.background = element_blank(),
+#     plot.margin = margin(t=0, r=0, b=0, l=0, "cm"))
+# cwd_change_bin
+# ggsave(paste0(wdir, "figures\\", "pres_cwd_change.svg"), cwd_change_bin, width = 9, height = 9)
+
+# pet_change_bin <- pet_change_bin + 
+#   theme(
+#     legend.position = c(lgd_pos),
+#     legend.key = element_blank(),
+#     legend.background = element_blank(),
+#     plot.margin = margin(t=0, r=0, b=0, l=0, "cm"),
+#     axis.text.y = element_blank(),
+#     axis.title.y = element_blank(),
+#     axis.ticks.y = element_blank())
+# pet_change_bin
+# ggsave(paste0(wdir, "figures\\", "pres_pet_change.svg"), pet_change_bin, width = 9, height = 9)
+# 
+# change_plot <- cwd_change_bin / pet_change_bin
+# ggsave(paste0(wdir, "figures\\", "pred_full_b.svg"), change_plot, width = 9, height = 15)
+# 
+# 
