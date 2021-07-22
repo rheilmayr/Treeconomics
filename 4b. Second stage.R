@@ -39,6 +39,7 @@ library(modi)
 library(margins)
 library(tidylog)
 library(fixest)
+library(effects)
 
 
 select <- dplyr::select
@@ -246,36 +247,13 @@ trim_df <- flm_df %>%
 # trim_df <- trim_df %>% 
 #   filter(gymno_angio=="gymno")
 
-mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=flm_df)
-cluster_vcov <- vcovCL(mod, cluster = flm_df$collection_id)
-coeftest(mod, vcov = vcovCL, cluster = flm_df$collection_id)
-
 mod_df = trim_df
-mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=mod_df)
-cluster_vcov <- vcovCL(mod, cluster = mod_df$species_id)
-coeftest(mod, vcov = vcovCL, cluster = mod_df$species_id)
-saveRDS(mod, paste0(wdir, "out\\second_stage\\cwd_mod.rds"))
-saveRDS(cluster_vcov, paste0(wdir, "out\\second_stage\\cwd_mod_vcov.rds"))
+cwd_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=mod_df)
+cwd_cluster_vcov <- vcovCL(cwd_mod, cluster = mod_df$species_id)
+coeftest(cwd_mod, vcov = vcovCL, cluster = mod_df$species_id)
+saveRDS(cwd_mod, paste0(wdir, "out\\second_stage\\cwd_mod.rds"))
+saveRDS(cwd_cluster_vcov, paste0(wdir, "out\\second_stage\\cwd_mod_vcov.rds"))
 # saveRDS(sq_pet_mod, paste0(wdir, "out\\second_stage\\ss_sq_pet_mod.rds"))
-
-trim_df <- trim_df %>% 
-  mutate(significant =   p.value_cwd.an<0.05)
-trim_df %>% 
-  ggplot(aes(x = cwd.spstd, y = estimate_cwd.an, color = std.error_cwd.an)) +
-  scale_color_viridis() +
-  # geom_point() +
-  # ylim(c(-1, 1)) +
-  # xlim(c(-2,2)) +
-  stat_smooth(method = "loess") +
-  # stat_smooth(method = "gam", formula = y ~ s(x), size = 1, color = "black") +
-  theme_bw()
-
-
-trim_df %>% 
-  ggplot(aes(x = cwd.spstd, y = estimate_pet.an)) +
-  stat_smooth(method = "loess") +
-  theme_bw()
-
 
 pet_mod <- lm(estimate_pet.an ~ cwd.spstd + pet.spstd, weights = pet_errorweights, data=mod_df)
 pet_cluster_vcov <- vcovCL(pet_mod, cluster = mod_df$collection_id)
@@ -291,97 +269,230 @@ saveRDS(int_mod, paste0(wdir, "out\\second_stage\\int_mod.rds"))
 saveRDS(int_cluster_vcov, paste0(wdir, "out\\second_stage\\int_mod_vcov.rds"))
 
 
-# Squared terms
-sq_cwd_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd + I(cwd.spstd^2) + I(pet.spstd^2), weights = errorweights, data=mod_df)
-coeftest(sq_cwd_mod, vcov = vcovCL, cluster = trim_df$collection_id)
-sq_cwd_cluster_vcov <- vcovCL(sq_cwd_mod, cluster = trim_df$collection_id)
-saveRDS(sq_cwd_mod, paste0(wdir, "out\\second_stage\\sq_cwd_mod.rds"))
-saveRDS(sq_cwd_cluster_vcov, paste0(wdir, "out\\second_stage\\sq_cwd_mod_vcov.rds"))
-
-sq_pet_mod <- lm(estimate_pet.an ~ cwd.spstd + pet.spstd + I(cwd.spstd^2) + I(pet.spstd^2), weights = pet_errorweights, data=mod_df)
-sq_pet_cluster_vcov <- vcovCL(sq_pet_mod, cluster = trim_df$collection_id)
-saveRDS(sq_pet_mod, paste0(wdir, "out\\second_stage\\sq_pet_mod.rds"))
-saveRDS(sq_pet_cluster_vcov, paste0(wdir, "out\\second_stage\\sq_pet_mod_vcov.rds"))
-
-sq_int_mod <- lm(estimate_intercept ~ cwd.spstd + pet.spstd + I(cwd.spstd^2) + I(pet.spstd^2), weights = int_errorweights, data=mod_df)
-sq_int_cluster_vcov <- vcovCL(sq_int_mod, cluster = trim_df$collection_id)
-saveRDS(sq_int_mod, paste0(wdir, "out\\second_stage\\sq_int_mod.rds"))
-saveRDS(sq_int_cluster_vcov, paste0(wdir, "out\\second_stage\\sq_int_mod_vcov.rds"))
-
-
-mod_df %>% 
-  mutate(pred_rwi = estimate_intercept + (estimate_pet.an * pet.spstd) + (estimate_cwd.an * cwd.spstd)) %>% 
-  select(pred_rwi) %>% 
-  summary() #CAUTION: Shouldn't mean here be much closer to 1? Investigate in first stage script....
+# # Squared terms
+# sq_cwd_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd + I(cwd.spstd^2) + I(pet.spstd^2), weights = errorweights, data=mod_df)
+# coeftest(sq_cwd_mod, vcov = vcovCL, cluster = trim_df$collection_id)
+# sq_cwd_cluster_vcov <- vcovCL(sq_cwd_mod, cluster = trim_df$collection_id)
+# saveRDS(sq_cwd_mod, paste0(wdir, "out\\second_stage\\sq_cwd_mod.rds"))
+# saveRDS(sq_cwd_cluster_vcov, paste0(wdir, "out\\second_stage\\sq_cwd_mod_vcov.rds"))
+# 
+# sq_pet_mod <- lm(estimate_pet.an ~ cwd.spstd + pet.spstd + I(cwd.spstd^2) + I(pet.spstd^2), weights = pet_errorweights, data=mod_df)
+# sq_pet_cluster_vcov <- vcovCL(sq_pet_mod, cluster = trim_df$collection_id)
+# saveRDS(sq_pet_mod, paste0(wdir, "out\\second_stage\\sq_pet_mod.rds"))
+# saveRDS(sq_pet_cluster_vcov, paste0(wdir, "out\\second_stage\\sq_pet_mod_vcov.rds"))
+# 
+# sq_int_mod <- lm(estimate_intercept ~ cwd.spstd + pet.spstd + I(cwd.spstd^2) + I(pet.spstd^2), weights = int_errorweights, data=mod_df)
+# sq_int_cluster_vcov <- vcovCL(sq_int_mod, cluster = trim_df$collection_id)
+# saveRDS(sq_int_mod, paste0(wdir, "out\\second_stage\\sq_int_mod.rds"))
+# saveRDS(sq_int_cluster_vcov, paste0(wdir, "out\\second_stage\\sq_int_mod_vcov.rds"))
+# 
+# 
+# # Interaction terms
+# cross_cwd_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd + I(cwd.spstd^2) + I(pet.spstd^2) + cwd.spstd * pet.spstd, weights = errorweights, data=mod_df)
+# coeftest(sq_cwd_mod, vcov = vcovCL, cluster = trim_df$collection_id)
+# sq_cwd_cluster_vcov <- vcovCL(sq_cwd_mod, cluster = trim_df$collection_id)
+# saveRDS(sq_cwd_mod, paste0(wdir, "out\\second_stage\\sq_cwd_mod.rds"))
+# saveRDS(sq_cwd_cluster_vcov, paste0(wdir, "out\\second_stage\\sq_cwd_mod_vcov.rds"))
+# 
+# cross_pet_mod <- lm(estimate_pet.an ~ cwd.spstd + pet.spstd + I(cwd.spstd^2) + I(pet.spstd^2) + cwd.spstd * pet.spstd, weights = pet_errorweights, data=mod_df)
+# sq_pet_cluster_vcov <- vcovCL(sq_pet_mod, cluster = trim_df$collection_id)
+# saveRDS(sq_pet_mod, paste0(wdir, "out\\second_stage\\sq_pet_mod.rds"))
+# saveRDS(sq_pet_cluster_vcov, paste0(wdir, "out\\second_stage\\sq_pet_mod_vcov.rds"))
+# 
+# cross_int_mod <- lm(estimate_intercept ~ cwd.spstd + pet.spstd + I(cwd.spstd^2) + I(pet.spstd^2) + cwd.spstd * pet.spstd, weights = int_errorweights, data=mod_df)
+# sq_int_cluster_vcov <- vcovCL(sq_int_mod, cluster = trim_df$collection_id)
+# saveRDS(sq_int_mod, paste0(wdir, "out\\second_stage\\sq_int_mod.rds"))
+# saveRDS(sq_int_cluster_vcov, paste0(wdir, "out\\second_stage\\sq_int_mod_vcov.rds"))
+# 
+# 
 
 
 # #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# # Margins plots --------------------------------------------------------
+# # Exploring model predictions --------------------------------------------------------
 # #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# xmin = -2
-# xmax = 2
-# sq_predictions <- prediction(sq_mod, at = list(cwd.spstd = seq(xmin, xmax, .1)), vcov = sq_cluster_vcov, calculate_se = T) %>%
-#   summary() %>%
-#   rename(cwd.spstd = "at(cwd.spstd)")
-# margins_plot <- ggplot(sq_predictions, aes(x = cwd.spstd)) +
-#   geom_line(aes(y = Prediction), size = 2) +
-#   geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
-#   geom_line(aes(y = upper), linetype = 3) +
-#   geom_line(aes(y = lower), linetype = 3) +
-#   geom_hline(yintercept = 0, linetype = 2) +
-#   xlab("Historic CWD\n(Deviation from species mean)") +
-#   ylab("Predicted sensitivity\nto CWD") +
-#   theme_bw(base_size = 22) +
-#   scale_y_continuous(labels = scales::scientific)
-# margins_plot
+# 
+# c_mod <- cwd_mod
+# p_mod <- pet_mod
+# i_mod <- int_mod
+# c_change <- 1
+# p_change <- 1
+# 
+# # p_max <- mod_df$pet.spstd %>% quantile(.99)
+# # p_min <- mod_df$pet.spstd %>% quantile(.01)
+# # c_max <- mod_df$cwd.spstd %>% quantile(.99)
+# # c_min <- mod_df$cwd.spstd %>% quantile(.01)
+# p_max <- 2
+# p_min <- -2
+# c_max <- 2
+# c_min <- -2
 # 
 # 
-# sq_predictions <- prediction(sq_mod, at = list(pet.spstd = seq(xmin, xmax, .1)), vcov = sq_cluster_vcov, calculate_se = T) %>%
-#   summary() %>%
-#   rename(pet.spstd = "at(pet.spstd)")
-# margins_plot <- ggplot(sq_predictions, aes(x = pet.spstd)) +
-#   geom_line(aes(y = Prediction), size = 2) +
-#   geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
-#   geom_line(aes(y = upper), linetype = 3) +
-#   geom_line(aes(y = lower), linetype = 3) +
-#   geom_hline(yintercept = 0, linetype = 2) +
-#   xlab("Historic PET\n(Deviation from species mean)") +
-#   ylab("Predicted sensitivity\nto CWD") +
-#   theme_bw(base_size = 22) +
-#   scale_y_continuous(labels = scales::scientific)
-# margins_plot
+# gridded <- data.frame(
+#   cwd.spstd=seq(from=c_min, to=c_max, length.out=100),
+#   pet.spstd=seq(from=p_min, to=p_max, length.out=100))
+# c_hat <- predict(c_mod, newdata=expand.grid(gridded))
+# p_hat <- predict(p_mod, newdata=expand.grid(gridded))
+# i_hat <- predict(i_mod, newdata=expand.grid(gridded))
+# r_hat <- (c_hat * (c_change + (expand.grid(gridded))$cwd.spstd)) + (p_hat * (p_change + (expand.grid(gridded))$pet.spstd)) + i_hat
 # 
-# sq_pet_predictions <- prediction(sq_pet_mod, at = list(pet.spstd = seq(xmin, xmax, .1)), vcov = sq_pet_cluster_vcov, calculate_se = T) %>%
-#   summary() %>%
-#   rename(pet.spstd = "at(pet.spstd)")
+# plot_dat <- as_tibble(expand.grid(gridded))
+# plot_dat$rwi <- r_hat
 # 
-# margins_plot <- ggplot(sq_pet_predictions, aes(x = pet.spstd)) +
-#   geom_line(aes(y = Prediction), size = 2) +
-#   geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
-#   geom_line(aes(y = upper), linetype = 3) +
-#   geom_line(aes(y = lower), linetype = 3) +
-#   geom_hline(yintercept = 0, linetype = 2) +
-#   xlab("Historic PET\n(Deviation from species mean)") +
-#   ylab("Predicted sensitivity\nto PET") +
-#   theme_bw(base_size = 22) +
-#   scale_y_continuous(labels = scales::scientific)
-# margins_plot
+# plot_dat %>% 
+#   ggplot(aes(x = cwd.spstd, y = pet.spstd, z = rwi)) +
+#   geom_contour_filled()
 # 
-# sq_pet_predictions <- prediction(sq_pet_mod, at = list(cwd.spstd = seq(xmin, xmax, .1)), vcov = sq_pet_cluster_vcov, calculate_se = T) %>%
-#   summary() %>%
-#   rename(cwd.spstd = "at(cwd.spstd)")
+# c_change <- 0
+# p_change <- 1
+# mod_df <- mod_df %>% 
+#   mutate(rwi_predict_ss <- estimate_pet.an * pet.spstd + estimate_cwd.an * cwd.spstd + estimate_intercept)
 # 
-# margins_plot <- ggplot(sq_pet_predictions, aes(x = cwd.spstd)) +
-#   geom_line(aes(y = Prediction), size = 2) +
-#   geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
-#   geom_line(aes(y = upper), linetype = 3) +
-#   geom_line(aes(y = lower), linetype = 3) +
-#   geom_hline(yintercept = 0, linetype = 2) +
-#   xlab("Historic CWD\n(Deviation from species mean)") +
-#   ylab("Predicted sensitivity\nto PET") +
-#   theme_bw(base_size = 22) +
-#   scale_y_continuous(labels = scales::scientific)
-# margins_plot
+# 
+# mod_df$cwd_predict <- predict(c_mod, select(mod_df, c(cwd.spstd, pet.spstd)))
+# mod_df$pet_predict <- predict(p_mod, select(mod_df, c(cwd.spstd, pet.spstd)))
+# mod_df$int_predict <- predict(i_mod, select(mod_df, c(cwd.spstd, pet.spstd)))
+# mod_df <- mod_df %>% 
+#   mutate(rwi_predict_ss = estimate_pet.an * pet.spstd + estimate_cwd.an * cwd.spstd + estimate_intercept,
+#          rwi_predict_ts = pet_predict * pet.spstd + cwd_predict * cwd.spstd + int_predict,
+#          rwi_predict_adj = (pet_predict * (pet.spstd + p_change)) + (cwd_predict * (cwd.spstd + c_change)) + int_predict)
+# 
+# 
+# 
+# seq_min <- -2.625
+# seq_max <- 2.625
+# seq_inc <- 0.25
+# sequence <- seq(seq_min, seq_max, seq_inc)
+# convert_bin <- function(n){
+#   sequence[n] + 0.125
+# }
+# 
+# plot_dat <- mod_df %>%
+#   filter(((abs(cwd.spstd)<3) & (abs(pet.spstd<3)))) %>%
+#   drop_na()
+# plot_dat <- plot_dat %>%
+#   mutate(cwd.q = cut(cwd.spstd, breaks = sequence, labels = FALSE),
+#          cwd.q = convert_bin(cwd.q),
+#          pet.q = cut(pet.spstd, breaks = sequence, labels = FALSE),
+#          pet.q = convert_bin(pet.q))
+# 
+# 
+# plot_dat <- plot_dat %>%
+#   group_by(cwd.q, pet.q) %>%
+#   summarize(rwi_predict_ss = mean(rwi_predict_ss, na.rm = TRUE),
+#             rwi_predict_ts = mean(rwi_predict_ts, na.rm = TRUE),
+#             rwi_predict_adj = mean(rwi_predict_adj, na.rm = TRUE),
+#             rwi_change = rwi_predict_adj - rwi_predict_ts,
+#             n = n()) %>%
+#   filter(n>10)
+# plot_dat %>% 
+#   ggplot(aes(x = cwd.q, y = pet.q, fill = rwi_change)) +
+#   geom_tile() +
+#   scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
+#   theme_bw()
+# 
+# 
+# mod_df$rwi_predict_ts %>% summary()
+# 
+# 
+# 
+# eff = effect("cwd.spstd", mod, partial.residuals=T)
+# closest <- function(x, x0) apply(outer(x, x0, FUN=function(x, x0) abs(x - x0)), 1, which.min)
+# x.fit <- unlist(eff$x.all)
+# trans <- I
+# x <- data.frame(lower = eff$lower, upper = eff$upper, fit = eff$fit, cwd = eff$x$cwd.spstd)
+# xy <- data.frame(x = x.fit, y = x$fit[closest(trans(x.fit), x$cwd)] + eff$residuals)
+# 
+# x <- data.frame(lower = eff$lower, upper = eff$upper, fit = eff$fit, pet = eff$x$pet.spstd)
+# xy <- data.frame(x = x.fit, y = x$fit[closest(trans(x.fit), x$pet)] + eff$residuals)
+# 
+# 
+# partial_plot <- ggplot(x, aes(x = cwd, y = fit)) +
+#   theme_bw() +
+#   geom_line(size = 1, color = "darkblue") +
+#   geom_point(data = xy, aes(x = x, y = y), shape = 1, col = "black", size = 2) +
+#   geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.5, fill = "darkblue") +
+#   # xlab("Historic CWD\n(Deviation from species mean)") +
+#   # ylab("Partial effect of historical CWD\non CWD sensitivity") +
+#   theme_bw(base_size = 20) +
+#   ylim(c(-.5, .5)) +
+#   xlim(c(-2, 2))
+# 
+# 
+# partial_plot
+
+
+
+
+
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Margins plots --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+xmin = -2
+xmax = 2
+sq_predictions <- prediction(sq_cwd_mod, at = list(cwd.spstd = seq(xmin, xmax, .1)), vcov = sq_cwd_cluster_vcov, calculate_se = T) %>%
+  summary() %>%
+  rename(cwd.spstd = "at(cwd.spstd)")
+margins_plot <- ggplot(sq_predictions, aes(x = cwd.spstd)) +
+  geom_line(aes(y = Prediction), size = 2) +
+  geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
+  geom_line(aes(y = upper), linetype = 3) +
+  geom_line(aes(y = lower), linetype = 3) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  xlab("Historic CWD\n(Deviation from species mean)") +
+  ylab("Predicted sensitivity\nto CWD") +
+  theme_bw(base_size = 22) +
+  scale_y_continuous(labels = scales::scientific)
+margins_plot
+
+
+sq_predictions <- prediction(sq_cwd_mod, at = list(pet.spstd = seq(xmin, xmax, .1)), vcov = sq_cwd_cluster_vcov, calculate_se = T) %>%
+  summary() %>%
+  rename(pet.spstd = "at(pet.spstd)")
+margins_plot <- ggplot(sq_predictions, aes(x = pet.spstd)) +
+  geom_line(aes(y = Prediction), size = 2) +
+  geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
+  geom_line(aes(y = upper), linetype = 3) +
+  geom_line(aes(y = lower), linetype = 3) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  xlab("Historic PET\n(Deviation from species mean)") +
+  ylab("Predicted sensitivity\nto CWD") +
+  theme_bw(base_size = 22) +
+  scale_y_continuous(labels = scales::scientific)
+margins_plot
+
+sq_pet_predictions <- prediction(sq_pet_mod, at = list(pet.spstd = seq(xmin, xmax, .1)), vcov = sq_pet_cluster_vcov, calculate_se = T) %>%
+  summary() %>%
+  rename(pet.spstd = "at(pet.spstd)")
+
+margins_plot <- ggplot(sq_pet_predictions, aes(x = pet.spstd)) +
+  geom_line(aes(y = Prediction), size = 2) +
+  geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
+  geom_line(aes(y = upper), linetype = 3) +
+  geom_line(aes(y = lower), linetype = 3) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  xlab("Historic PET\n(Deviation from species mean)") +
+  ylab("Predicted sensitivity\nto PET") +
+  theme_bw(base_size = 22) +
+  scale_y_continuous(labels = scales::scientific)
+margins_plot
+
+sq_pet_predictions <- prediction(sq_pet_mod, at = list(cwd.spstd = seq(xmin, xmax, .1)), vcov = sq_pet_cluster_vcov, calculate_se = T) %>%
+  summary() %>%
+  rename(cwd.spstd = "at(cwd.spstd)")
+
+margins_plot <- ggplot(sq_pet_predictions, aes(x = cwd.spstd)) +
+  geom_line(aes(y = Prediction), size = 2) +
+  geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
+  geom_line(aes(y = upper), linetype = 3) +
+  geom_line(aes(y = lower), linetype = 3) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  xlab("Historic CWD\n(Deviation from species mean)") +
+  ylab("Predicted sensitivity\nto PET") +
+  theme_bw(base_size = 22) +
+  scale_y_continuous(labels = scales::scientific)
+margins_plot
 
 
 
