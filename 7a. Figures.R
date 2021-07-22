@@ -127,6 +127,16 @@ int_mod <- readRDS(paste0(wdir, "out\\second_stage\\int_mod.rds"))
 # 
 # 
 
+# 2. Historic climate raster
+clim_file <- paste0(wdir, 'in\\CRUData\\historic_raster\\HistoricCWD_AETGrids.Rdat')
+load(clim_file)
+cwd_historic <- sum(cwd_historic)
+aet_historic <- sum(aet_historic)
+pet_historic <- aet_historic + cwd_historic
+names(cwd_historic) = "cwd"
+names(pet_historic) = "pet"
+clim_historic <- raster::brick(list(cwd_historic, pet_historic))
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define palettes ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -225,6 +235,34 @@ ggsave(paste0(wdir, 'figures\\1c_hist_conceptual.svg'), plot = histogram_concept
 #   raster::mask(range_sf)
 # 
 # plot(cwd_clip)
+
+
+
+
+# Pull relevant range map
+sp_codes <- list("pipo", "tsca", "tadi", "pisy", "qust", "qual")
+sp_codes <- list("pipo", "tsca", "tadi", "qust", "qual")
+sp_range <- range_sf %>% 
+  filter(sp_code %in% sp_codes)
+sp_bbox <- st_bbox(sp_range)
+lon_lims <- c(sp_bbox$xmin - 1, sp_bbox$xmax + 1)
+lat_lims <- c(sp_bbox$ymin - 1, sp_bbox$ymax + 1)
+
+# Plot species ranges
+### Need to implement two scale trick - see https://eliocamp.github.io/codigo-r/2018/09/multiple-color-and-fill-scales-with-ggplot2/
+cwd_historic_df <- as.data.frame(cwd_historic, xy = TRUE)
+world <- ne_coastline(scale = "medium", returnclass = "sf")
+map <- ggplot() +
+  geom_tile(data = cwd_historic_df, aes(x = x, y = y, fill = cwd)) +
+  geom_sf(data = world) +
+  geom_sf(data = sp_range, aes(color = sp_code, fill = sp_code), alpha = .1) +
+  # geom_sf(data = sp_range, aes(color = sp_code, fill = sp_code)) +
+  theme_bw(base_size = 22) +
+  ylab("Latitude")+
+  xlab("Longitude")+
+  coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
+map
+
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Observation frequency plot --------------------------------------------------------
