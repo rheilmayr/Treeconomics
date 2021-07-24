@@ -96,8 +96,8 @@ cwd_vcov <- readRDS(paste0(wdir, "out/second_stage/cwd_mod_vcov.rds"))
 
 mod_df <- trim_df
 
-pet_mod <- readRDS(paste0(wdir, "out\\second_stage\\pet_mod.rds"))
-int_mod <- readRDS(paste0(wdir, "out\\second_stage\\int_mod.rds"))
+pet_mod <- readRDS(paste0(wdir, "out/second_stage/pet_mod.rds"))
+int_mod <- readRDS(paste0(wdir, "out/second_stage/int_mod.rds"))
   
 # # 2. Species range maps
 # range_file <- paste0(wdir, 'in//species_ranges//merged_ranges.shp')
@@ -207,7 +207,7 @@ map <- ggplot() +
   theme_bw(base_size = 22)+
   geom_sf(data = world, color = "lightgrey", fill = "lightgrey") +
   #geom_sf(data = sp_range, fill = 'lightblue', alpha = .9, colour = NA) +
-  geom_sf(data = flm_df, color = 'darkblue', alpha = .5) +
+  geom_sf(data = flm_df, color = 'darkblue', alpha = .2) +
   ylab("Latitude")+
   xlab("Longitude")
 map
@@ -217,10 +217,18 @@ map
 
 
 histogram_conceptual <- ggplot(flm_df, aes(x = cwd.spstd)) + 
-  geom_histogram(bins = 40, alpha=0.8, fill = "#404788FF") +
+  geom_histogram(bins = 40, alpha=0.5, fill = "#404788FF") +
   xlim(c(-2.5, 2.5)) +
   theme_bw(base_size = 22) + 
-  ylab("Number of sites")
+  ylab("Number of sites")+
+  theme(legend.position = c(.1,.5),legend.title = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"),
+        panel.border = element_blank())+
+  xlab("")+
+  ylab("")+
+  scale_y_continuous(position = "right")
+
 histogram_conceptual
 #ggsave(paste0(wdir, 'figures\\1c_hist_conceptual.svg'), plot = histogram_conceptual, width = 9, height = 6, units = "in")
 
@@ -246,12 +254,14 @@ lon_lims <- c(sp_bbox$xmin - 1, sp_bbox$xmax + 1)
 lat_lims <- c(sp_bbox$ymin - 1, sp_bbox$ymax + 1)
 
 cwd_historic_df <- as.data.frame(cwd_historic, xy = TRUE)
+
 cwd_historic_df <- cwd_historic_df %>% 
   filter(x >= lon_lims[1],
          x <= lon_lims[2],
          y >= lat_lims[1],
          y <= lat_lims[2])
 world <- ne_coastline(scale = "medium", returnclass = "sf")
+
 range_map <- ggplot() +
   geom_tile(data = cwd_historic_df, aes(x = x, y = y, fill = cwd)) +
   scale_fill_viridis_c(name = bquote('Historic CWD (mmH2O)')) +
@@ -281,16 +291,17 @@ hex <- flm_df %>% ggplot(aes(x = cwd.spstd, y = pet.spstd, weight = nobs)) +
   labs(fill = "Number of tree-year\nobservations") +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") + 
-  theme_bw(base_size = 22) +
   coord_fixed() +
   geom_hline(yintercept = 0, size = 1, linetype = 2) +
   geom_vline(xintercept = 0, size = 1, linetype = 2) +
-  theme(
-    legend.position = c(.15,.9),
-    legend.key = element_blank(),
-    legend.background = element_blank()
-  )
+  theme_bw(base_size = 35)+
+  theme(legend.position = c(.15,.83),
+        legend.text = element_text(size=18),
+        legend.title = element_text(size=23),
+        legend.background = element_blank())
 hex
+
+
 #ggsave(paste0(wdir, 'figures\\1b_obs_density.svg'), plot = hex, width = 12, height = 12)
 
 
@@ -361,12 +372,6 @@ hex
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Boxplot of first stage coefficients --------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-trim_df %>% ggplot(aes(y = estimate_cwd.an, color = factor(genus), fill = factor(genus)))+
-  geom_boxplot(outlier.colour = NA, width = .5)
-
-trim_df %>% ggplot(aes(y = estimate_pet.an))+
-  geom_boxplot(outlier.colour = NA, width = .5)+
-  geom_boxplot(aes(y=estimate_cwd.an),outlier.colour = NA, width = .5)
 
 head(trim_df)
 
@@ -390,8 +395,6 @@ allsens_plot=ggplot(long_trim_df, aes(x=name, y=value, fill=name)) +
   scale_fill_manual(values=c('#21908CFF','#404788FF'))+
   scale_color_manual(values=c('#21908CFF','#404788FF'))
 
-
-
 genus_plot=ggplot(long_trim_df, aes(x=name, y=value, fill=genus)) + 
   geom_hline(yintercept=0,colour = 'black', linetype=2)+
   #geom_jitter(position=position_jitter(0.2),alpha=.1,aes(color=genus))+
@@ -414,8 +417,6 @@ allsens_plot+genus_plot+
   plot_annotation(tag_levels="a") & theme(plot.tag = element_text(face = 'bold', size=15))
   
                           
-
-
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Main sensitivity plot --------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -453,13 +454,15 @@ binned_margins <- plot_dat_b %>%
   geom_tile() +
   xlim(c(-2, 1.1))+
   ylim(c(-2,1.1))+
+  scale_fill_viridis_c(direction = -1) +
   ylab("Deviation from mean PET")+
   xlab("Deviation from mean CWD")+
+  theme_bw(base_size = 22)+
   theme(legend.position = c(.18,.83),
     legend.key = element_blank(),
-    legend.background = element_blank(),
-    panel.grid.major = element_blank(), 
-    panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))+
+    legend.background = element_blank())+
+    #panel.grid.major = element_blank(), 
+    #panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))+
   labs(fill = "Marginal effect\nof CWD") +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") +
@@ -472,31 +475,31 @@ binned_margins
 #ggsave(paste0(wdir, 'figures\\binned_margins.svg'), plot = binned_margins)
 
 
-### Binned plot of pet sensitivity
-binned_margins <- plot_dat %>%
-  ggplot(aes(x = cwd.q, y = pet.q, fill = pet_sens)) +
-  geom_tile() +
-  # scale_fill_viridis_c(direction = -1) +
-  scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
-  theme_bw(base_size = 22)+
-  xlim(c(-2, 1.1))+
-  ylim(c(-2,1.1))+
-  ylab("Deviation from mean PET")+
-  xlab("Deviation from mean CWD")+
-  theme(
-    legend.position = c(.15,.85),
-    legend.key = element_blank(),
-    legend.background = element_blank()
-  ) +
-  labs(fill = "Marginal effect\nof PET") +
-  ylab("Historic PET\n(Deviation from species mean)") +
-  xlab("Historic CWD\n(Deviation from species mean)") +
-  coord_fixed() +
-  geom_hline(yintercept = 0, size = 1, linetype = 2) +
-  geom_vline(xintercept = 0, size = 1, linetype = 2)
-
-
-binned_margins
+# ### Binned plot of pet sensitivity
+# binned_margins <- plot_dat_b %>%
+#   ggplot(aes(x = cwd.q, y = pet.q, fill = pet_sens)) +
+#   geom_tile() +
+#   # scale_fill_viridis_c(direction = -1) +
+#   scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
+#   theme_bw(base_size = 22)+
+#   xlim(c(-2, 1.1))+
+#   ylim(c(-2,1.1))+
+#   ylab("Deviation from mean PET")+
+#   xlab("Deviation from mean CWD")+
+#   theme(
+#     legend.position = c(.15,.85),
+#     legend.key = element_blank(),
+#     legend.background = element_blank()
+#   ) +
+#   labs(fill = "Marginal effect\nof PET") +
+#   ylab("Historic PET\n(Deviation from species mean)") +
+#   xlab("Historic CWD\n(Deviation from species mean)") +
+#   coord_fixed() +
+#   geom_hline(yintercept = 0, size = 1, linetype = 2) +
+#   geom_vline(xintercept = 0, size = 1, linetype = 2)
+# 
+# 
+# binned_margins
 
 
 
@@ -582,7 +585,7 @@ margins_plot
 
 
 histogram <- ggplot(mod_df, aes(x = cwd.spstd)) + 
-  geom_histogram(bins = 40, alpha=0.8, fill = "#404788FF") +
+  geom_histogram(bins = 40, alpha = 0.8, fill = "#404788FF") +
   xlim(c(pred_min, pred_max)) +
   theme_bw(base_size = 25) + 
   ylab("# sites") +
@@ -597,16 +600,13 @@ histogram
 
 out_fig <- binned_margins + (histogram / margins_plot)+ 
   plot_layout(widths = c(1,1))+
-  plot_annotation(tag_levels="a") & theme(plot.tag = element_text(face = 'bold', size=15))
+  plot_annotation(tag_levels="a") & theme(plot.tag = element_text(face = 'bold', size=23))
 
 
 out_fig
 #ggsave(paste0(wdir, 'figures\\2_cwd_margins.svg'), plot = out_fig, width = 20, height = 12, units = "in")
 #ggsave(paste0(wdir, 'figures\\2_cwd_margins.png'), plot = out_fig, width = 20, height = 12, units = "in")
-
-
-
-ggsave(paste0(wdir, 'figures\\2_cwd_margins_only.svg'), plot = margins_plot, width = 15, height = 9, units = "in")
+#ggsave(paste0(wdir, 'figures\\2_cwd_margins_only.svg'), plot = margins_plot, width = 15, height = 9, units = "in")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -651,11 +651,16 @@ cwd_sens_bin <- plot_dat %>%
   scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
   # scale_fill_distiller(type = "div") +
   # scale_fill_viridis_c(direction = -1, option = "viridis") +
-  theme_bw(base_size = 20)+
+  theme_bw(base_size = 55)+
+  theme(legend.position = c(.13,.83),
+        legend.text = element_text(size=25),
+        legend.title = element_text(size=29),
+        legend.background = element_blank())+
   labs(fill = "Predicted\nsensitivity\nto CWD") +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") + 
-  coord_fixed()
+  coord_fixed()+
+  xlab("")
 cwd_sens_bin
 
 
@@ -667,7 +672,11 @@ pet_sens_bin <- plot_dat %>%
   ylim(c(-2.5, 2.5)) +
   scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
   # scale_fill_viridis_c(direction = -1, option = "viridis") +
-  theme_bw(base_size = 20)+
+  theme_bw(base_size = 55)+
+  theme(legend.position = c(.13,.83),
+        legend.text = element_text(size=25),
+        legend.title = element_text(size=29),
+        legend.background = element_blank())+
   labs(fill = "Predicted\nsensitivity\nto PET") +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") + 
@@ -682,11 +691,17 @@ cwd_change_bin <- plot_dat %>%
   xlim(c(-2.5, 2.5)) +
   ylim(c(-2.5, 2.5)) +
   scale_fill_viridis_c(direction = 1, option = "magma") +
-  theme_bw(base_size = 20)+
+  theme_bw(base_size = 55)+
+  theme(legend.position = c(.19,.83),
+        legend.text = element_text(size=25),
+        legend.title = element_text(size=29),
+        legend.background = element_blank())+
   labs(fill = "Predicted change\nin CWD (std)") +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") + 
-  coord_fixed()
+  coord_fixed()+
+  ylab("")+
+  xlab("")
 cwd_change_bin
 
 ### PET change
@@ -696,11 +711,16 @@ pet_change_bin <- plot_dat %>%
   xlim(c(-2.5, 2.5)) +
   ylim(c(-2.5, 2.5)) +
   scale_fill_viridis_c(direction = 1, option = "magma") +
-  theme_bw(base_size = 20)+
+  theme_bw(base_size = 55)+
+  theme(legend.position = c(.19,.83),
+        legend.text = element_text(size=25),
+        legend.title = element_text(size=29),
+        legend.background = element_blank())+
   labs(fill = "Predicted change\nin PET (std)") +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") + 
-  coord_fixed()
+  coord_fixed()+
+  ylab("")
 pet_change_bin
 
 
@@ -712,8 +732,12 @@ rwi_bin <- plot_dat %>%
   ylim(c(-2.5, 2.5)) +
   scale_fill_viridis_c(direction = -1, option = "viridis") +
   # scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
-  theme_bw(base_size = 25)+
-  labs(fill = "Predicted change\nin RWI") +
+  theme_bw(base_size = 35)+
+  theme(legend.position = c(.15,.83),
+        legend.text = element_text(size=18),
+        legend.title = element_text(size=23),
+        legend.background = element_blank())+
+  labs(fill = "Predicted \nchange in RWI") +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") + 
   coord_fixed()
@@ -739,7 +763,7 @@ pet_sens_bin <- pet_sens_bin +
     legend.background = element_blank())
 
 sens_plot <- cwd_sens_bin / pet_sens_bin
-ggsave(paste0(wdir, "figures\\", "pred_full_a.svg"), sens_plot, width = 9, height = 15)
+#ggsave(paste0(wdir, "figures\\", "pred_full_a.svg"), sens_plot, width = 9, height = 15)
 
 
 lgd_pos <- c(.15, .8)
@@ -772,9 +796,11 @@ rwi_bin <- rwi_bin +
     legend.key = element_blank(),
     legend.background = element_blank()
   )
-ggsave(paste0(wdir, "figures\\", "pred_full_c.svg"), rwi_bin, width = 9, height = 9)
+rwi_bin
+#ggsave(paste0(wdir, "figures\\", "pred_full_c.svg"), rwi_bin, width = 9, height = 9)
 
 
+cwd_change_bin/pet_change_bin | cwd_sens_bin/ pet_sens_bin | rwi_bin
 
 # 
 # lgd_pos <- c(.2, .8)
