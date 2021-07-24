@@ -258,25 +258,6 @@ saveRDS(mod, paste0(wdir, "out\\second_stage\\cwd_mod.rds"))
 saveRDS(cluster_vcov, paste0(wdir, "out\\second_stage\\cwd_mod_vcov.rds"))
 # saveRDS(sq_pet_mod, paste0(wdir, "out\\second_stage\\ss_sq_pet_mod.rds"))
 
-trim_df <- trim_df %>% 
-  mutate(significant =   p.value_cwd.an<0.05)
-trim_df %>% 
-  ggplot(aes(x = cwd.spstd, y = estimate_cwd.an, color = std.error_cwd.an)) +
-  scale_color_viridis() +
-  # geom_point() +
-  # ylim(c(-1, 1)) +
-  # xlim(c(-2,2)) +
-  stat_smooth(method = "loess") +
-  # stat_smooth(method = "gam", formula = y ~ s(x), size = 1, color = "black") +
-  theme_bw()
-
-
-trim_df %>% 
-  ggplot(aes(x = cwd.spstd, y = estimate_pet.an)) +
-  stat_smooth(method = "loess") +
-  theme_bw()
-
-
 pet_mod <- lm(estimate_pet.an ~ cwd.spstd + pet.spstd, weights = pet_errorweights, data=mod_df)
 pet_cluster_vcov <- vcovCL(pet_mod, cluster = mod_df$collection_id)
 coeftest(pet_mod, cluster = mod_df$collection_id)
@@ -318,6 +299,13 @@ mod_df %>%
 # #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # # Margins plots --------------------------------------------------------
 # #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# trim_df <- trim_df %>% 
+#   mutate(significant =   p.value_cwd.an<0.05)
+# trim_df %>% 
+#   ggplot(aes(x = cwd.spstd, y = estimate_cwd.an, color = std.error_cwd.an)) +
+#   stat_smooth(method = "loess") +
+#   theme_bw()
+# 
 # xmin = -2
 # xmax = 2
 # sq_predictions <- prediction(sq_mod, at = list(cwd.spstd = seq(xmin, xmax, .1)), vcov = sq_cluster_vcov, calculate_se = T) %>%
@@ -511,33 +499,33 @@ subset_cluster_vcov <- vcovCL(subset_mod, cluster = subset_df$collection_id)
 coeftest(subset_mod, vcov = subset_cluster_vcov)
 
 
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Investigate mechanism - tree or site --------------------------------------------------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Focus on trees from genera with effect, and for which we have full weather history
-young_df <- trim_df %>%
-  filter(young==TRUE) %>%
-  drop_na()
-
-mod <- lm(estimate_cwd.an ~ cwd.spstd + cwd.trstd + pet.spstd + pet.trstd, weights = errorweights, data=young_df)
-cluster_vcov <- vcovCL(mod, cluster = young_df$collection_id)
-coeftest(mod, vcov = vcovCL, cluster = young_df$collection_id)
-
-# Could include all trees from sites with any variation in tree-level drought history (including trees born <1901)
-young_sites <- trim_df %>%
-  filter(young == T) %>%
-  pull(collection_id) %>%
-  unique()
-youngsite_df <- trim_df %>%
-  filter(collection_id %in% young_sites) %>%
-  drop_na()
-mod <- lm(estimate_cwd.an ~ cwd.spstd + cwd.trstd + pet.spstd + pet.trstd, weights = errorweights, data=youngsite_df)
-coeftest(mod, vcov = vcovCL, cluster = youngsite_df$collection_id)
-
-# Include collection fixed effects
-mod <- feols(estimate_cwd.an ~ cwd.trstd + pet.trstd | collection_id, weights = trim_df$errorweights, data=trim_df)
-summary(mod)
-
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# # Investigate mechanism - tree or site --------------------------------------------------------
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# # Focus on trees from genera with effect, and for which we have full weather history
+# young_df <- trim_df %>%
+#   filter(young==TRUE) %>%
+#   drop_na()
+# 
+# mod <- lm(estimate_cwd.an ~ cwd.spstd + cwd.trstd + pet.spstd + pet.trstd, weights = errorweights, data=young_df)
+# cluster_vcov <- vcovCL(mod, cluster = young_df$collection_id)
+# coeftest(mod, vcov = vcovCL, cluster = young_df$collection_id)
+# 
+# # Could include all trees from sites with any variation in tree-level drought history (including trees born <1901)
+# young_sites <- trim_df %>%
+#   filter(young == T) %>%
+#   pull(collection_id) %>%
+#   unique()
+# youngsite_df <- trim_df %>%
+#   filter(collection_id %in% young_sites) %>%
+#   drop_na()
+# mod <- lm(estimate_cwd.an ~ cwd.spstd + cwd.trstd + pet.spstd + pet.trstd, weights = errorweights, data=youngsite_df)
+# coeftest(mod, vcov = vcovCL, cluster = youngsite_df$collection_id)
+# 
+# # Include collection fixed effects
+# mod <- feols(estimate_cwd.an ~ cwd.trstd + pet.trstd | collection_id, weights = trim_df$errorweights, data=trim_df)
+# summary(mod)
+# 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Investigate variation by genus  ----------------------------------------
@@ -634,12 +622,12 @@ predict_cwd_effect <- function(trim_df){
     filter(abs(cwd.spstd)<3,
            abs(pet.spstd)<3) %>%
     drop_na()
-  gen_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd + I(cwd.spstd^2) + I(pet.spstd^2), weights=errorweights, data=trim_df)
+  gen_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights=errorweights, data=trim_df)
   cluster_vcov <- vcovCL(gen_mod, cluster = trim_df$collection_id)
   mod_cl <- tidy(coeftest(gen_mod, vcov = vcovCL, cluster = trim_df$collection_id))
   pred_min <- trim_df$cwd.spstd %>% quantile(0.025)
   pred_max <- trim_df$cwd.spstd %>% quantile(0.975)
-  predictions <- prediction(gen_mod, at = list(cwd.spstd = seq(pred_min, pred_max, .5)), vcov = cluster_vcov, calculate_se = T) %>% 
+  predictions <- prediction(gen_mod, at = list(cwd.spstd = seq(pred_min, pred_max, 0.1)), vcov = cluster_vcov, calculate_se = T) %>% 
     summary() %>% 
     rename(cwd.spstd = "at(cwd.spstd)")
   out <- tibble(predictions = list(predictions), model = list(mod_cl))
@@ -651,12 +639,16 @@ predict_cwd_effect <- function(trim_df){
 ## Plot marginal effects by genus
 genus_freq <- mod_df %>% 
   group_by(genus) %>% 
-  summarise(n_collections = n_distinct(collection_id)) %>% 
+  summarise(n_collections = n_distinct(collection_id),
+            min_cwd = min(cwd.spstd),
+            max_cwd = max(cwd.spstd),
+            range_cwd = max_cwd - min_cwd) %>% 
   arrange(desc(n_collections))
 
 genus_keep <- genus_freq %>% 
-  filter(n_collections>50) %>% 
+  filter(n_collections>2) %>%
   pull(genus)
+
 
 genus_key <- sp_info %>% 
   select(genus, gymno_angio) %>% 
@@ -682,41 +674,20 @@ genus_coefs <- genus_coefs %>%
 
 genus_predictions <- genus_df %>% 
   unnest(predictions) %>% 
-  select(-data, -model)
+  select(-data, -model) %>% 
+  left_join(genus_freq, by = "genus") %>% 
+  left_join(genus_coefs, by = "genus")
 
+saveRDS(genus_predictions, paste0(wdir, "out/second_stage/genus_mods.rds"))
 
-margins_plot <- ggplot(genus_predictions, aes(x = cwd.spstd)) + 
-  geom_line(aes(y = Prediction)) +
-  # geom_ribbon(aes(ymin=lower, ymax=upper, fill = gymno_angio), alpha=0.2) +
-  geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
-  theme_bw(base_size = 22) + 
-  facet_wrap(~genus, scales = "free") +
-  theme(panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        strip.background = element_blank(),
-        panel.border = element_rect(colour = "black", fill = NA)) +
-  geom_line(aes(y = upper), linetype = 3) +
-  geom_line(aes(y = lower), linetype = 3) +
-  geom_hline(yintercept = 0, linetype = 2) +
-  xlab("Historic CWD\n(Deviation from species mean)") + 
-  ylab("Predicted sensitivity to CWD") +
-  xlim(c(-2, 2))
-  
-# margins_plot <- margins_plot +
-#   geom_text(data = genus_coefs, aes(x = -1.8, y = 0, label = lab))
-
-margins_plot
-ggsave(paste0(wdir, 'figures\\genus_margins.svg'), margins_plot, width = 10, height = 8, units = "in")
-
-
-histogram <- ggplot(flm_df %>% filter(genus %in% genus_keep), aes(x = cwd.spstd)) + 
-  facet_wrap(~genus) +
-  geom_histogram(aes(fill = gymno_angio), bins = 40, alpha=0.4) +
-  xlim(c(-3, 3)) +
-  theme_bw(base_size = 22) + 
-  ylab("# sites") +
-  xlab("Historic CWD\n(Deviation from species mean)")
-histogram
+# histogram <- ggplot(flm_df %>% filter(genus %in% genus_keep), aes(x = cwd.spstd)) + 
+#   facet_wrap(~genus) +
+#   geom_histogram(aes(fill = gymno_angio), bins = 40, alpha=0.4) +
+#   xlim(c(-3, 3)) +
+#   theme_bw(base_size = 22) + 
+#   ylab("# sites") +
+#   xlab("Historic CWD\n(Deviation from species mean)")
+# histogram
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

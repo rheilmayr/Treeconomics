@@ -91,14 +91,15 @@ sp_predictions <- readRDS(paste0(wdir, "out/predictions/sp_predictions.rds"))
 
 
 # 6. Second stage model
+mod_df <- trim_df
 cwd_mod <- readRDS(paste0(wdir, "out/second_stage/cwd_mod.rds"))
 cwd_vcov <- readRDS(paste0(wdir, "out/second_stage/cwd_mod_vcov.rds"))
-
-mod_df <- trim_df
-
 pet_mod <- readRDS(paste0(wdir, "out/second_stage/pet_mod.rds"))
 int_mod <- readRDS(paste0(wdir, "out/second_stage/int_mod.rds"))
-  
+
+genus_predictions <- readRDS(paste0(wdir, "out/second_stage/genus_mods.rds"))
+
+
 # # 2. Species range maps
 # range_file <- paste0(wdir, 'in//species_ranges//merged_ranges.shp')
 # range_sf <- st_read(range_file) %>% 
@@ -607,6 +608,37 @@ out_fig
 #ggsave(paste0(wdir, 'figures\\2_cwd_margins.svg'), plot = out_fig, width = 20, height = 12, units = "in")
 #ggsave(paste0(wdir, 'figures\\2_cwd_margins.png'), plot = out_fig, width = 20, height = 12, units = "in")
 #ggsave(paste0(wdir, 'figures\\2_cwd_margins_only.svg'), plot = margins_plot, width = 15, height = 9, units = "in")
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Marginal effects by genera ------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+genus_keep <- genus_predictions %>% 
+  # filter(range_cwd>2) %>% 
+  filter(n_collections>10) %>%
+  pull(genus)
+
+margins_plot <- genus_predictions %>% 
+  filter(genus %in% genus_keep) %>% 
+  ggplot(aes(x = cwd.spstd)) + 
+  geom_line(aes(y = Prediction)) +
+  # geom_ribbon(aes(ymin=lower, ymax=upper, fill = gymno_angio), alpha=0.2) +
+  geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
+  theme_bw(base_size = 22) + 
+  facet_wrap(~genus, scales = "free") +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black", fill = NA)) +
+  geom_line(aes(y = upper), linetype = 3) +
+  geom_line(aes(y = lower), linetype = 3) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  xlab("Historic CWD\n(Deviation from species mean)") + 
+  ylab("Predicted sensitivity to CWD") +
+  xlim(c(-2, 2))
+
+margins_plot
+ggsave(paste0(wdir, 'figures\\genus_margins.svg'), margins_plot, width = 10, height = 8, units = "in")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
