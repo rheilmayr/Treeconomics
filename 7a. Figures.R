@@ -97,6 +97,7 @@ cwd_vcov <- readRDS(paste0(wdir, "out/second_stage/cwd_mod_vcov.rds"))
 pet_mod <- readRDS(paste0(wdir, "out/second_stage/pet_mod.rds"))
 int_mod <- readRDS(paste0(wdir, "out/second_stage/int_mod.rds"))
 
+# 7. Genus model predictions
 genus_predictions <- readRDS(paste0(wdir, "out/second_stage/genus_mods.rds"))
 
 
@@ -131,7 +132,7 @@ genus_predictions <- readRDS(paste0(wdir, "out/second_stage/genus_mods.rds"))
 # 
 
 # 2. Historic climate raster
-clim_file <- paste0(wdir, 'in\\CRUData\\historic_raster\\HistoricCWD_AETGrids.Rdat')
+clim_file <- paste0(wdir, 'in/CRUData/historic_raster/HistoricCWD_AETGrids.Rdat')
 load(clim_file)
 cwd_historic <- sum(cwd_historic)
 
@@ -303,6 +304,8 @@ hex <- flm_df %>% ggplot(aes(x = cwd.spstd, y = pet.spstd, weight = nobs)) +
 hex
 
 
+
+
 #ggsave(paste0(wdir, 'figures\\1b_obs_density.svg'), plot = hex, width = 12, height = 12)
 
 
@@ -370,6 +373,92 @@ hex
 #   coord_fixed()
 # binned_margins
 # 
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# ITRDB bias plot --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# CWD
+fullrange_cwd <- sp_predictions %>% 
+  select(cwd.spstd) 
+fullrange_quantiles <- (fullrange_cwd$cwd.spstd) %>% 
+  quantile(probs = seq(0, 1, 0.01))
+
+itrdb_cwd <- mod_df %>% 
+  select(cwd.spstd)
+itrdb_quantiles <- (itrdb_cwd$cwd.spstd) %>% 
+  quantile(probs = seq(0, 1, 0.01))
+
+itrdb_hist <- itrdb_cwd %>% 
+  ggplot(aes(x = cwd.spstd)) +
+  geom_histogram(bins = 50) +
+  xlim(-2.5, 5) +
+  theme_bw() +
+  ggtitle("Frequency among ITRDB sites")
+
+fullrange_hist <- fullrange_cwd %>% 
+  ggplot(aes(x = cwd.spstd)) +
+  geom_histogram(bins = 50) +
+  xlim(-2.5, 5) +
+  theme_bw() +
+  ggtitle("Frequency across species ranges")
+
+quantile_df <- tibble(itrdb = itrdb_quantiles, fullrange = fullrange_quantiles)
+
+qq_plot <- quantile_df %>%
+  ggplot(aes(x = fullrange, y = itrdb)) +
+  geom_point() +
+  # xlim(c(-2, 2)) +
+  # ylim(c(-2, 2)) +
+  xlim(c(-3, 15)) +
+  ylim(c(-3, 15)) +
+  geom_abline(intercept = 0, slope = 1) +
+  theme_bw() +
+  coord_fixed() +
+  ggtitle("QQ-plot comparing CWD distributions")
+
+(itrdb_hist / fullrange_hist) | qq_plot
+
+
+# PET
+fullrange_pet <- sp_predictions %>% 
+  select(pet.spstd) 
+fullrange_pquantiles <- (fullrange_pet$pet.spstd) %>% 
+  quantile(probs = seq(0, 1, 0.01))
+
+itrdb_pet <- mod_df %>% 
+  select(pet.spstd)
+itrdb_pquantiles <- (itrdb_pet$pet.spstd) %>% 
+  quantile(probs = seq(0, 1, 0.01))
+
+itrdb_pet_hist <- itrdb_pet %>% 
+  ggplot(aes(x = pet.spstd)) +
+  geom_histogram(bins = 50) +
+  xlim(-2.5, 5) +
+  theme_bw()
+
+fullrange_pet_hist <- fullrange_pet %>% 
+  ggplot(aes(x = pet.spstd)) +
+  geom_histogram(bins = 50) +
+  xlim(-2.5, 5) +
+  theme_bw()
+
+pquantile_df <- tibble(itrdb = itrdb_pquantiles, fullrange = fullrange_pquantiles)
+
+pet_qq_plot <- pquantile_df %>%
+  ggplot(aes(x = fullrange, y = itrdb)) +
+  geom_point() +
+  # xlim(c(-2, 2)) +
+  # ylim(c(-2, 2)) +
+  xlim(c(-3.5, 15)) +
+  ylim(c(-3.5, 15)) +
+  geom_abline(intercept = 0, slope = 1) +
+  theme_bw() +
+  coord_fixed()
+
+(itrdb_pet_hist / fullrange_pet_hist) | pet_qq_plot
+
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Boxplot of first stage coefficients --------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
