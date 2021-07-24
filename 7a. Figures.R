@@ -51,18 +51,18 @@ options(scipen=999)
 # Load data ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ### Define path
-wdir <- 'remote\\'
+wdir <- 'remote/'
 
 # 1. Site-level regressions
 flm_df <- read_csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv")) %>%
   select(-X1)
 
 # 2. Species range maps
-range_file <- paste0(wdir, 'in//species_ranges//merged_ranges.shp')
+range_file <- paste0(wdir, 'in/species_ranges/merged_ranges.shp')
 range_sf <- st_read(range_file)
 
 # 3. Site information
-site_smry <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
+site_smry <- read_csv(paste0(wdir, 'out/dendro/site_summary.csv'))
 site_smry <- site_smry %>% 
   select(collection_id, sp_id, latitude, longitude) %>% 
   mutate(species_id = tolower(sp_id)) %>% 
@@ -90,8 +90,8 @@ sp_predictions <- readRDS(paste0(wdir, "out/predictions/sp_predictions.rds"))
 
 
 # 6. Second stage model
-cwd_mod <- readRDS(paste0(wdir, "out\\second_stage\\sq_cwd_mod.rds"))
-cwd_vcov <- readRDS(paste0(wdir, "out\\second_stage\\sq_cwd_mod_vcov.rds"))
+cwd_mod <- readRDS(paste0(wdir, "out/second_stage/sq_cwd_mod.rds"))
+cwd_vcov <- readRDS(paste0(wdir, "out/second_stage/sq_cwd_mod_vcov.rds"))
 mod_df <- trim_df
   
 # # 2. Species range maps
@@ -188,15 +188,17 @@ sp_predictions <- sp_predictions %>%
 # ITRDB map, histogram, and climate with species ranges ------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 world <- ne_countries(scale = "medium", returnclass = "sf")
+
 map <- ggplot() +
   theme_bw(base_size = 22)+
   geom_sf(data = world, color = "lightgrey", fill = "lightgrey") +
-  # geom_sf(data = sp_range, fill = 'lightblue', alpha = .9, colour = NA) +
+  #geom_sf(data = sp_range, fill = 'lightblue', alpha = .9, colour = NA) +
   geom_sf(data = flm_df, color = 'darkblue', alpha = .5) +
   ylab("Latitude")+
   xlab("Longitude")
 map
-ggsave(paste0(wdir, 'figures\\1a_itrdb_map.svg'), plot = map, width = 9, height = 6, units = "in")
+
+#ggsave(paste0(wdir, 'figures\\1a_itrdb_map.svg'), plot = map, width = 9, height = 6, units = "in")
 
 
 
@@ -206,7 +208,7 @@ histogram_conceptual <- ggplot(flm_df, aes(x = cwd.spstd)) +
   theme_bw(base_size = 22) + 
   ylab("Number of sites")
 histogram_conceptual
-ggsave(paste0(wdir, 'figures\\1c_hist_conceptual.svg'), plot = histogram_conceptual, width = 9, height = 6, units = "in")
+#ggsave(paste0(wdir, 'figures\\1c_hist_conceptual.svg'), plot = histogram_conceptual, width = 9, height = 6, units = "in")
 
 
 # range_sf %>% ggplot() +
@@ -243,7 +245,7 @@ hex <- flm_df %>% ggplot(aes(x = cwd.spstd, y = pet.spstd, weight = nobs)) +
     legend.background = element_blank()
   )
 hex
-ggsave(paste0(wdir, 'figures\\1b_obs_density.svg'), plot = hex, width = 12, height = 12)
+#ggsave(paste0(wdir, 'figures\\1b_obs_density.svg'), plot = hex, width = 12, height = 12)
 
 
 # ## Plot to show relative variation
@@ -311,6 +313,64 @@ ggsave(paste0(wdir, 'figures\\1b_obs_density.svg'), plot = hex, width = 12, heig
 # binned_margins
 # 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Boxplot of first stage coefficients --------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+trim_df %>% ggplot(aes(y = estimate_cwd.an, color = factor(genus), fill = factor(genus)))+
+  geom_boxplot(outlier.colour = NA, width = .5)
+
+trim_df %>% ggplot(aes(y = estimate_pet.an))+
+  geom_boxplot(outlier.colour = NA, width = .5)+
+  geom_boxplot(aes(y=estimate_cwd.an),outlier.colour = NA, width = .5)
+
+head(trim_df)
+
+long_trim_df <- trim_df %>% 
+  select(collection_id, genus, species_id, estimate_cwd.an,estimate_pet.an) %>% 
+  pivot_longer(-c(collection_id, genus, species_id))
+
+allsens_plot=ggplot(long_trim_df, aes(x=name, y=value, fill=name)) + 
+  geom_hline(yintercept=0,colour = 'black', linetype=2)+
+  geom_jitter(position=position_jitter(0.2),alpha=.1,aes(color=name))+
+  geom_boxplot(outlier.colour = NA, width = .5, alpha=.9)+
+  theme_bw(base_size = 20)+
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))+
+  scale_x_discrete(labels=c("estimate_cwd.an" = "CWD sens.", 
+                            "estimate_pet.an" = "PET sens."))+
+  ylim(-3,3)+
+  xlab("")+
+  ylab("Sensitivity (coefficient estimate)")+
+  guides(fill=F, color=F)+
+  scale_fill_manual(values=c('#21908CFF','#404788FF'))+
+  scale_color_manual(values=c('#21908CFF','#404788FF'))
+
+
+
+genus_plot=ggplot(long_trim_df, aes(x=name, y=value, fill=genus)) + 
+  geom_hline(yintercept=0,colour = 'black', linetype=2)+
+  #geom_jitter(position=position_jitter(0.2),alpha=.1,aes(color=genus))+
+  geom_boxplot(outlier.colour = NA)+
+  theme_bw(base_size = 20)+
+  theme(legend.position = c(.1,.5),legend.title = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))+
+  scale_x_discrete(labels=c("estimate_cwd.an" = "CWD sensitivity", 
+                            "estimate_pet.an" = "PET sensitivity"))+
+  ylim(-2,1.5)+
+  xlab("")+
+  ylab("Sensitivity (coefficient estimate)")+
+  guides(fill=F)+
+  scale_fill_viridis(discrete = T,option = "D")
+genus_plot
+
+allsens_plot+genus_plot+
+  plot_layout(widths = c(1,2))+
+  plot_annotation(tag_levels="a") & theme(plot.tag = element_text(face = 'bold', size=15))
+  
+                          
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Main sensitivity plot --------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ### Binned plot of cwd sensitivity
@@ -318,6 +378,7 @@ seq_min <- -2.625
 seq_max <- 2.625
 seq_inc <- 0.25
 sequence <- seq(seq_min, seq_max, seq_inc)
+
 convert_bin <- function(n){
   sequence[n] + 0.125
 }
@@ -325,14 +386,15 @@ convert_bin <- function(n){
 plot_dat <- trim_df %>%
   filter(((abs(cwd.spstd)<3) & (abs(pet.spstd<3)))) %>%
   drop_na()
-plot_dat <- plot_dat %>%
+
+plot_dat_a <- plot_dat %>%
   mutate(cwd.q = cut(cwd.spstd, breaks = sequence, labels = FALSE),
          cwd.q = convert_bin(cwd.q),
          pet.q = cut(pet.spstd, breaks = sequence, labels = FALSE),
          pet.q = convert_bin(pet.q))
 
 
-plot_dat <- plot_dat %>%
+plot_dat_b <- plot_dat_a %>%
   group_by(cwd.q, pet.q) %>%
   summarize(cwd_sens = mean(estimate_cwd.an, na.rm = TRUE),
             pet_sens = mean(estimate_pet.an, na.rm = TRUE),
@@ -340,7 +402,7 @@ plot_dat <- plot_dat %>%
   filter(n>10)
 
 
-binned_margins <- plot_dat %>%
+binned_margins <- plot_dat_b %>%
   ggplot(aes(x = cwd.q, y = pet.q, fill = cwd_sens)) +
   geom_tile() +
   scale_fill_viridis_c(direction = -1) +
@@ -349,11 +411,11 @@ binned_margins <- plot_dat %>%
   ylim(c(-2,1.1))+
   ylab("Deviation from mean PET")+
   xlab("Deviation from mean CWD")+
-  theme(
-    legend.position = c(.15,.85),
+  theme(legend.position = c(.18,.83),
     legend.key = element_blank(),
-    legend.background = element_blank()
-  ) +
+    legend.background = element_blank(),
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))+
   labs(fill = "Marginal effect\nof CWD") +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") +
@@ -363,7 +425,7 @@ binned_margins <- plot_dat %>%
   
 
 binned_margins
-ggsave(paste0(wdir, 'figures\\binned_margins.svg'), plot = binned_margins)
+#ggsave(paste0(wdir, 'figures\\binned_margins.svg'), plot = binned_margins)
 
 
 
@@ -427,9 +489,11 @@ ggsave(paste0(wdir, 'figures\\binned_margins.svg'), plot = binned_margins)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 pred_min <- mod_df$cwd.spstd %>% quantile(0.01)
 pred_max <- mod_df$cwd.spstd %>% quantile(0.99)
-sq_predictions <- prediction(cwd_mod, at = list(cwd.spstd = seq(pred_min, pred_max, .1)), vcov = cwd_vcov, calculate_se = T, data = mod_df) %>% 
+sq_predictions <- prediction(cwd_mod, at = list(cwd.spstd = seq(pred_min, pred_max, .1)), 
+                             vcov = cwd_vcov, calculate_se = T, data = mod_df) %>% 
   summary() %>% 
   rename(cwd.spstd = "at(cwd.spstd)")
+
 margins_plot <- ggplot(sq_predictions, aes(x = cwd.spstd)) + 
   # stat_smooth(data = trim_df, aes(x = cwd.spstd, y = estimate_cwd.an)) +
   geom_line(aes(y = Prediction), size = 2) +
@@ -438,28 +502,37 @@ margins_plot <- ggplot(sq_predictions, aes(x = cwd.spstd)) +
   geom_line(aes(y = lower), linetype = 3) +
   geom_hline(yintercept = 0, linetype = 2) +
   xlab("Historic CWD\n(Deviation from species mean)") + 
-  ylab("Predicted sensitivity\nto CWD") + 
+  ylab("Pred. sensitivity to CWD") + 
   xlim(c(pred_min, pred_max)) +
-  theme_bw(base_size = 22)
+  theme_bw(base_size = 25)+
+  theme(panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
+
 margins_plot
 
 
 histogram <- ggplot(mod_df, aes(x = cwd.spstd)) + 
   geom_histogram(bins = 40, alpha=0.8, fill = "#404788FF") +
   xlim(c(pred_min, pred_max)) +
-  theme_bw(base_size = 22) + 
+  theme_bw(base_size = 25) + 
   ylab("# sites") +
   theme(aspect.ratio = 0.3,
         axis.title.x = element_blank(),
         axis.text.x = element_blank(),
-        axis.ticks.x = element_blank())
+        axis.ticks.x = element_blank(),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
 histogram
 
 
-out_fig <- binned_margins | (histogram / margins_plot)
+out_fig <- binned_margins + (histogram / margins_plot)+ 
+  plot_layout(widths = c(1,1))+
+  plot_annotation(tag_levels="a") & theme(plot.tag = element_text(face = 'bold', size=15))
+
+
 out_fig
-ggsave(paste0(wdir, 'figures\\2_cwd_margins.svg'), plot = out_fig, width = 20, height = 12, units = "in")
-ggsave(paste0(wdir, 'figures\\2_cwd_margins.png'), plot = out_fig, width = 20, height = 12, units = "in")
+#ggsave(paste0(wdir, 'figures\\2_cwd_margins.svg'), plot = out_fig, width = 20, height = 12, units = "in")
+#ggsave(paste0(wdir, 'figures\\2_cwd_margins.png'), plot = out_fig, width = 20, height = 12, units = "in")
 
 
 
