@@ -637,6 +637,9 @@ margins_plot <- genus_predictions %>%
   ylab("Predicted sensitivity to CWD") +
   xlim(c(-2, 2))
 
+# margins_plot <- margins_plot +
+#   geom_text(data = genus_coefs, aes(x = -1.8, y = 0, label = lab))
+
 margins_plot
 ggsave(paste0(wdir, 'figures\\genus_margins.svg'), margins_plot, width = 10, height = 8, units = "in")
 
