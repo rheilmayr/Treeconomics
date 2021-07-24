@@ -544,7 +544,8 @@ binned_margins <- plot_dat_b %>%
   geom_tile() +
   xlim(c(-2, 1.1))+
   ylim(c(-2,1.1))+
-  scale_fill_viridis_c(direction = -1) +
+  # scale_fill_viridis_c(direction = -1) +
+  scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
   ylab("Deviation from mean PET")+
   xlab("Deviation from mean CWD")+
   theme_bw(base_size = 22)+
