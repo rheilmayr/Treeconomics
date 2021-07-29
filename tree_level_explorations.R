@@ -25,7 +25,10 @@ library(fixest)
 library(dlnm)
 library(tidyverse)
 library(data.table)
-# library(tidylog)
+library(tidylog)
+library(dplyr)
+library(data.table)
+library(stringr)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -36,39 +39,51 @@ wdir <- 'remote\\'
 
 # 1. Dendrochronologies
 dendro_dir <- paste0(wdir, "out\\dendro\\")
-dendro_df <- read.csv(paste0(dendro_dir, "rwi_long.csv")) %>% 
-  as_tibble()
+dendro_df <- read.csv(paste0(dendro_dir, "rwi_long.csv"))
 dendro_df <- dendro_df %>% 
-  select(-core_id) %>% 
-  filter(year>=1900) %>% 
-  filter(year<2020)
-  # TODO: should be debugged in dendro prep - 1b
-
+  select(-core_id)
 
 # 2. Site-specific weather history
 cwd_csv <- paste0(wdir, 'out\\climate\\essentialcwd_data.csv')
 cwd_df <- read_csv(cwd_csv)
 cwd_df <- cwd_df %>% 
-  rename("collection_id" = site)
+  mutate("collection_id" = as.character(site))
 
-# 3. Site summary data
-site_df <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
-site_df <- site_df %>% 
+# 3. Site information
+site_smry <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
+site_smry <- site_smry %>% 
   select(collection_id, sp_id) %>% 
-  mutate(sp_id = str_to_lower(sp_id))
+  mutate(species_id = tolower(sp_id)) %>% 
+  select(-sp_id)
+
+dendro_df <- dendro_df %>% 
+  left_join(site_smry, by = 'collection_id')
+
+obs_ids <- dendro_df %>% 
+  select(collection_id, tree, core) %>% 
+  distinct() %>% 
+  mutate(id = paste(collection_id, tree, core, sep = "_"))
+
+dendro_df <- dendro_df %>% 
+  left_join(obs_ids, by = c("collection_id", "tree", "core"))
 
 # 4. Species information
 sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
 sp_info <- sp_info %>% 
-  select(species_id, genus, gymno_angio, family) %>% 
-  rename(sp_id = species_id)
-site_df <- site_df %>% 
-  left_join(sp_info, by = "sp_id")
+  select(species_id, genus, gymno_angio, family)
+site_smry <- site_smry %>% 
+  left_join(sp_info, by = c("species_id"))
 
-# Merge site / species data back to dendro
-dendro_df <- dendro_df %>%  
-  left_join(site_df,by = "collection_id") %>% 
-  mutate(ln_rwi = log(width))
+# 5. Historic species niche data
+niche_csv <- paste0(wdir, 'out/climate/clim_niche.csv')
+niche_df <- read_csv(niche_csv) %>% 
+  select(-X1) %>% 
+  rename(species_id = sp_code) %>% 
+  rename(sp_pet_mean = pet_mean,
+         sp_pet_sd = pet_sd,
+         sp_cwd_mean = cwd_mean,
+         sp_cwd_sd = cwd_sd)
+
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Summarize and merge site historic climate ------------------------------
@@ -80,74 +95,268 @@ clim_df = cwd_df %>%
             pet.an = sum((aet+cwd)),
             cwd.an = sum(cwd))
 
+# Relate climate to species climatic range
+clim_df = clim_df %>%
+  left_join(site_smry, by = "collection_id") %>%  
+  left_join(niche_df, by = "species_id") %>% 
+  mutate(cwd.an = (cwd.an - sp_cwd_mean) / sp_cwd_sd,
+         pet.an = (pet.an - sp_pet_mean) / sp_pet_sd) %>% 
+  select(collection_id, year, cwd.an, pet.an)
+
+clim_df <- clim_df %>% 
+  drop_na()
 
 # Calculate site-level historic climate
 hist_clim_df <- clim_df %>%
   group_by(collection_id) %>%
   filter(year<1980) %>%
-  summarise(aet.ave = mean(aet.an),
-            cwd.ave = mean(cwd.an),
-            pet.ave = mean(pet.an),
-            cwd.min = min(cwd.an))
+  summarise(cwd.ave = mean(cwd.an),
+            pet.ave = mean(pet.an))
+
+
+# Note: This is slightly different than in our other analyses
+# Here we're removing the site-level historic mean to make interpretation
+# of the DLNM shock a bit easier to compare (1 std above site-level average)
+clim_df <- clim_df %>%
+  left_join(hist_clim_df, by = "collection_id") %>%
+  mutate(cwd.an = cwd.an - cwd.ave,
+         pet.an = pet.an - pet.ave)
+
+# nolag_df <- dendro_df %>% 
+#   left_join(clim_df, by = c("collection_id", "year"))
+# 
+# mod_df <- nolag_df %>% 
+#   filter(cwd.ave > 0)
+# nolagmod = lm(rwi ~ cwd.an + pet.an, data=mod_df)
+# summary(nolagmod)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Create lagged cwd  ------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-nlags=30
-for(i in 1:nlags){
-  lagdf=clim_df %>%
-    select(c(collection_id,year,cwd.an)) %>%
-    mutate(year = year + i)
-  colnames(lagdf)[3]=paste0("cwd_L",i)
-  if(i==1) clim_lagged=left_join(clim_df,lagdf, by = c("collection_id", "year"))
-  if(i>1) clim_lagged=left_join(clim_lagged,lagdf, by = c("collection_id", "year"))
-  print(i)
-}
+nlags=10
+shock = 1
+
+
+cwd_lag_names <- str_c("cwd_L", str_pad(1:nlags, width = 2, pad = 0))
+pet_lag_names <- str_c("pet_L", str_pad(1:nlags, width = 2, pad = 0))
+clim_lags <- clim_df %>% 
+  group_by(collection_id) %>% 
+  arrange(collection_id, year) %>% 
+  do(data.frame(., setNames(shift(.$cwd.an, 1:nlags), cwd_lag_names))) %>%
+  do(data.frame(., setNames(shift(.$pet.an, 1:nlags), pet_lag_names)))
 
 dendro_lagged <- dendro_df %>% 
-  left_join(clim_lagged, by = c("collection_id", "year"))
+  left_join(clim_lags, by = c("collection_id", "year"))
 
-# fwrite(dendro_lagged,file="C:\\Users\\fmoore\\Desktop\\treedendrolagged.csv")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Expore site-level DLNM  ------------------------------
+# Site-level DLNM  ------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-keep_sites = dendro_df %>% 
+run_dlnm <- function(gendat){
+  failed <- F
+  tryCatch(
+    expr = {
+      bylag = 0.1
+      
+      cwd_lagged = data.frame(gendat$cwd.an,gendat[,grep("cwd_L",colnames(gendat))])
+      pet_lagged = data.frame(gendat$pet.an,gendat[,grep("pet_L",colnames(gendat))])
+      
+      cwd_cb = crossbasis(cwd_lagged,lag=c(0,nlags),argvar=list(fun = "lin"),arglag=list(knots=logknots(30, 3)))
+      pet_cb = crossbasis(pet_lagged, lag=c(0,nlags), argvar=list(fun = "lin"), arglag=list(knots=logknots(30, 3)))
+      
+      lagmod=lm(rwi ~ cwd_cb + pet_cb, data=gendat)
+      
+      cwd_cp = crosspred(cwd_cb, lagmod, cen = 0, at = -1:1, bylag = bylag, cumul = TRUE)
+      pet_cp = crosspred(pet_cb, lagmod, cen = 0, at = -1:1, bylag = bylag, cumul = TRUE)
+      # cwd_cum <- cwd_cp$cumfit[3,nlags + 1]
+      # pet_cum <- pet_cp$cumfit[3,nlags + 1]
+      lag_effects <- tibble(lag = seq(0,nlags,bylag), 
+                            cwd_effect = cwd_cp$matfit[3,], 
+                            pet_effect = pet_cp$matfit[3,],
+                            cwd_cum =  cwd_cp$cumfit[3,nlags + 1],
+                            pet_cum =  pet_cp$cumfit[3,nlags + 1])
+    },
+    error = function(e) {
+      message("Returned dlnm error")
+      reg_error <<- e[1]
+      failed <<- T
+    }
+  )
+  if (failed){
+    return(NA)
+  }
+  return(lag_effects)
+}
+
+gendat <- dendro_lagged %>% 
   group_by(collection_id) %>% 
-  tally() %>% 
-  arrange(desc(n))
+  nest()
 
-site = "NETH031"
-site = "AUST115"
-site = "RUSS223"
-site = "CA667"
-site = "MONG039"
-site = "SWIT285"
-site = "WV006"
+gendat <- gendat %>% 
+  mutate(cum_cwd_effect = map(data, run_dlnm))
 
-i = 203
-site = keep_sites[i,1] %>% pull()
+lagged_effects <- gendat %>% 
+  select(collection_id, cum_cwd_effect) %>% 
+  unnest(cum_cwd_effect) %>% 
+  left_join(hist_clim_df, by = "collection_id")
 
-gendat=dendro_lagged%>%
-  filter(collection_id==site)
-  
-shock = gendat$cwd.an %>% quantile(.9, na.rm = TRUE)
-at_vals = (shock - 50):(shock + 50)
+cum_effects <- lagged_effects %>% 
+  select(collection_id, cwd_cum, pet_cum, cwd.ave, pet.ave) %>% 
+  distinct()
 
-lagged=data.frame(gendat$cwd.an,gendat[,grep("cwd_L",colnames(gendat))])
-cblagged=crossbasis(lagged,lag=c(0,nlags),argvar=list("bs",degree=2),arglag=list(knots=logknots(30, 3)))
-gendat$id=interaction(gendat$collection_id,gendat$tree)
-lagmod=lm(gendat$width~cblagged+gendat$pet.an,data=gendat)
-crosspredict = crosspred(cblagged, lagmod, cen=0, at = at_vals, cumul = TRUE)
-plot(crosspredict,
+lagged_effects <- lagged_effects %>% 
+  select(-cwd_cum, -pet_cum, -cum_cwd_effect) %>% 
+  drop_na()
+
+lagged_effects$cwd_tercile <- ntile(lagged_effects$cwd.ave, 3) %>% as.factor()
+lagged_effects$pet_tercile = ntile(lagged_effects$pet.ave, 3) %>% as.factor()
+
+median_effect <- lagged_effects %>%
+  group_by(lag) %>%
+  summarise(med_effect = median(cwd_effect),
+            upper = quantile(cwd_effect, 0.66, na.rm = T),
+            lower = quantile(cwd_effect, 0.33, na.rm = T),
+            upper2 = med_effect + sd(cwd_effect),
+            lower2 = med_effect - sd(cwd_effect))
+
+median_effect %>% 
+  ggplot(aes(x = lag, y = med_effect, ymax = upper, ymin = lower)) +
+  geom_line() +
+  geom_ribbon(alpha = 0.2) +
+  theme_bw()
+
+p <- ggplot() +
+  geom_line(aes(x = lag, y = cwd_effect, group = collection_id), data = lagged_effects, 
+            alpha = 0.05) +
+  geom_line(aes(x = lag, y = med_effect), data = median_effect, color = "cornflowerblue") +
+  geom_ribbon(aes(x = lag, ymax = upper, ymin = lower), data = median_effect, 
+              fill = "cornflowerblue", alpha = 0.3) +
+  ylim(c(-0.6, 0.25)) +
+  theme_bw()
+p
+
+
+median_effect <- lagged_effects %>%
+  group_by(cwd_tercile, lag) %>%
+  summarise(med_effect = median(cwd_effect),
+            upper = quantile(cwd_effect, 0.66, na.rm = T),
+            lower = quantile(cwd_effect, 0.33, na.rm = T),
+            upper2 = med_effect + sd(cwd_effect),
+            lower2 = med_effect - sd(cwd_effect))
+median_effect %>% 
+  ggplot(aes(x = lag, y = med_effect, ymax = upper, ymin = lower)) +
+  facet_grid(rows = median_effect$cwd_tercile) +
+  geom_line() +
+  geom_ribbon(alpha = 0.2) +
+  theme_bw()
+
+
+median_effect <- lagged_effects %>%
+  group_by(lag) %>% 
+  summarise(med_effect = median(pet_effect),
+            upper = quantile(pet_effect, 0.66, na.rm = T),
+            lower = quantile(pet_effect, 0.33, na.rm = T))
+median_effect %>% 
+  ggplot(aes(x = lag, y = med_effect, ymax = upper, ymin = lower)) +
+  geom_line() +
+  geom_ribbon(alpha = 0.2) +
+  theme_bw()
+
+
+
+median_effect <- lagged_effects %>%
+  group_by(lag, pet_tercile) %>% 
+  summarise(med_effect = median(pet_effect),
+            upper = quantile(pet_effect, 0.66, na.rm = T),
+            lower = quantile(pet_effect, 0.33, na.rm = T))
+median_effect %>% 
+  ggplot(aes(x = lag, y = med_effect, ymax = upper, ymin = lower)) +
+  geom_line() +
+  geom_ribbon(alpha = 0.2) +
+  facet_grid(rows = median_effect$pet_tercile) +
+  theme_bw()
+
+
+thresh_low <- cum_effects$cwd_cum %>% quantile(0.02, na.rm = T)
+thresh_high <- cum_effects$cwd_cum %>% quantile(0.98, na.rm = T)
+mod_df <- cum_effects %>% filter(cwd_cum>thresh_low, cwd_cum<thresh_high)
+mod <- lm(cwd_cum ~ cwd.ave + pet.ave, data = mod_df)
+summary(mod)
+
+thresh_low <- cum_effects$pet_cum %>% quantile(0.02, na.rm = T)
+thresh_high <- cum_effects$pet_cum %>% quantile(0.98, na.rm = T)
+mod_df <- cum_effects %>% filter(pet_cum>thresh_low, pet_cum<thresh_high)
+mod <- lm(pet_cum ~ cwd.ave + pet.ave, data = mod_df)
+summary(mod)
+
+
+cum_effects %>% 
+  filter(cwd_cum>thresh_low, cwd_cum<thresh_high) %>% 
+  ggplot(aes(y = cwd_cum)) +
+  geom_boxplot()
+
+
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Aggregated DLNM  ------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+gendat <- dendro_lagged
+
+gendat <- gendat %>% 
+  group_by(collection_id) %>% 
+  nest()
+
+keep_sites = site_smry %>% 
+  filter(species_id == "pcgl") %>% 
+  pull(collection_id) %>% 
+  unique()
+
+cwd_thresh <- hist_clim_df$cwd.ave %>% 
+  quantile(0.66)
+pet_thresh <- hist_clim_df$pet.ave %>% 
+  quantile(0.66)
+
+
+keep_sites = hist_clim_df %>% 
+  filter(pet.ave > pet_thresh,
+         cwd.ave > cwd_thresh) %>%
+  # sample_frac(0.25) %>%
+  pull(collection_id) %>% 
+  unique()
+
+gendat = dendro_lagged %>%
+  filter(collection_id %in% keep_sites)
+
+mod <- feols(rwi ~ pet.an + cwd.an + pet_L01 + cwd_L01 + pet_L02 + cwd_L02 + pet_L03 + cwd_L03 +
+               pet_L05 + cwd_L05 + pet_L05 + cwd_L05| id, data = gendat)
+mod <- lm(rwi ~ pet.an + cwd.an * cwd.ave + pet.an * pet.ave, data = gendat)
+summary(mod)
+
+at_vals = seq((shock - 1), (shock + 1), 0.01)
+
+cwd_lagged = data.frame(gendat$cwd.an,gendat[,grep("cwd_L",colnames(gendat))])
+pet_lagged = data.frame(gendat$pet.an,gendat[,grep("pet_L",colnames(gendat))])
+
+cwd_cb = crossbasis(cwd_lagged,lag=c(0,nlags),argvar=list(fun = "lin"),arglag=list(knots=logknots(30, 2)))
+pet_cb = crossbasis(pet_lagged, lag=c(0,nlags), argvar=list(fun = "lin"), arglag=list(knots=logknots(30, 2)))
+
+
+lagmod=lm(rwi ~ cwd_cb + pet_cb, data=gendat)
+summary(lagmod)
+cwd_cp = crosspred(cwd_cb, lagmod, cen = 0, at = -1:1, bylag = 0.1, cumul = TRUE)
+plot(cwd_cp,
      var=shock,
      xlab=paste0("Lagged Effect of CWD=", as.integer(shock)),
-     ylab="Ring Width Growth",main=paste("Site=",site),cumul=FALSE)
+     ylab="Ring Width Growth",main=paste("Site"),cumul=FALSE)
 
-
-
+pet_cp = crosspred(pet_cb, lagmod, cen = 0, at = -1:1, bylag = 0.1, cumul = TRUE)
+plot(pet_cp,
+     var=shock,
+     xlab=paste0("Lagged Effect of PET=", as.integer(shock)),
+     ylab="Ring Width Growth",main=paste("Site"),cumul=FALSE)
 
 
 
@@ -245,12 +454,13 @@ for(i in 1:length(relgenus)){
 
 #try interactions model for whole dataset
 dendro_lagged <- dendro_lagged %>%
-  mutate(lag_5 = rowMeans(select(.,cwd_L1,cwd_L2,cwd_L3,cwd_L4,cwd_L5)),
-         lag_2_5 = rowMeans(select(.,cwd_L2,cwd_L3,cwd_L4,cwd_L5)),
-         lag_6_10 = rowMeans(select(.,cwd_L6,cwd_L7,cwd_L8,cwd_L9,cwd_L10)))
+  mutate(lag_5 = rowMeans(select(.,cwd_L01,cwd_L02,cwd_L03,cwd_L04,cwd_L05)),
+         lag_2_5 = rowMeans(select(.,cwd_L02,cwd_L03,cwd_L04,cwd_L05)),
+         lag_6_10 = rowMeans(select(.,cwd_L06,cwd_L07,cwd_L08,cwd_L09,cwd_L10)))
 dendro_lagged$id=interaction(dendro_lagged$collection_id,dendro_lagged$tree)
-intmod=felm(ln_rwi~cwd.an*lag_2_5+cwd.an*lag_6_10+pet.an|id|0|collection_id,data=dendro_lagged)
-intmod=felm(ln_rwi~cwd.an + lag_5 + lag_6_10 + pet.an|id|0|collection_id,data=dendro_lagged)
+intmod=felm(rwi~cwd.an*lag_2_5+cwd.an*lag_6_10+pet.an|id|0|collection_id,data=dendro_lagged)
+summary(intmod)
+intmod=felm(rwi~cwd.an + lag_5 + lag_6_10 + pet.an|id|0|collection_id,data=dendro_lagged)
 summary(intmod)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -373,5 +583,63 @@ youngtrees_df <- dendro_lagged %>%
   inner_join(young_trees, by = c("collection_id", "tree"))
 
 lagmod=felm(subset_dat$ln_rwi~cblagged+subset_dat$pet.an|id|0|collection_id,data=subset_dat)
-         
-         
+
+
+
+
+
+
+# ### Binned plot of cwd sensitivity - could adapt to dlnm?
+# seq_min <- -2.625
+# seq_max <- 2.625
+# seq_inc <- 0.25
+# sequence <- seq(seq_min, seq_max, seq_inc)
+# 
+# convert_bin <- function(n){
+#   sequence[n] + 0.125
+# }
+# 
+# plot_dat <- cum_effects %>%
+#   filter(cwd_cum>thresh_low, cwd_cum<thresh_high) %>%
+#   filter(((abs(cwd.ave)<3) & (abs(pet.ave<3)))) %>%
+#   drop_na()
+# 
+# plot_dat_a <- plot_dat %>%
+#   mutate(cwd.q = cut(cwd.ave, breaks = sequence, labels = FALSE),
+#          cwd.q = convert_bin(cwd.q),
+#          pet.q = cut(pet.ave, breaks = sequence, labels = FALSE),
+#          pet.q = convert_bin(pet.q))
+# 
+# 
+# plot_dat_b <- plot_dat_a %>%
+#   group_by(cwd.q, pet.q) %>%
+#   dplyr::summarize(cwd_sens = mean(cwd_cum, na.rm = TRUE),
+#                    pet_sens = mean(pet_cum, na.rm = TRUE),
+#                    n = n()) %>%
+#   filter(n>10)
+# 
+# 
+# binned_margins <- plot_dat_b %>%
+#   ggplot(aes(x = cwd.q, y = pet.q, fill = pet_sens)) +
+#   geom_tile() +
+#   xlim(c(-2, 1.1))+
+#   ylim(c(-2,1.1))+
+#   # scale_fill_viridis_c(direction = -1) +
+#   scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
+#   ylab("Deviation from mean PET")+
+#   xlab("Deviation from mean CWD")+
+#   theme_bw(base_size = 22)+
+#   theme(legend.position = c(.18,.83),
+#         legend.key = element_blank(),
+#         legend.background = element_blank())+
+#   #panel.grid.major = element_blank(),
+#   #panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))+
+#   labs(fill = "Marginal effect\nof CWD") +
+#   ylab("Historic PET\n(Deviation from species mean)") +
+#   xlab("Historic CWD\n(Deviation from species mean)") +
+#   coord_fixed() +
+#   geom_hline(yintercept = 0, size = 1, linetype = 2) +
+#   geom_vline(xintercept = 0, size = 1, linetype = 2)
+# 
+# 
+# binned_margins
