@@ -218,28 +218,7 @@ dendro_df %>%
 # summary(coef_mod)
 
 
-# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# # Identify tree-level weather history ------------------------------
-# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# tree_clim <- dendro_df %>% 
-#   select(collection_id, year, tree, aet.an, cwd.an, pet.an) %>% 
-#   distinct()
-# 
-# tree_clim <- tree_clim %>%
-#   filter(year<1980) %>% 
-#   group_by(collection_id, tree) %>% 
-#   summarize(first_year = min(year),
-#             young = first_year > 1901,
-#             cwd.trmean = mean(cwd.an),
-#             cwd.trsd = sd(cwd.an),
-#             pet.trmean = mean(pet.an),
-#             pet.trsd = sd(pet.an))
-# 
-# # tree_clim %>% 
-# #   filter(young == T) %>% 
-# #   group_by(collection_id) %>% 
-# #   tally() %>% 
-# #   filter(n>1)
+
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -396,7 +375,7 @@ fs_mod <- function(site_data){
     )    
   }
   if (failed){
-    return(tibble(mod = list(mod), nobs = nobs, ncores = ncores, ntrees = ntrees, rwl_mean = rwl_mean, rwl_sd = rwl_sd, error = reg_error))
+    return(NA)
   }
   return(tibble(mod = list(mod), nobs = nobs, ncores = ncores, ntrees = ntrees, rwl_mean = rwl_mean, rwl_sd = rwl_sd, error = reg_error))
 }
@@ -405,13 +384,12 @@ site_df <- dendro_df %>%
   drop_na() %>% 
   mutate(cwd.an = cwd.an.spstd,
          pet.an = pet.an.spstd) %>% 
-  mutate(ln_rwi = log(rwi)) %>% 
   group_by(collection_id) %>%
   add_tally(name = 'nobs') %>% 
   filter(nobs>10) %>% 
   nest()
 
-
+site_df <- site_df[1:1000,]
 site_df <- site_df %>% 
   mutate(fs_result = map(data, fs_mod))
 
@@ -448,6 +426,76 @@ site_df %>% write.csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv'))
 # data %>% 
 #   ggplot(aes(x = rwi, y = pred)) +
 #   geom_point()
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Identify tree-level weather history ------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+tree_df <- dendro_df %>%
+  select(collection_id, year, tree, core, rwi, cwd.an.spstd, pet.an.spstd) %>%
+  drop_na() %>% 
+  mutate(cwd.an = cwd.an.spstd,
+         pet.an = pet.an.spstd,
+         tree_id = paste(collection_id, tree, sep = "_")) %>% 
+  distinct()
+
+tree_clim <- tree_df %>%
+  filter(year<1980) %>%
+  group_by(tree_id) %>%
+  summarize(first_year = min(year),
+            last_year = max(year),
+            young = first_year > 1901,
+            cwd.trmean = mean(cwd.an.spstd, na.rm = T),
+            cwd.trsd = sd(cwd.an.spstd, na.rm = T),
+            pet.trmean = mean(pet.an.spstd, na.rm = T),
+            pet.trsd = sd(pet.an.spstd, na.rm = T))
+
+
+# tree_clim %>% 
+#   filter(young==T) %>% 
+#   select(collection_id, tree, cwd.trmean) %>% 
+#   unique() %>% 
+#   group_by(collection_id) %>% 
+#   tally() %>% 
+#   filter(n>1)
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Create tree-level regressions ------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+tree_df <- tree_df %>% 
+  group_by(tree_id) %>%
+  add_tally(name = 'nobs') %>% 
+  filter(nobs>10) %>% 
+  nest()
+
+tree_fs <- tree_df %>% 
+  mutate(fs_result = map(data, fs_mod))
+
+tree_data <- tree_fs %>% 
+  select(tree_id, data)
+
+tree_fs <- tree_fs %>% 
+  select(tree_id, fs_result) %>% 
+  unnest(fs_result)
+
+tree_fs <- tree_fs[which(!(tree_fs %>% pull(mod) %>% is.na())),]
+
+tree_fs <- tree_fs %>% 
+  unnest(cols = c(mod))
+
+tree_fs <- tree_fs %>% 
+  select(-error) %>% 
+  ungroup() %>% 
+  left_join(tree_clim, by = "tree_id")
+
+tree_fs <- tree_fs %>% 
+  select(-fs_result, -rwl_mean, -rwl_sd)
+  
+
+tree_fs %>% write.csv(paste0(wdir, 'out\\first_stage\\tree_pet_cwd_std.csv'))
+
+
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Create illustrative figure --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -509,82 +557,86 @@ site_data %>% ggplot(aes(x = cwd.an, y = rwi)) +
 #     drop_na()
 #   return(dendro_dat)
 # }
-
-fs_mod <- function(tree_data){
-  failed <- F
-  reg_error <- NA
-  femod <- NA
-  pet_cwd_cov <- NA
-  nobs <- NA
-  ncores <- tree_data %>% select(core) %>%  n_distinct()
-  no_cwd_var <- (tree_data %>% select(cwd.an) %>% n_distinct() == 1)
-  no_pet_var <- (tree_data %>% select(pet.an) %>% n_distinct() == 1)
-  if (no_cwd_var | no_pet_var) {
-    message("Site has no variation in CWD or PET")
-    failed <- T
-  } else{
-    # Try to run felm. Typically fails if missing cwd / aet data 
-    tryCatch(
-      expr = {
-        # mod <- lm(ln_rwi ~ pet.an + cwd.an, data = tree_data)
-        if (ncores==1){
-          femod <- feols(ln_rwi ~ cwd.an + pet.an, tree_data)
-        } else{
-          femod <- feols(ln_rwi ~ cwd.an + pet.an | core, tree_data)
-        }
-        vcov <- femod$cov.unscaled
-        pet_cwd_cov <- vcov %>% 
-          subset(rownames(vcov) == "cwd.an") %>% 
-          as_tibble() %>% 
-          pull("pet.an")
-        nobs <- femod$nobs
-        femod <- tidy(femod) %>%
-          filter(term %in% c('cwd.an', 'pet.an')) %>% 
-          pivot_wider(names_from = "term", values_from = c("estimate", "std.error", "statistic", "p.value"))
-      },
-      error = function(e){ 
-        message("Returned regression error")
-        reg_error <<- e[1]
-        failed <<- T
-      }
-    )    
-  }
-  if (failed){
-    return(tibble(mod = list(femod), cov = pet_cwd_cov, nobs = nobs, ncores = ncores, error = reg_error))
-  }
-  return(tibble(mod = list(femod), cov = pet_cwd_cov, nobs = nobs, ncores = ncores, error = reg_error))
-}
-
-
-tree_df <- dendro_df %>% 
-  drop_na() %>% 
-  mutate(ln_rwi = log(rwi)) %>% 
-  group_by(collection_id, tree) %>%
-  add_tally(name = 'nobs') %>% 
-  filter(nobs>10) %>% 
-  nest()
-
-tree_df <- tree_df %>% 
-  mutate(fs_result = map(data, fs_mod)) 
-
-tree_df <- tree_df %>% 
-  select(collection_id, tree, fs_result, data) %>% 
-  unnest(fs_result) 
-
-tree_df <- tree_df[which(!(tree_df %>% pull(mod) %>% is.na())),]
-tree_df <- tree_df %>% 
-  filter(map_lgl(error, is.null)) %>% 
-  unnest(mod)
-
-tree_df <- tree_df %>% 
-  select(-error, -data)
-
-tree_df <- tree_df %>% 
-  left_join(tree_clim, by = c("collection_id", "tree"))
-
-# tree_df %>% filter(p.value_pet.an<0.05) %>% select(estimate_cwd.an, estimate_pet.an) %>% summary()
-
-tree_df %>% write.csv(paste0(wdir, 'out\\first_stage\\tree_log_pet_cwd.csv'))
+# 
+# fs_mod <- function(tree_data){
+#   failed <- F
+#   reg_error <- NA
+#   femod <- NA
+#   pet_cwd_cov <- NA
+#   nobs <- NA
+#   ncores <- tree_data %>% select(core) %>%  n_distinct()
+#   no_cwd_var <- (tree_data %>% select(cwd.an) %>% n_distinct() == 1)
+#   no_pet_var <- (tree_data %>% select(pet.an) %>% n_distinct() == 1)
+#   if (no_cwd_var | no_pet_var) {
+#     message("Site has no variation in CWD or PET")
+#     failed <- T
+#   } else{
+#     # Try to run felm. Typically fails if missing cwd / aet data 
+#     tryCatch(
+#       expr = {
+#         # mod <- lm(ln_rwi ~ pet.an + cwd.an, data = tree_data)
+#         if (ncores==1){
+#           femod <- feols(ln_rwi ~ cwd.an + pet.an, tree_data)
+#         } else{
+#           femod <- feols(ln_rwi ~ cwd.an + pet.an | core, tree_data)
+#         }
+#         vcov <- femod$cov.unscaled
+#         pet_cwd_cov <- vcov %>% 
+#           subset(rownames(vcov) == "cwd.an") %>% 
+#           as_tibble() %>% 
+#           pull("pet.an")
+#         nobs <- femod$nobs
+#         femod <- tidy(femod) %>%
+#           filter(term %in% c('cwd.an', 'pet.an')) %>% 
+#           pivot_wider(names_from = "term", values_from = c("estimate", "std.error", "statistic", "p.value"))
+#       },
+#       error = function(e){ 
+#         message("Returned regression error")
+#         reg_error <<- e[1]
+#         failed <<- T
+#       }
+#     )    
+#   }
+#   if (failed){
+#     return(tibble(mod = list(femod), cov = pet_cwd_cov, nobs = nobs, ncores = ncores, error = reg_error))
+#   }
+#   return(tibble(mod = list(femod), cov = pet_cwd_cov, nobs = nobs, ncores = ncores, error = reg_error))
+# }
+# 
+# 
+# tree_df <- dendro_df %>% 
+#   drop_na() %>% 
+#   mutate(ln_rwi = log(rwi)) %>% 
+#   group_by(collection_id, tree) %>%
+#   add_tally(name = 'nobs') %>% 
+#   filter(nobs>10) %>% 
+#   nest()
+# 
+# tree_df <- tree_df %>% 
+#   mutate(fs_result = map(data, fs_mod)) 
+# 
+# tree_df <- tree_df %>% 
+#   select(collection_id, tree, fs_result, data) %>% 
+#   unnest(fs_result) 
+# 
+# tree_df <- tree_df[which(!(tree_df %>% pull(mod) %>% is.na())),]
+# tree_df <- tree_df %>% 
+#   filter(map_lgl(error, is.null)) %>% 
+#   unnest(mod)
+# 
+# tree_df <- tree_df %>% 
+#   select(-error, -data)
+# 
+# tree_df <- tree_df %>% 
+#   left_join(tree_clim, by = c("collection_id", "tree"))
+# 
+# # tree_df %>% filter(p.value_pet.an<0.05) %>% select(estimate_cwd.an, estimate_pet.an) %>% summary()
+# 
+# tree_df %>% write.csv(paste0(wdir, 'out\\first_stage\\tree_log_pet_cwd.csv'))
+# 
+# 
+# 
+# 
 
 
 
