@@ -135,6 +135,7 @@ genus_predictions <- readRDS(paste0(wdir, "out/second_stage/genus_mods.rds"))
 clim_file <- paste0(wdir, 'in/CRUData/historic_raster/HistoricCWD_AETGrids.Rdat')
 load(clim_file)
 cwd_historic <- sum(cwd_historic)
+names(cwd_historic) = "cwd"
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define palettes ------------------------------------
@@ -160,9 +161,14 @@ create_prediction_df <- function(spp_predictions){
                  pull(sensitivity))[[1]]
   sp_rwi  <- (spp_predictions %>% 
                 pull(rwi_predictions))[[1]]
-  names(sp_rwi) <- "rwi"
   
-  clim_compare <- brick(c(sp_fut, sp_hist, sp_sens, sp_rwi))
+  sp_rwi_psens  <- (spp_predictions %>% 
+                pull(rwi_predictions_partial_sens))[[1]]
+  
+  sp_rwi_pclim  <- (spp_predictions %>% 
+                      pull(rwi_predictions_partial_clim))[[1]]
+  
+  clim_compare <- brick(c(sp_fut, sp_hist, sp_sens, sp_rwi, sp_rwi_psens, sp_rwi_pclim))
   clim_compare <- clim_compare %>% 
     as.data.frame(xy = TRUE) %>% 
     drop_na()
@@ -176,11 +182,11 @@ sp_predictions <- sp_predictions %>%
   select(-data) %>% 
   unnest(cols = pred_df) %>% 
   mutate(cwd_change = cwd.fut - cwd.spstd,
-         pet_change = pet.fut - pet.spstd)
-
-sp_predictions <- sp_predictions %>% 
-  mutate(rwi_null = cwd.spstd * cwd_sens + pet.spstd * pet_sens + intercept,
-         rwi_change = rwi - rwi_null)
+         pet_change = pet.fut - pet.spstd,
+         rwi_null = cwd.spstd * cwd_sens + pet.spstd * pet_sens + intercept,
+         rwi_change = rwi_pred - rwi_null,
+         rwi_change_psens = rwi_psens - rwi_null,
+         rwi_change_pclim = rwi_pclim - rwi_null)
 
 # sp_predictions %>% 
 #   ggplot(aes(x = cwd.spstd, y = cwd_sens)) +
@@ -435,13 +441,16 @@ itrdb_pet_hist <- itrdb_pet %>%
   ggplot(aes(x = pet.spstd)) +
   geom_histogram(bins = 50) +
   xlim(-2.5, 5) +
-  theme_bw()
+  theme_bw() +
+  ggtitle("Frequency among ITRDB sites")
+
 
 fullrange_pet_hist <- fullrange_pet %>% 
   ggplot(aes(x = pet.spstd)) +
   geom_histogram(bins = 50) +
   xlim(-2.5, 5) +
-  theme_bw()
+  theme_bw() +
+  ggtitle("Frequency across species ranges")
 
 pquantile_df <- tibble(itrdb = itrdb_pquantiles, fullrange = fullrange_pquantiles)
 
@@ -454,16 +463,37 @@ pet_qq_plot <- pquantile_df %>%
   ylim(c(-3.5, 15)) +
   geom_abline(intercept = 0, slope = 1) +
   theme_bw() +
-  coord_fixed()
+  coord_fixed() +
+  ggtitle("QQ-plot comparing CWD distributions")
 
 (itrdb_pet_hist / fullrange_pet_hist) | pet_qq_plot
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Boxplot of first stage coefficients --------------------------------------------------
+# Histogram of first stage coefficients --------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+cwd_trim_df <- trim_df %>% 
+  select(collection_id, genus, species_id, estimate = estimate_cwd.an, p = p.value_cwd.an) %>% 
+  mutate(variable = "cwd")
 
-head(trim_df)
+pet_trim_df <- trim_df %>% 
+  select(collection_id, genus, species_id, estimate = estimate_pet.an, p = p.value_pet.an) %>% 
+  mutate(variable = "pet")
+
+long_trim_df <- rbind(cwd_trim_df, pet_trim_df) %>% 
+  mutate(`p<0.05` = p<0.05)
+
+long_trim_df %>% 
+  ggplot(aes(x = estimate, fill = `p<0.05`)) +
+  geom_histogram(bins = 300) +
+  facet_wrap("variable", nrow = 2) +
+  scale_x_continuous(trans="log1p") +
+  theme_bw() +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+  xlim(-2, 2) +
+  scale_fill_manual(values = c("cornflowerblue", "darkblue"))
+
+
 
 long_trim_df <- trim_df %>% 
   select(collection_id, genus, species_id, estimate_cwd.an,estimate_pet.an) %>% 
@@ -563,7 +593,7 @@ binned_margins <- plot_dat_b %>%
   
 
 binned_margins
-#ggsave(paste0(wdir, 'figures\\binned_margins.svg'), plot = binned_margins)
+# ggsave(paste0(wdir, 'figures\\binned_margins.svg'), plot = binned_margins)
 
 
 # ### Binned plot of pet sensitivity
@@ -695,7 +725,7 @@ out_fig <- binned_margins + (histogram / margins_plot)+
 
 
 out_fig
-#ggsave(paste0(wdir, 'figures\\2_cwd_margins.svg'), plot = out_fig, width = 20, height = 12, units = "in")
+ggsave(paste0(wdir, 'figures\\2_cwd_margins.svg'), plot = out_fig, width = 20, height = 12, units = "in")
 #ggsave(paste0(wdir, 'figures\\2_cwd_margins.png'), plot = out_fig, width = 20, height = 12, units = "in")
 #ggsave(paste0(wdir, 'figures\\2_cwd_margins_only.svg'), plot = margins_plot, width = 15, height = 9, units = "in")
 
@@ -705,8 +735,9 @@ out_fig
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 genus_keep <- genus_predictions %>% 
   # filter(range_cwd>2) %>% 
-  filter(n_collections>10) %>%
-  pull(genus)
+  filter(n_collections>25) %>%
+  pull(genus) %>% 
+  unique()
 
 margins_plot <- genus_predictions %>% 
   filter(genus %in% genus_keep) %>% 
@@ -731,7 +762,7 @@ margins_plot <- genus_predictions %>%
 #   geom_text(data = genus_coefs, aes(x = -1.8, y = 0, label = lab))
 
 margins_plot
-ggsave(paste0(wdir, 'figures\\genus_margins.svg'), margins_plot, width = 10, height = 8, units = "in")
+ggsave(paste0(wdir, 'figures\\3_genus_margins.svg'), margins_plot, width = 10, height = 8, units = "in")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -757,8 +788,10 @@ plot_dat <- plot_dat %>%
 
 plot_dat <- plot_dat %>% 
   group_by(cwd.q, pet.q) %>% 
-  summarize(rwi = mean(rwi, na.rm = TRUE),
+  summarize(rwi_pred = mean(rwi_pred, na.rm = TRUE),
             rwi_change = mean(rwi_change, na.rm = TRUE),
+            rwi_change_psens = mean(rwi_change_psens, na.rm = TRUE),
+            rwi_change_pclim = mean(rwi_change_pclim, na.rm = TRUE),
             cwd_sens = mean(cwd_sens, na.rm = TRUE),
             pet_sens = mean(pet_sens, na.rm = TRUE),
             cwd_change = mean(cwd_change, na.rm = TRUE),
@@ -926,6 +959,32 @@ rwi_bin
 
 
 cwd_change_bin/pet_change_bin | cwd_sens_bin/ pet_sens_bin | rwi_bin
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Transect plots ------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+transect_dat <- plot_dat %>% 
+  select(cwd.q, pet.q, rwi_change, rwi_change_psens, rwi_change_pclim) %>% 
+  pivot_longer(c(rwi_change, rwi_change_psens, rwi_change_pclim), names_to = 'scenario', values_to = "rwi_change")
+
+transect_dat %>% 
+  filter(pet.q == -1) %>% 
+  ggplot(aes(x = cwd.q, y = rwi_change, group = scenario, color = scenario)) +
+  geom_line() +
+  theme_bw() +
+  ylim(c(-0.6, 0.4)) +
+  xlim(c(-2.5, 2.5))
+
+
+transect_dat %>% 
+  filter(pet.q == 1) %>% 
+  ggplot(aes(x = cwd.q, y = rwi_change, group = scenario, color = scenario)) +
+  geom_line() +
+  theme_bw() +
+  ylim(c(-0.6, 0.4)) +
+  xlim(c(-2.5, 2.5))
+
 
 # 
 # lgd_pos <- c(.2, .8)
