@@ -310,8 +310,72 @@ sp_predictions <- sp_predictions %>%
          rwi_predictions_partial_clim = map2(.x = clim_future_sp, .y = sensitivity, calc_rwi_partial_clim))
 
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Stack rasters into dataframe ------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+create_prediction_df <- function(spp_predictions){
+  sp_fut <- (spp_predictions %>% 
+               pull(clim_future_sp))[[1]]
+  names(sp_fut) <- c("cwd.fut", "pet.fut")
+  
+  sp_hist <- (spp_predictions %>% 
+                pull(clim_historic_sp))[[1]]
+  sp_sens  <- (spp_predictions %>% 
+                 pull(sensitivity))[[1]]
+  sp_rwi  <- (spp_predictions %>% 
+                pull(rwi_predictions))[[1]]
+  
+  sp_rwi_psens  <- (spp_predictions %>% 
+                      pull(rwi_predictions_partial_sens))[[1]]
+  
+  sp_rwi_pclim  <- (spp_predictions %>% 
+                      pull(rwi_predictions_partial_clim))[[1]]
+  
+  clim_compare <- brick(c(sp_fut, sp_hist, sp_sens, sp_rwi, sp_rwi_psens, sp_rwi_pclim))
+  clim_compare <- clim_compare %>% 
+    as.data.frame(xy = TRUE) %>% 
+    drop_na()
+  return(clim_compare)
+}
+
+sp_predictions <- sp_predictions %>% 
+  group_by(sp_code) %>% 
+  nest() %>% 
+  mutate(pred_df = map(data, create_prediction_df)) %>% 
+  select(-data) %>% 
+  unnest(cols = pred_df) %>% 
+  mutate(cwd_change = cwd.fut - cwd.spstd,
+         pet_change = pet.fut - pet.spstd,
+         rwi_null = cwd.spstd * cwd_sens + pet.spstd * pet_sens + intercept,
+         rwi_change = rwi_pred - rwi_null,
+         rwi_change_psens = rwi_psens - rwi_null,
+         rwi_change_pclim = rwi_pclim - rwi_null) %>% 
+  select()
+
+
 sp_predictions %>% 
   saveRDS(file = paste0(wdir,"out/predictions/sp_predictions.rds") )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # rwi_cmip_predict <- function(sensitivity){
@@ -323,526 +387,526 @@ sp_predictions %>%
 # 
 # sp_predictions <- sp_predictions %>% 
 #   mutate(rwi_predictions = map(sensitivity, rwi_cmip_predict))
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Extract to dataframe    ---------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-extract_rasters <- function(raster_column){
-  table_column <- raster_column %>% 
-    as.data.frame(xy = T) %>% 
-    drop_na()
-  return(table_column)
-}
-
-# extract_predictions <- function(clim_historic_sp, rwi_predictions){
-#   predict_rasters <- raster::brick(c(clim_historic_sp, rwi_predictions))
+# 
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# # Extract to dataframe    ---------------
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# extract_rasters <- function(raster_column){
+#   table_column <- raster_column %>% 
+#     as.data.frame(xy = T) %>% 
+#     drop_na()
+#   return(table_column)
+# }
+# 
+# # extract_predictions <- function(clim_historic_sp, rwi_predictions){
+# #   predict_rasters <- raster::brick(c(clim_historic_sp, rwi_predictions))
+# #   predict_df <- predict_rasters %>% 
+# #     as.data.frame() %>% 
+# #     drop_na()
+# #   return(predict_df)
+# # }
+# 
+# 
+# 
+# sp_predictions <- sp_predictions %>% 
+#   mutate(clim_historic_sp = map(clim_historic_sp, extract_rasters),
+#          rwi_predictions = map(rwi_predictions, extract_rasters),
+#          rwi_predictions_partial_sens = map(rwi_predictions_partial_sens, extract_rasters),
+#          rwi_predictions_partial_clim = map(rwi_predictions_partial_clim, extract_rasters))
+# 
+# historic_df <- sp_predictions %>% 
+#   select(sp_code, clim_historic_sp) %>% 
+#   unnest(clim_historic_sp)
+# 
+# rwi_df <- sp_predictions %>% 
+#   select(sp_code, rwi_predictions) %>% 
+#   unnest(rwi_predictions)
+# 
+# rwi_psens_df <- sp_predictions %>% 
+#   select(sp_code, rwi_predictions_partial_sens) %>% 
+#   unnest(rwi_predictions_partial_sens)
+# 
+# rwi_pclim_df <- sp_predictions %>% 
+#   select(sp_code, rwi_predictions_partial_clim) %>% 
+#   unnest(rwi_predictions_partial_clim)
+# 
+# out_predictions <- historic_df %>% 
+#   left_join(rwi_df, by = c("sp_code", "x", "y")) %>% 
+#   left_join(rwi_psens_df, by = c("sp_code", "x", "y")) %>% 
+#   left_join(rwi_pclim_df, by = c("sp_code", "x", "y"))
+# 
+# 
+# 
+# out_predictions %>% 
+#   saveRDS(file = paste0(wdir,"out/predictions/sp_predictions.rds") )
+# 
+# 
+# 
+# 
+# 
+# extract_predictions <- function(clim_historic_sp, rwi_predictions, rwi_predictions_partial_sens, rwi_predictions_partial_clim){
+#   predict_rasters <- raster::brick(c(clim_historic_sp, rwi_predictions, rwi_predictions_partial_sens, rwi_predictions_partial_clim))
 #   predict_df <- predict_rasters %>% 
 #     as.data.frame() %>% 
 #     drop_na()
 #   return(predict_df)
 # }
-
-
-
-sp_predictions <- sp_predictions %>% 
-  mutate(clim_historic_sp = map(clim_historic_sp, extract_rasters),
-         rwi_predictions = map(rwi_predictions, extract_rasters),
-         rwi_predictions_partial_sens = map(rwi_predictions_partial_sens, extract_rasters),
-         rwi_predictions_partial_clim = map(rwi_predictions_partial_clim, extract_rasters))
-
-historic_df <- sp_predictions %>% 
-  select(sp_code, clim_historic_sp) %>% 
-  unnest(clim_historic_sp)
-
-rwi_df <- sp_predictions %>% 
-  select(sp_code, rwi_predictions) %>% 
-  unnest(rwi_predictions)
-
-rwi_psens_df <- sp_predictions %>% 
-  select(sp_code, rwi_predictions_partial_sens) %>% 
-  unnest(rwi_predictions_partial_sens)
-
-rwi_pclim_df <- sp_predictions %>% 
-  select(sp_code, rwi_predictions_partial_clim) %>% 
-  unnest(rwi_predictions_partial_clim)
-
-out_predictions <- historic_df %>% 
-  left_join(rwi_df, by = c("sp_code", "x", "y")) %>% 
-  left_join(rwi_psens_df, by = c("sp_code", "x", "y")) %>% 
-  left_join(rwi_pclim_df, by = c("sp_code", "x", "y"))
-
-
-
-out_predictions %>% 
-  saveRDS(file = paste0(wdir,"out/predictions/sp_predictions.rds") )
-
-
-
-
-
-extract_predictions <- function(clim_historic_sp, rwi_predictions, rwi_predictions_partial_sens, rwi_predictions_partial_clim){
-  predict_rasters <- raster::brick(c(clim_historic_sp, rwi_predictions, rwi_predictions_partial_sens, rwi_predictions_partial_clim))
-  predict_df <- predict_rasters %>% 
-    as.data.frame() %>% 
-    drop_na()
-  return(predict_df)
-}
-
-sp_predictions <- sp_predictions %>% 
-  mutate(predict_df = pmap(list(clim_historic_sp, rwi_predictions, rwi_predictions_partial_sens, rwi_predictions_partial_clim), extract_predictions))
-
-
-sp_predictions_df <- sp_predictions %>% 
-  select(sp_code, predict_df) %>% 
-  unnest(predict_df) %>% 
-  pivot_longer(c(-sp_code, -cwd.spstd, -pet.spstd), names_to = "cmip_run", values_to = "rwi")
-
-
-sp_predictions_df %>% 
-  filter(sp_code == "pisy") %>% 
-  ggplot(aes(x = cwd.spstd, y = rwi)) +
-  geom_point()
-
-sp_predictions_df %>% 
-  filter(sp_code == "pila") %>% 
-  ggplot(aes(x = cwd.spstd, y = rwi)) +
-  geom_point()
-
-
-### Binned plot of cwd sensitivity
-nbins = 21
-label_gaps <- 5
-label_pattern <- seq(1,nbins,label_gaps)
-plot_dat <- sp_predictions %>% 
-  # filter(sp_code == "pila") %>% 
-  mutate(cwd.q = as.numeric(ntile(cwd.spstd, nbins)),
-         pet.q = as.numeric(ntile(pet.spstd, nbins)))
-
-cwd.quantiles = quantile(plot_dat$cwd.spstd, probs = seq(0, 1, 1/nbins), names = TRUE) %>% 
-  round(2) %>% 
-  lapply(round, digits = 1)
-pet.quantiles = quantile(plot_dat$pet.spstd, probs = seq(0, 1, 1/nbins), names = TRUE) %>% 
-  round(2) %>% 
-  lapply(round, digits = 1)
-cwd.breaks = seq(0.5, nbins+0.5, 1)
-pet.breaks = seq(0.5, nbins+0.5, 1)
-
-group_dat <- plot_dat %>% 
-  group_by(cwd.q, pet.q) %>% 
-  dplyr::summarize(ln_rwi = mean(ln_rwi, na.rm = TRUE),
-                   n = n()) %>% 
-  filter(n>100)
-
-
-binned_margins <- group_dat %>% 
-  ggplot(aes(x = cwd.q, y = pet.q, fill = ln_rwi)) +
-  geom_tile() +
-  scale_fill_viridis_c(direction = -1) +
-  theme_bw(base_size = 22)+
-  theme(legend.position = "right") +
-  labs(fill = "Predicted impact\nof climate change\non RWI") +
-  scale_x_continuous(labels = cwd.quantiles[label_pattern], breaks = cwd.breaks[label_pattern]) +
-  scale_y_continuous(labels = pet.quantiles[label_pattern], breaks = pet.breaks[label_pattern]) +
-  ylab("Historic PET\n(Deviation from species mean)") +
-  xlab("Historic CWD\n(Deviation from species mean)") + 
-  coord_fixed()
-
-binned_margins 
-combined_plot <- binned_change / binned_margins
-
-ggsave(paste0(wdir, 'figures\\predicted_rwi.svg'), plot = binned_margins)
-ggsave(paste0(wdir, 'figures\\climate_change.svg'), plot = combined_plot, width = 7, height = 11, units = "in")
-
-
-
-
-# calc_mean_rwi <- function(rwi_predictions){
-#   mean_rwi <- raster::brick(rwi_predictions %>% pull(rwi_rast)) %>% mean()
-#   return(mean_rwi)
-# }
 # 
-# sp_predictions <- sp_predictions %>%
-#   mutate(rwi_2100 = map(rwi_predictions, calc_mean_rwi))
-
-
-### Plot drought change by historic cwd and pet
-cwd_historic_sp <- clim_historic_sp %>% subset("cwd.spstd")
-cwd_change <- raster::brick(c(clim_historic_sp, projections$cwd_change))
-cwd_change <- as.data.frame(cwd_change)
-cwd_change <- cwd_change %>% 
-  pivot_longer(-c(cwd.spstd, pet.spstd), names_to = "cmip_mod", values_to = "cwd_change")
-
-plot_dat <- cwd_change %>% drop_na()
-nbins = 10
-plot_dat <- plot_dat %>% 
-  mutate(cwd.q = as.numeric(ntile(cwd.spstd, nbins)),
-         pet.q = as.numeric(ntile(pet.spstd, nbins)))
-cwd.quantiles = quantile(plot_dat$cwd.spstd, probs = seq(0, 1, 1/nbins), names = TRUE) %>% round(2)
-pet.quantiles = quantile(plot_dat$pet.spstd, probs = seq(0, 1, 1/nbins), names = TRUE) %>% round(2)
-
-group_dat <- plot_dat %>% 
-  group_by(cwd.q, pet.q) %>% 
-  summarize(mean = mean(cwd_change),
-            n = n())
-
-binned_margins <- group_dat %>% 
-  ggplot(aes(x = cwd.q, y = pet.q, fill = mean)) +
-  geom_tile() +
-  # xlim(c(-3, 4)) +
-  #ylim(c(-1.5, 1.5))+
-  # scale_fill_gradientn (colours = c("darkblue","lightblue")) +
-  scale_fill_viridis_c() +
-  # scale_fill_viridis_c() +
-  theme_bw(base_size = 22)+
-  ylab("Deviation from mean PET")+
-  xlab("Deviation from mean CWD")+
-  theme(legend.position = "right") +
-  labs(fill = "Mean predicted\nchange in CWD") +
-  scale_x_continuous(labels = cwd.quantiles, breaks = seq(0.5, nbins+0.5, 1)) +
-  scale_y_continuous(labels = pet.quantiles, breaks = seq(0.5, nbins+0.5, 1)) +
-  ylab("Historic PET\n(Deviation from species mean)") +
-  xlab("Historic CWD\n(Deviation from species mean)") + 
-  coord_fixed()
-
-binned_margins 
-
-### Plot predicted RWI impact by historic cwd and pet
-predict_brick <- raster::brick(c(rwi_change = mean_rwi, cwd_hist = cwd_historic, pet_hist = pet_historic))
-rwi_change_df <- as.data.frame(predict_brick)
-rwi_change_df <- rwi_change_df %>% 
-  drop_na() %>% 
-  mutate(cwd.spstd = (cwd_hist - sp_niche$cwd_mean) / sp_niche$cwd_sd,
-         pet.spstd = (pet_hist - sp_niche$pet_mean) / sp_niche$pet_sd)
-mod <- lm(rwi_change ~ cwd.spstd + pet.spstd, data = rwi_change_df)
-summary(mod)
-
-xmin = -2.5
-xmax = 2.5
-predictions <- prediction(mod, at = list(cwd.spstd = seq(xmin, xmax, .1)), calculate_se = T) %>% 
-  summary() %>% 
-  rename(cwd.spstd = "at(cwd.spstd)")
-
-margins_plot <- ggplot(predictions, aes(x = cwd.spstd)) + 
-  geom_line(aes(y = Prediction)) +
-  geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
-  geom_line(aes(y = upper), linetype = 3) +
-  geom_line(aes(y = lower), linetype = 3) +
-  geom_hline(yintercept = 0, linetype = 2) +
-  xlab("Historic CWD\n(Deviation from species mean)") + 
-  ylab("Mean predicted impact on ln(RWI)") + 
-  theme_bw(base_size = 22) +
-  scale_y_continuous(labels = scales::scientific)
-
-margins_plot
-
-
-plot_dat <- rwi_change_df %>%
-  filter(((abs(cwd.spstd)<3) & (abs(pet.spstd<3)))) %>%
-  drop_na()
-nbins = 10
-plot_dat <- plot_dat %>% 
-  mutate(cwd.q = as.numeric(ntile(cwd.spstd, nbins)),
-         pet.q = as.numeric(ntile(pet.spstd, nbins)))
-
-cwd.quantiles = quantile(plot_dat$cwd.spstd, probs = seq(0, 1, 1/nbins), names = TRUE) %>% round(2)
-pet.quantiles = quantile(plot_dat$pet.spstd, probs = seq(0, 1, 1/nbins), names = TRUE) %>% round(2)
-
-group_dat <- plot_dat %>% 
-  group_by(cwd.q, pet.q) %>% 
-  summarize(mean = mean(rwi_change),
-            n = n()) %>% 
-  filter(n>1)
-
-binned_margins <- group_dat %>% 
-  ggplot(aes(x = cwd.q, y = pet.q, fill = mean)) +
-  geom_tile() +
-  # xlim(c(-3, 4)) +
-  #ylim(c(-1.5, 1.5))+
-  scale_fill_gradientn (colours = c("darkblue","lightblue")) +
-  # scale_fill_viridis_c() +
-  theme_bw(base_size = 22)+
-  ylab("Deviation from mean PET")+
-  xlab("Deviation from mean CWD")+
-  theme(legend.position = "right") +
-  labs(fill = "Marginal effect\nof CWD") +
-  scale_x_continuous(labels = cwd.quantiles, breaks = seq(0.5, nbins+0.5, 1)) +
-  scale_y_continuous(labels = pet.quantiles, breaks = seq(0.5, nbins+0.5, 1)) +
-  ylab("Historic PET\n(Deviation from species mean)") +
-  xlab("Historic CWD\n(Deviation from species mean)") + 
-  coord_fixed()
-
-binned_margins 
-
-
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Explore species-level climate / sensitivity ---------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Plot cwd deviation against historic cwd
-# Example species: East Coast - tsca; West coast - pipo; Mediterranean -  
-example_species <- "pila" # TODO: Dig into weird CWD censoring for ABAL, TSHE - guessing this is due to 0 CWD values
-sp_fut <- (sp_predictions %>% 
-             filter(sp_code == example_species) %>% 
-             pull(clim_future_sp))[[1]]
-sp_hist <- (sp_predictions %>% 
-              filter(sp_code == example_species) %>% 
-              pull(clim_historic_sp))[[1]]
-sp_sens  <- (sp_predictions %>% 
-               filter(sp_code == example_species) %>% 
-               pull(sensitivity))[[1]]
-
-names(sp_fut) <- c("cwd.fut", "pet.fut")
-clim_compare <- brick(c(sp_fut, sp_hist, sp_sens))
-clim_compare <- clim_compare %>% 
-  as.data.frame(xy = TRUE)
-
-clim_compare %>% 
-  ggplot(aes(x = cwd.spstd, y = cwd_sens)) +
-  geom_point() +
-  xlim(c(-2,2)) +
-  ylim(c(-.3,.3)) +
-  theme_bw()
-
-
-clim_compare %>% 
-  ggplot(aes(x = cwd.spstd, y = pet_sens)) +
-  geom_point() +
-  xlim(c(-2,2)) +
-  ylim(c(-.3,.3)) +
-  theme_bw()
-
-clim_compare %>% 
-  ggplot(aes(x = cwd.spstd, y = pet.spstd)) +
-  geom_point() +
-  geom_abline(slope = 1, intercept = 0) +
-  coord_fixed() +
-  xlim(c(-2,2)) +
-  ylim(c(-2,2)) +
-  theme_bw()
-
-
-clim_compare %>% 
-  ggplot(aes(x = cwd.spstd, y = cwd.fut)) +
-  geom_point() +
-  geom_abline(slope = 1, intercept = 0) +
-  coord_fixed() +
-  xlim(c(-4,4)) +
-  ylim(c(-4,4)) +
-  theme_bw()
-
-clim_compare %>% 
-  ggplot(aes(x = pet.spstd, y = pet.fut)) +
-  geom_point() +
-  geom_abline(slope = 1, intercept = 0) +
-  coord_fixed() +
-  xlim(c(-2,2)) +
-  ylim(c(-2,2)) +
-  theme_bw()
-
-sens  <- (sp_predictions %>% filter(sp_code == example_species) %>% pull(sensitivity))[[1]]
-sens <- sens %>% subset("pet_sens")
-data <- as.data.frame(sens,xy = TRUE)
-data <- data %>% drop_na()
-xlims <- c(round(min(data$x) - 1), round(max(data$x) + 1))
-ylims <- c(round(min(data$y) - 1), round(max(data$y) + 1))
-
-# Plot species ranges
-world <- ne_coastline(scale = "medium", returnclass = "sf")
-map <- ggplot() +
-  geom_sf(data = world) +
-  geom_raster(data = data, aes(x = x, y = y, fill = pet_sens)) +
-  theme_bw(base_size = 22)+
-  ylab("Latitude")+
-  xlab("Longitude")+
-  scale_fill_viridis_c(direction = -1) +
-  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE)
-map
-
-
-sens  <- (sp_predictions %>% filter(sp_code == "tsca") %>% pull(sensitivity))[[1]]
-sens <- sens %>% subset("cwd_sens")
-data <- as.data.frame(sens,xy = TRUE)
-data <- data %>% drop_na()
-
-# Plot species ranges
-world <- ne_coastline(scale = "medium", returnclass = "sf")
-map <- ggplot() +
-  geom_sf(data = world) +
-  geom_raster(data = data, aes(x = x, y = y, fill = cwd_sens)) +
-  theme_bw(base_size = 22)+
-  ylab("Latitude")+
-  xlab("Longitude")+
-  scale_fill_viridis_c(direction = -1) +
-  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE)
-map
-
-
-
-sens  <- (sp_predictions %>% filter(sp_code == "tsca") %>% pull(clim_historic_sp))[[1]]
-sens <- sens %>% subset("cwd.spstd")
-data <- as.data.frame(sens,xy = TRUE)
-data <- data %>% drop_na()
-
-# Plot species ranges
-map <- ggplot() +
-  geom_sf(data = world) +
-  geom_raster(data = data, aes(x = x, y = y, fill = cwd.spstd)) +
-  theme_bw(base_size = 22)+
-  ylab("Latitude")+
-  xlab("Longitude")+
-  scale_fill_viridis_c(direction = -1) +
-  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE)
-map
-
-
-sens  <- (sp_predictions %>% filter(sp_code == "tsca") %>% pull(clim_historic_sp))[[1]]
-sens <- sens %>% subset("pet.spstd")
-data <- as.data.frame(sens,xy = TRUE)
-data <- data %>% drop_na()
-
-# Plot species ranges
-world <- ne_coastline(scale = "medium", returnclass = "sf")
-map <- ggplot() +
-  geom_sf(data = world) +
-  geom_raster(data = data, aes(x = x, y = y, fill = pet.spstd)) +
-  theme_bw(base_size = 22)+
-  ylab("Latitude")+
-  xlab("Longitude")+
-  scale_fill_viridis_c(direction = -1) +
-  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE)
-map
-
-
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Map historic climate and sensitivity ---------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-xlims <- c(-132, -100)
-ylims <- c(30, 56)
-cwd_sensitivity_df <- cwd_sens %>% 
-  as.data.frame(xy = TRUE) %>% 
-  drop_na() %>% 
-  filter(x>xlims[1], x<xlims[2], y>ylims[1], y<ylims[2]) %>% 
-  rename(sensitivity = layer)
-
-cwd_historic_df <- cwd_historic_spstd %>% 
-  as.data.frame(xy = TRUE) %>% 
-  filter(x>xlims[1], x<xlims[2], y>ylims[1], y<ylims[2]) %>%
-  drop_na()
-
-pet_historic_df <- pet_historic_spstd %>% 
-  as.data.frame(xy = TRUE) %>% 
-  filter(x>xlims[1], x<xlims[2], y>ylims[1], y<ylims[2]) %>% 
-  drop_na()
-
-
-
-world <- ne_coastline(scale = "medium", returnclass = "sf")
-sens_map <- ggplot() +
-  geom_raster(data = cwd_sensitivity_df, aes(x = x, y = y, fill = sensitivity)) +
-  # geom_sf(data = sp_range, fill = 'lightblue', alpha = .9) +
-  scale_fill_viridis_c(direction = -1,
-                       guide = guide_legend(
-                         label.theme = element_text(angle = 90),
-                         label.position = "bottom"
-                       )) +
-  theme_bw(base_size = 22)+
-  theme(legend.position = "bottom") +
-  ylab("Latitude")+
-  xlab("Longitude")+
-  geom_sf(data = world, color = 'black') +
-  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE) ## Western US
-
-pet_map <- ggplot() +
-  geom_raster(data = pet_historic_df, aes(x = x, y = y, fill = pet.spstd)) +
-  # geom_sf(data = sp_range, fill = 'lightblue', alpha = .9) +
-  scale_fill_viridis_c(guide = guide_legend(
-    label.theme = element_text(angle = 90),
-    label.position = "bottom"
-  )) +
-  theme_bw(base_size = 22)+
-  theme(legend.position = "bottom") +
-  ylab("Latitude")+
-  xlab("Longitude")+
-  geom_sf(data = world, color = 'black') +
-  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE) ## Western US
-
-cwd_map <- ggplot() +
-  geom_raster(data = cwd_historic_df, aes(x = x, y = y, fill = cwd.spstd)) +
-  # geom_sf(data = sp_range, fill = 'lightblue', alpha = .9) +
-  scale_fill_viridis_c(guide = guide_legend(
-    label.theme = element_text(angle = 90),
-    label.position = "bottom"
-  )) +
-  theme_bw(base_size = 22) +
-  theme(legend.position = "bottom") +
-  ylab("Latitude")+
-  xlab("Longitude")+
-  geom_sf(data = world, color = 'black') +
-  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE) ## Western US
-
-sens_map | cwd_map
-
-
-rwi_rast <- mean_rwi
-
-# rwi_rast <- projections %>% 
-#   filter(mod_n == 10) %>% 
-#   pull(rwi_rast)
-
-
-
-rwi_df <- rwi_rast[[1]] %>% 
-  as.data.frame(xy = TRUE) %>% 
-  drop_na() %>% 
-  filter(x>xlims[1], x<xlims[2], y>ylims[1], y<ylims[2]) %>% 
-  rename(log_rwi = layer)
-
-rwi_map <- ggplot() +
-  geom_raster(data = rwi_df, aes(x = x, y = y, fill = log_rwi)) +
-  # geom_sf(data = sp_range, fill = 'lightblue', alpha = .9) +
-  scale_fill_viridis_c(direction = -1,
-                       guide = guide_legend(
-                         label.theme = element_text(angle = 90),
-                         label.position = "bottom"
-                       )) +
-  theme_bw(base_size = 22)+
-  theme(legend.position = "bottom") +
-  ylab("Latitude")+
-  xlab("Longitude")+
-  geom_sf(data = world, color = 'black') +
-  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE) ## Western US
-
-rwi_map
-
-
-
-
-
-cwd_prj <- projections %>% 
-  filter(mod_n==1) %>% 
-  pull(cmip_rast)
-
-cwd_change <- cwd_prj[[1]]$cwd - cwd_historic
-
-change_df <- cwd_change %>% 
-  as.data.frame(xy = TRUE) %>% 
-  drop_na() %>% 
-  filter(x>xlims[1], x<xlims[2], y>ylims[1], y<ylims[2]) %>% 
-  rename(change = layer)
-
-change_map <- ggplot() +
-  geom_raster(data = change_df, aes(x = x, y = y, fill = change)) +
-  # geom_sf(data = sp_range, fill = 'lightblue', alpha = .9) +
-  scale_fill_viridis_c(guide = guide_legend(
-                         label.theme = element_text(angle = 90),
-                         label.position = "bottom"
-                       )) +
-  theme_bw(base_size = 22)+
-  theme(legend.position = "bottom") +
-  ylab("Latitude")+
-  xlab("Longitude")+
-  geom_sf(data = world, color = 'black') +
-  coord_sf(xlim = xlims, ylim = ylims, expand = FALSE) ## Western US
-
-change_map
+# sp_predictions <- sp_predictions %>% 
+#   mutate(predict_df = pmap(list(clim_historic_sp, rwi_predictions, rwi_predictions_partial_sens, rwi_predictions_partial_clim), extract_predictions))
+# 
+# 
+# sp_predictions_df <- sp_predictions %>% 
+#   select(sp_code, predict_df) %>% 
+#   unnest(predict_df) %>% 
+#   pivot_longer(c(-sp_code, -cwd.spstd, -pet.spstd), names_to = "cmip_run", values_to = "rwi")
+# 
+# 
+# sp_predictions_df %>% 
+#   filter(sp_code == "pisy") %>% 
+#   ggplot(aes(x = cwd.spstd, y = rwi)) +
+#   geom_point()
+# 
+# sp_predictions_df %>% 
+#   filter(sp_code == "pila") %>% 
+#   ggplot(aes(x = cwd.spstd, y = rwi)) +
+#   geom_point()
+# 
+# 
+# ### Binned plot of cwd sensitivity
+# nbins = 21
+# label_gaps <- 5
+# label_pattern <- seq(1,nbins,label_gaps)
+# plot_dat <- sp_predictions %>% 
+#   # filter(sp_code == "pila") %>% 
+#   mutate(cwd.q = as.numeric(ntile(cwd.spstd, nbins)),
+#          pet.q = as.numeric(ntile(pet.spstd, nbins)))
+# 
+# cwd.quantiles = quantile(plot_dat$cwd.spstd, probs = seq(0, 1, 1/nbins), names = TRUE) %>% 
+#   round(2) %>% 
+#   lapply(round, digits = 1)
+# pet.quantiles = quantile(plot_dat$pet.spstd, probs = seq(0, 1, 1/nbins), names = TRUE) %>% 
+#   round(2) %>% 
+#   lapply(round, digits = 1)
+# cwd.breaks = seq(0.5, nbins+0.5, 1)
+# pet.breaks = seq(0.5, nbins+0.5, 1)
+# 
+# group_dat <- plot_dat %>% 
+#   group_by(cwd.q, pet.q) %>% 
+#   dplyr::summarize(ln_rwi = mean(ln_rwi, na.rm = TRUE),
+#                    n = n()) %>% 
+#   filter(n>100)
+# 
+# 
+# binned_margins <- group_dat %>% 
+#   ggplot(aes(x = cwd.q, y = pet.q, fill = ln_rwi)) +
+#   geom_tile() +
+#   scale_fill_viridis_c(direction = -1) +
+#   theme_bw(base_size = 22)+
+#   theme(legend.position = "right") +
+#   labs(fill = "Predicted impact\nof climate change\non RWI") +
+#   scale_x_continuous(labels = cwd.quantiles[label_pattern], breaks = cwd.breaks[label_pattern]) +
+#   scale_y_continuous(labels = pet.quantiles[label_pattern], breaks = pet.breaks[label_pattern]) +
+#   ylab("Historic PET\n(Deviation from species mean)") +
+#   xlab("Historic CWD\n(Deviation from species mean)") + 
+#   coord_fixed()
+# 
+# binned_margins 
+# combined_plot <- binned_change / binned_margins
+# 
+# ggsave(paste0(wdir, 'figures\\predicted_rwi.svg'), plot = binned_margins)
+# ggsave(paste0(wdir, 'figures\\climate_change.svg'), plot = combined_plot, width = 7, height = 11, units = "in")
+# 
+# 
+# 
+# 
+# # calc_mean_rwi <- function(rwi_predictions){
+# #   mean_rwi <- raster::brick(rwi_predictions %>% pull(rwi_rast)) %>% mean()
+# #   return(mean_rwi)
+# # }
+# # 
+# # sp_predictions <- sp_predictions %>%
+# #   mutate(rwi_2100 = map(rwi_predictions, calc_mean_rwi))
+# 
+# 
+# ### Plot drought change by historic cwd and pet
+# cwd_historic_sp <- clim_historic_sp %>% subset("cwd.spstd")
+# cwd_change <- raster::brick(c(clim_historic_sp, projections$cwd_change))
+# cwd_change <- as.data.frame(cwd_change)
+# cwd_change <- cwd_change %>% 
+#   pivot_longer(-c(cwd.spstd, pet.spstd), names_to = "cmip_mod", values_to = "cwd_change")
+# 
+# plot_dat <- cwd_change %>% drop_na()
+# nbins = 10
+# plot_dat <- plot_dat %>% 
+#   mutate(cwd.q = as.numeric(ntile(cwd.spstd, nbins)),
+#          pet.q = as.numeric(ntile(pet.spstd, nbins)))
+# cwd.quantiles = quantile(plot_dat$cwd.spstd, probs = seq(0, 1, 1/nbins), names = TRUE) %>% round(2)
+# pet.quantiles = quantile(plot_dat$pet.spstd, probs = seq(0, 1, 1/nbins), names = TRUE) %>% round(2)
+# 
+# group_dat <- plot_dat %>% 
+#   group_by(cwd.q, pet.q) %>% 
+#   summarize(mean = mean(cwd_change),
+#             n = n())
+# 
+# binned_margins <- group_dat %>% 
+#   ggplot(aes(x = cwd.q, y = pet.q, fill = mean)) +
+#   geom_tile() +
+#   # xlim(c(-3, 4)) +
+#   #ylim(c(-1.5, 1.5))+
+#   # scale_fill_gradientn (colours = c("darkblue","lightblue")) +
+#   scale_fill_viridis_c() +
+#   # scale_fill_viridis_c() +
+#   theme_bw(base_size = 22)+
+#   ylab("Deviation from mean PET")+
+#   xlab("Deviation from mean CWD")+
+#   theme(legend.position = "right") +
+#   labs(fill = "Mean predicted\nchange in CWD") +
+#   scale_x_continuous(labels = cwd.quantiles, breaks = seq(0.5, nbins+0.5, 1)) +
+#   scale_y_continuous(labels = pet.quantiles, breaks = seq(0.5, nbins+0.5, 1)) +
+#   ylab("Historic PET\n(Deviation from species mean)") +
+#   xlab("Historic CWD\n(Deviation from species mean)") + 
+#   coord_fixed()
+# 
+# binned_margins 
+# 
+# ### Plot predicted RWI impact by historic cwd and pet
+# predict_brick <- raster::brick(c(rwi_change = mean_rwi, cwd_hist = cwd_historic, pet_hist = pet_historic))
+# rwi_change_df <- as.data.frame(predict_brick)
+# rwi_change_df <- rwi_change_df %>% 
+#   drop_na() %>% 
+#   mutate(cwd.spstd = (cwd_hist - sp_niche$cwd_mean) / sp_niche$cwd_sd,
+#          pet.spstd = (pet_hist - sp_niche$pet_mean) / sp_niche$pet_sd)
+# mod <- lm(rwi_change ~ cwd.spstd + pet.spstd, data = rwi_change_df)
+# summary(mod)
+# 
+# xmin = -2.5
+# xmax = 2.5
+# predictions <- prediction(mod, at = list(cwd.spstd = seq(xmin, xmax, .1)), calculate_se = T) %>% 
+#   summary() %>% 
+#   rename(cwd.spstd = "at(cwd.spstd)")
+# 
+# margins_plot <- ggplot(predictions, aes(x = cwd.spstd)) + 
+#   geom_line(aes(y = Prediction)) +
+#   geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
+#   geom_line(aes(y = upper), linetype = 3) +
+#   geom_line(aes(y = lower), linetype = 3) +
+#   geom_hline(yintercept = 0, linetype = 2) +
+#   xlab("Historic CWD\n(Deviation from species mean)") + 
+#   ylab("Mean predicted impact on ln(RWI)") + 
+#   theme_bw(base_size = 22) +
+#   scale_y_continuous(labels = scales::scientific)
+# 
+# margins_plot
+# 
+# 
+# plot_dat <- rwi_change_df %>%
+#   filter(((abs(cwd.spstd)<3) & (abs(pet.spstd<3)))) %>%
+#   drop_na()
+# nbins = 10
+# plot_dat <- plot_dat %>% 
+#   mutate(cwd.q = as.numeric(ntile(cwd.spstd, nbins)),
+#          pet.q = as.numeric(ntile(pet.spstd, nbins)))
+# 
+# cwd.quantiles = quantile(plot_dat$cwd.spstd, probs = seq(0, 1, 1/nbins), names = TRUE) %>% round(2)
+# pet.quantiles = quantile(plot_dat$pet.spstd, probs = seq(0, 1, 1/nbins), names = TRUE) %>% round(2)
+# 
+# group_dat <- plot_dat %>% 
+#   group_by(cwd.q, pet.q) %>% 
+#   summarize(mean = mean(rwi_change),
+#             n = n()) %>% 
+#   filter(n>1)
+# 
+# binned_margins <- group_dat %>% 
+#   ggplot(aes(x = cwd.q, y = pet.q, fill = mean)) +
+#   geom_tile() +
+#   # xlim(c(-3, 4)) +
+#   #ylim(c(-1.5, 1.5))+
+#   scale_fill_gradientn (colours = c("darkblue","lightblue")) +
+#   # scale_fill_viridis_c() +
+#   theme_bw(base_size = 22)+
+#   ylab("Deviation from mean PET")+
+#   xlab("Deviation from mean CWD")+
+#   theme(legend.position = "right") +
+#   labs(fill = "Marginal effect\nof CWD") +
+#   scale_x_continuous(labels = cwd.quantiles, breaks = seq(0.5, nbins+0.5, 1)) +
+#   scale_y_continuous(labels = pet.quantiles, breaks = seq(0.5, nbins+0.5, 1)) +
+#   ylab("Historic PET\n(Deviation from species mean)") +
+#   xlab("Historic CWD\n(Deviation from species mean)") + 
+#   coord_fixed()
+# 
+# binned_margins 
+# 
+# 
+# 
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# # Explore species-level climate / sensitivity ---------------
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# # Plot cwd deviation against historic cwd
+# # Example species: East Coast - tsca; West coast - pipo; Mediterranean -  
+# example_species <- "pila" # TODO: Dig into weird CWD censoring for ABAL, TSHE - guessing this is due to 0 CWD values
+# sp_fut <- (sp_predictions %>% 
+#              filter(sp_code == example_species) %>% 
+#              pull(clim_future_sp))[[1]]
+# sp_hist <- (sp_predictions %>% 
+#               filter(sp_code == example_species) %>% 
+#               pull(clim_historic_sp))[[1]]
+# sp_sens  <- (sp_predictions %>% 
+#                filter(sp_code == example_species) %>% 
+#                pull(sensitivity))[[1]]
+# 
+# names(sp_fut) <- c("cwd.fut", "pet.fut")
+# clim_compare <- brick(c(sp_fut, sp_hist, sp_sens))
+# clim_compare <- clim_compare %>% 
+#   as.data.frame(xy = TRUE)
+# 
+# clim_compare %>% 
+#   ggplot(aes(x = cwd.spstd, y = cwd_sens)) +
+#   geom_point() +
+#   xlim(c(-2,2)) +
+#   ylim(c(-.3,.3)) +
+#   theme_bw()
+# 
+# 
+# clim_compare %>% 
+#   ggplot(aes(x = cwd.spstd, y = pet_sens)) +
+#   geom_point() +
+#   xlim(c(-2,2)) +
+#   ylim(c(-.3,.3)) +
+#   theme_bw()
+# 
+# clim_compare %>% 
+#   ggplot(aes(x = cwd.spstd, y = pet.spstd)) +
+#   geom_point() +
+#   geom_abline(slope = 1, intercept = 0) +
+#   coord_fixed() +
+#   xlim(c(-2,2)) +
+#   ylim(c(-2,2)) +
+#   theme_bw()
+# 
+# 
+# clim_compare %>% 
+#   ggplot(aes(x = cwd.spstd, y = cwd.fut)) +
+#   geom_point() +
+#   geom_abline(slope = 1, intercept = 0) +
+#   coord_fixed() +
+#   xlim(c(-4,4)) +
+#   ylim(c(-4,4)) +
+#   theme_bw()
+# 
+# clim_compare %>% 
+#   ggplot(aes(x = pet.spstd, y = pet.fut)) +
+#   geom_point() +
+#   geom_abline(slope = 1, intercept = 0) +
+#   coord_fixed() +
+#   xlim(c(-2,2)) +
+#   ylim(c(-2,2)) +
+#   theme_bw()
+# 
+# sens  <- (sp_predictions %>% filter(sp_code == example_species) %>% pull(sensitivity))[[1]]
+# sens <- sens %>% subset("pet_sens")
+# data <- as.data.frame(sens,xy = TRUE)
+# data <- data %>% drop_na()
+# xlims <- c(round(min(data$x) - 1), round(max(data$x) + 1))
+# ylims <- c(round(min(data$y) - 1), round(max(data$y) + 1))
+# 
+# # Plot species ranges
+# world <- ne_coastline(scale = "medium", returnclass = "sf")
+# map <- ggplot() +
+#   geom_sf(data = world) +
+#   geom_raster(data = data, aes(x = x, y = y, fill = pet_sens)) +
+#   theme_bw(base_size = 22)+
+#   ylab("Latitude")+
+#   xlab("Longitude")+
+#   scale_fill_viridis_c(direction = -1) +
+#   coord_sf(xlim = xlims, ylim = ylims, expand = FALSE)
+# map
+# 
+# 
+# sens  <- (sp_predictions %>% filter(sp_code == "tsca") %>% pull(sensitivity))[[1]]
+# sens <- sens %>% subset("cwd_sens")
+# data <- as.data.frame(sens,xy = TRUE)
+# data <- data %>% drop_na()
+# 
+# # Plot species ranges
+# world <- ne_coastline(scale = "medium", returnclass = "sf")
+# map <- ggplot() +
+#   geom_sf(data = world) +
+#   geom_raster(data = data, aes(x = x, y = y, fill = cwd_sens)) +
+#   theme_bw(base_size = 22)+
+#   ylab("Latitude")+
+#   xlab("Longitude")+
+#   scale_fill_viridis_c(direction = -1) +
+#   coord_sf(xlim = xlims, ylim = ylims, expand = FALSE)
+# map
+# 
+# 
+# 
+# sens  <- (sp_predictions %>% filter(sp_code == "tsca") %>% pull(clim_historic_sp))[[1]]
+# sens <- sens %>% subset("cwd.spstd")
+# data <- as.data.frame(sens,xy = TRUE)
+# data <- data %>% drop_na()
+# 
+# # Plot species ranges
+# map <- ggplot() +
+#   geom_sf(data = world) +
+#   geom_raster(data = data, aes(x = x, y = y, fill = cwd.spstd)) +
+#   theme_bw(base_size = 22)+
+#   ylab("Latitude")+
+#   xlab("Longitude")+
+#   scale_fill_viridis_c(direction = -1) +
+#   coord_sf(xlim = xlims, ylim = ylims, expand = FALSE)
+# map
+# 
+# 
+# sens  <- (sp_predictions %>% filter(sp_code == "tsca") %>% pull(clim_historic_sp))[[1]]
+# sens <- sens %>% subset("pet.spstd")
+# data <- as.data.frame(sens,xy = TRUE)
+# data <- data %>% drop_na()
+# 
+# # Plot species ranges
+# world <- ne_coastline(scale = "medium", returnclass = "sf")
+# map <- ggplot() +
+#   geom_sf(data = world) +
+#   geom_raster(data = data, aes(x = x, y = y, fill = pet.spstd)) +
+#   theme_bw(base_size = 22)+
+#   ylab("Latitude")+
+#   xlab("Longitude")+
+#   scale_fill_viridis_c(direction = -1) +
+#   coord_sf(xlim = xlims, ylim = ylims, expand = FALSE)
+# map
+# 
+# 
+# 
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# # Map historic climate and sensitivity ---------------
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# xlims <- c(-132, -100)
+# ylims <- c(30, 56)
+# cwd_sensitivity_df <- cwd_sens %>% 
+#   as.data.frame(xy = TRUE) %>% 
+#   drop_na() %>% 
+#   filter(x>xlims[1], x<xlims[2], y>ylims[1], y<ylims[2]) %>% 
+#   rename(sensitivity = layer)
+# 
+# cwd_historic_df <- cwd_historic_spstd %>% 
+#   as.data.frame(xy = TRUE) %>% 
+#   filter(x>xlims[1], x<xlims[2], y>ylims[1], y<ylims[2]) %>%
+#   drop_na()
+# 
+# pet_historic_df <- pet_historic_spstd %>% 
+#   as.data.frame(xy = TRUE) %>% 
+#   filter(x>xlims[1], x<xlims[2], y>ylims[1], y<ylims[2]) %>% 
+#   drop_na()
+# 
+# 
+# 
+# world <- ne_coastline(scale = "medium", returnclass = "sf")
+# sens_map <- ggplot() +
+#   geom_raster(data = cwd_sensitivity_df, aes(x = x, y = y, fill = sensitivity)) +
+#   # geom_sf(data = sp_range, fill = 'lightblue', alpha = .9) +
+#   scale_fill_viridis_c(direction = -1,
+#                        guide = guide_legend(
+#                          label.theme = element_text(angle = 90),
+#                          label.position = "bottom"
+#                        )) +
+#   theme_bw(base_size = 22)+
+#   theme(legend.position = "bottom") +
+#   ylab("Latitude")+
+#   xlab("Longitude")+
+#   geom_sf(data = world, color = 'black') +
+#   coord_sf(xlim = xlims, ylim = ylims, expand = FALSE) ## Western US
+# 
+# pet_map <- ggplot() +
+#   geom_raster(data = pet_historic_df, aes(x = x, y = y, fill = pet.spstd)) +
+#   # geom_sf(data = sp_range, fill = 'lightblue', alpha = .9) +
+#   scale_fill_viridis_c(guide = guide_legend(
+#     label.theme = element_text(angle = 90),
+#     label.position = "bottom"
+#   )) +
+#   theme_bw(base_size = 22)+
+#   theme(legend.position = "bottom") +
+#   ylab("Latitude")+
+#   xlab("Longitude")+
+#   geom_sf(data = world, color = 'black') +
+#   coord_sf(xlim = xlims, ylim = ylims, expand = FALSE) ## Western US
+# 
+# cwd_map <- ggplot() +
+#   geom_raster(data = cwd_historic_df, aes(x = x, y = y, fill = cwd.spstd)) +
+#   # geom_sf(data = sp_range, fill = 'lightblue', alpha = .9) +
+#   scale_fill_viridis_c(guide = guide_legend(
+#     label.theme = element_text(angle = 90),
+#     label.position = "bottom"
+#   )) +
+#   theme_bw(base_size = 22) +
+#   theme(legend.position = "bottom") +
+#   ylab("Latitude")+
+#   xlab("Longitude")+
+#   geom_sf(data = world, color = 'black') +
+#   coord_sf(xlim = xlims, ylim = ylims, expand = FALSE) ## Western US
+# 
+# sens_map | cwd_map
+# 
+# 
+# rwi_rast <- mean_rwi
+# 
+# # rwi_rast <- projections %>% 
+# #   filter(mod_n == 10) %>% 
+# #   pull(rwi_rast)
+# 
+# 
+# 
+# rwi_df <- rwi_rast[[1]] %>% 
+#   as.data.frame(xy = TRUE) %>% 
+#   drop_na() %>% 
+#   filter(x>xlims[1], x<xlims[2], y>ylims[1], y<ylims[2]) %>% 
+#   rename(log_rwi = layer)
+# 
+# rwi_map <- ggplot() +
+#   geom_raster(data = rwi_df, aes(x = x, y = y, fill = log_rwi)) +
+#   # geom_sf(data = sp_range, fill = 'lightblue', alpha = .9) +
+#   scale_fill_viridis_c(direction = -1,
+#                        guide = guide_legend(
+#                          label.theme = element_text(angle = 90),
+#                          label.position = "bottom"
+#                        )) +
+#   theme_bw(base_size = 22)+
+#   theme(legend.position = "bottom") +
+#   ylab("Latitude")+
+#   xlab("Longitude")+
+#   geom_sf(data = world, color = 'black') +
+#   coord_sf(xlim = xlims, ylim = ylims, expand = FALSE) ## Western US
+# 
+# rwi_map
+# 
+# 
+# 
+# 
+# 
+# cwd_prj <- projections %>% 
+#   filter(mod_n==1) %>% 
+#   pull(cmip_rast)
+# 
+# cwd_change <- cwd_prj[[1]]$cwd - cwd_historic
+# 
+# change_df <- cwd_change %>% 
+#   as.data.frame(xy = TRUE) %>% 
+#   drop_na() %>% 
+#   filter(x>xlims[1], x<xlims[2], y>ylims[1], y<ylims[2]) %>% 
+#   rename(change = layer)
+# 
+# change_map <- ggplot() +
+#   geom_raster(data = change_df, aes(x = x, y = y, fill = change)) +
+#   # geom_sf(data = sp_range, fill = 'lightblue', alpha = .9) +
+#   scale_fill_viridis_c(guide = guide_legend(
+#                          label.theme = element_text(angle = 90),
+#                          label.position = "bottom"
+#                        )) +
+#   theme_bw(base_size = 22)+
+#   theme(legend.position = "bottom") +
+#   ylab("Latitude")+
+#   xlab("Longitude")+
+#   geom_sf(data = world, color = 'black') +
+#   coord_sf(xlim = xlims, ylim = ylims, expand = FALSE) ## Western US
+# 
+# change_map
