@@ -2,7 +2,7 @@
 # Authors: Robert Heilmayr, Joan Dudney, Frances Moore
 # Project: Treeconomics
 # Date: 5/27/20
-# Purpose: Creat predictions of growth impacts from climate change
+# Purpose: Create predictions of growth impacts from climate change
 #
 # Input files:
 # - ss_mod: R model object saved from Second stage
@@ -34,9 +34,9 @@ library(prediction)
 wdir <- 'remote\\'
 
 # 1. Second stage model
-mod <- readRDS(paste0(wdir, "out\\second_stage\\sq_cwd_mod.rds"))
-pet_mod <- readRDS(paste0(wdir, "out\\second_stage\\sq_pet_mod.rds"))
-int_mod <- readRDS(paste0(wdir, "out\\second_stage\\sq_int_mod.rds"))
+mod <- readRDS(paste0(wdir, "out\\second_stage\\cwd_mod.rds"))
+pet_mod <- readRDS(paste0(wdir, "out\\second_stage\\pet_mod.rds"))
+int_mod <- readRDS(paste0(wdir, "out\\second_stage\\int_mod.rds"))
 
 # mod <- readRDS(paste0(wdir, "out\\second_stage\\ss_sq_mod.rds"))
 # pet_mod <- readRDS(paste0(wdir, "out\\second_stage\\ss_sq_pet_mod.rds"))
@@ -274,11 +274,44 @@ calc_rwi <- function(cmip_rast, sensitivity){
   pet_sens = sensitivity %>% subset("pet_sens")
   intercept = sensitivity %>% subset("intercept")
   rwi_rast <- intercept + (cmip_rast$cwd.spstd * cwd_sens) + (cmip_rast$pet.spstd * pet_sens)
+  names(rwi_rast) = "rwi_pred"
   return(rwi_rast)
 }
 
 sp_predictions <- sp_predictions %>% 
   mutate(rwi_predictions = map2(.x = clim_future_sp, .y = sensitivity, calc_rwi))
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Thought experiments - partialling out mechanisms    ---------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+calc_rwi_partial_sens <- function(cmip_rast, sensitivity){ # NOTE: Should the means be calculated across full range rather than by each species?
+  mean_fut_cwd <- cmip_rast %>% subset("cwd.spstd") %>% cellStats(stat = "mean")
+  mean_fut_pet <- cmip_rast %>% subset("pet.spstd") %>% cellStats(stat = "mean")
+  cwd_sens = sensitivity %>% subset("cwd_sens")
+  pet_sens = sensitivity %>% subset("pet_sens")
+  intercept = sensitivity %>% subset("intercept")
+  rwi_rast <- intercept + (mean_fut_cwd * cwd_sens) + (mean_fut_pet * pet_sens)
+  names(rwi_rast) = "rwi_psens"
+  return(rwi_rast)
+}
+
+calc_rwi_partial_clim <- function(cmip_rast, sensitivity){ # NOTE: Should the means be calculated across full range rather than by each species?
+  mean_cwd_sens <- sensitivity %>% subset("cwd_sens") %>% cellStats(stat = "mean")
+  mean_pet_sens <- sensitivity %>% subset("pet_sens") %>% cellStats(stat = "mean")
+  mean_intercept <-sensitivity %>% subset("intercept") %>% cellStats(stat = "mean") 
+  rwi_rast <- mean_intercept + (cmip_rast$cwd.spstd * mean_cwd_sens) + (cmip_rast$pet.spstd * mean_pet_sens)
+  names(rwi_rast) = "rwi_pclim"
+  return(rwi_rast)
+}
+
+
+sp_predictions <- sp_predictions %>% 
+  mutate(rwi_predictions_partial_sens = map2(.x = clim_future_sp, .y = sensitivity, calc_rwi_partial_sens),
+         rwi_predictions_partial_clim = map2(.x = clim_future_sp, .y = sensitivity, calc_rwi_partial_clim))
+
+
+sp_predictions %>% 
+  saveRDS(file = paste0(wdir,"out/predictions/sp_predictions.rds") )
 
 
 # rwi_cmip_predict <- function(sensitivity){
@@ -291,8 +324,64 @@ sp_predictions <- sp_predictions %>%
 # sp_predictions <- sp_predictions %>% 
 #   mutate(rwi_predictions = map(sensitivity, rwi_cmip_predict))
 
-extract_predictions <- function(clim_historic_sp, rwi_predictions){
-  predict_rasters <- raster::brick(c(clim_historic_sp, rwi_predictions))
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Extract to dataframe    ---------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+extract_rasters <- function(raster_column){
+  table_column <- raster_column %>% 
+    as.data.frame(xy = T) %>% 
+    drop_na()
+  return(table_column)
+}
+
+# extract_predictions <- function(clim_historic_sp, rwi_predictions){
+#   predict_rasters <- raster::brick(c(clim_historic_sp, rwi_predictions))
+#   predict_df <- predict_rasters %>% 
+#     as.data.frame() %>% 
+#     drop_na()
+#   return(predict_df)
+# }
+
+
+
+sp_predictions <- sp_predictions %>% 
+  mutate(clim_historic_sp = map(clim_historic_sp, extract_rasters),
+         rwi_predictions = map(rwi_predictions, extract_rasters),
+         rwi_predictions_partial_sens = map(rwi_predictions_partial_sens, extract_rasters),
+         rwi_predictions_partial_clim = map(rwi_predictions_partial_clim, extract_rasters))
+
+historic_df <- sp_predictions %>% 
+  select(sp_code, clim_historic_sp) %>% 
+  unnest(clim_historic_sp)
+
+rwi_df <- sp_predictions %>% 
+  select(sp_code, rwi_predictions) %>% 
+  unnest(rwi_predictions)
+
+rwi_psens_df <- sp_predictions %>% 
+  select(sp_code, rwi_predictions_partial_sens) %>% 
+  unnest(rwi_predictions_partial_sens)
+
+rwi_pclim_df <- sp_predictions %>% 
+  select(sp_code, rwi_predictions_partial_clim) %>% 
+  unnest(rwi_predictions_partial_clim)
+
+out_predictions <- historic_df %>% 
+  left_join(rwi_df, by = c("sp_code", "x", "y")) %>% 
+  left_join(rwi_psens_df, by = c("sp_code", "x", "y")) %>% 
+  left_join(rwi_pclim_df, by = c("sp_code", "x", "y"))
+
+
+
+out_predictions %>% 
+  saveRDS(file = paste0(wdir,"out/predictions/sp_predictions.rds") )
+
+
+
+
+
+extract_predictions <- function(clim_historic_sp, rwi_predictions, rwi_predictions_partial_sens, rwi_predictions_partial_clim){
+  predict_rasters <- raster::brick(c(clim_historic_sp, rwi_predictions, rwi_predictions_partial_sens, rwi_predictions_partial_clim))
   predict_df <- predict_rasters %>% 
     as.data.frame() %>% 
     drop_na()
@@ -300,16 +389,7 @@ extract_predictions <- function(clim_historic_sp, rwi_predictions){
 }
 
 sp_predictions <- sp_predictions %>% 
-  mutate(predict_df = map2(clim_historic_sp, rwi_predictions, extract_predictions))
-
-sp_predictions %>% 
-  saveRDS(file = paste0(wdir,"out/predictions/sp_predictions.rds") )
-
-
-
-
-
-
+  mutate(predict_df = pmap(list(clim_historic_sp, rwi_predictions, rwi_predictions_partial_sens, rwi_predictions_partial_clim), extract_predictions))
 
 
 sp_predictions_df <- sp_predictions %>% 
