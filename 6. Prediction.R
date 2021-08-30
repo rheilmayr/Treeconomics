@@ -349,8 +349,7 @@ sp_predictions <- sp_predictions %>%
          rwi_null = cwd.spstd * cwd_sens + pet.spstd * pet_sens + intercept,
          rwi_change = rwi_pred - rwi_null,
          rwi_change_psens = rwi_psens - rwi_null,
-         rwi_change_pclim = rwi_pclim - rwi_null) %>% 
-  select()
+         rwi_change_pclim = rwi_pclim - rwi_null)
 
 
 sp_predictions %>% 
