@@ -118,9 +118,11 @@ hist_clim_df <- clim_df %>%
 # Here we're removing the site-level historic mean to make interpretation
 # of the DLNM shock a bit easier to compare (1 std above site-level average)
 clim_df <- clim_df %>%
-  left_join(hist_clim_df, by = "collection_id") %>%
-  mutate(cwd.an = cwd.an - cwd.ave,
-         pet.an = pet.an - pet.ave)
+  left_join(hist_clim_df, by = "collection_id")
+
+# %>%
+#   mutate(cwd.an = cwd.an - cwd.ave,
+#          pet.an = pet.an - pet.ave)
 
 # nolag_df <- dendro_df %>% 
 #   left_join(clim_df, by = c("collection_id", "year"))
@@ -149,6 +151,52 @@ clim_lags <- clim_df %>%
 dendro_lagged <- dendro_df %>% 
   left_join(clim_lags, by = c("collection_id", "year"))
 
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Aggregate lagged model  ------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+mod <- feols(rwi ~ cwd.an + cwd_L01 + cwd_L02 + cwd_L03 + cwd_L04 + pet.an + pet_L01 + pet_L02 + pet_L03 + pet_L04 | collection_id, data = dendro_lagged)
+summary(mod)
+
+test_data <- cbind(cwd_lagged, pet_lagged)
+mod <- lm(dendro_lagged$rwi ~ ., test_data)
+summary(mod)
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Aggregate DLNM  ------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+bylag = 0.1
+gendat = dendro_lagged
+cwd_lagged = data.frame(gendat$cwd.an,gendat[,grep("cwd_L",colnames(gendat))])
+pet_lagged = data.frame(gendat$pet.an,gendat[,grep("pet_L",colnames(gendat))])
+
+cwd_cb = crossbasis(cwd_lagged,lag=c(0,nlags),argvar=list(fun = "lin"),arglag=list(knots=logknots(nlags, 3)))
+pet_cb = crossbasis(pet_lagged, lag=c(0,nlags), argvar=list(fun = "lin"), arglag=list(knots=logknots(nlags, 3)))
+
+lagmod=felm(rwi ~ cwd_cb + pet_cb | collection_id, data=gendat) # replace with fixest. Note - felm seems to return same results as lm?
+
+cwd_cp = crosspred(cwd_cb, lagmod, cen = 0, at = -1:1, bylag = bylag, cumul = TRUE)
+pet_cp = crosspred(pet_cb, lagmod, cen = 0, at = -1:1, bylag = bylag, cumul = TRUE)
+# cwd_cum <- cwd_cp$cumfit[3,nlags + 1]
+# pet_cum <- pet_cp$cumfit[3,nlags + 1]
+lag_effects <- tibble(lag = seq(0,nlags,bylag), 
+                      cwd_effect = cwd_cp$matfit[3,], 
+                      pet_effect = pet_cp$matfit[3,],
+                      cwd_cum =  cwd_cp$cumfit[3,nlags + 1],
+                      pet_cum =  pet_cp$cumfit[3,nlags + 1])
+
+
+plot(cwd_cp,
+     var=shock,
+     cumul=FALSE,
+     xlab=paste0("Lagged Effect of CWD=", as.integer(shock)),
+     ylab="Ring Width Growth",main=paste("Site"))
+
+plot(pet_cp,
+     var=shock,
+     cumul = FALSE,
+     xlab=paste0("Lagged Effect of PET=", as.integer(shock)),
+     ylab="Ring Width Growth",main=paste("Site"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -203,7 +251,7 @@ lagged_effects <- gendat %>%
   left_join(hist_clim_df, by = "collection_id")
 
 cum_effects <- lagged_effects %>% 
-  select(collection_id, cwd_cum, pet_cum, cwd.ave, pet.ave) %>% 
+  select(collection_id, lag, cwd_cum, pet_cum, cwd.ave, pet.ave) %>% 
   distinct()
 
 lagged_effects <- lagged_effects %>% 
@@ -212,6 +260,44 @@ lagged_effects <- lagged_effects %>%
 
 lagged_effects$cwd_tercile <- ntile(lagged_effects$cwd.ave, 3) %>% as.factor()
 lagged_effects$pet_tercile = ntile(lagged_effects$pet.ave, 3) %>% as.factor()
+
+
+cwd_median_effect <- lagged_effects %>%
+  group_by(lag) %>% 
+  summarise(med_effect = median(cwd_effect),
+            upper = quantile(cwd_effect, 0.66, na.rm = T),
+            lower = quantile(cwd_effect, 0.33, na.rm = T))
+cwd_plot <- cwd_median_effect %>% 
+  ggplot(aes(x = lag, y = med_effect, ymax = upper, ymin = lower)) +
+  geom_line() +
+  geom_ribbon(alpha = 0.2) +
+  theme_bw()
+cwd_plot +
+  xlab("Lag (years)") +
+  ylab("Median effect of CWD=1 shock on RWI")
+
+pet_median_effect <- lagged_effects %>%
+  group_by(lag) %>% 
+  summarise(med_effect = median(pet_effect),
+            upper = quantile(pet_effect, 0.66, na.rm = T),
+            lower = quantile(pet_effect, 0.33, na.rm = T))
+pet_plot <- pet_median_effect %>% 
+  ggplot(aes(x = lag, y = med_effect, ymax = upper, ymin = lower)) +
+  geom_line() +
+  geom_ribbon(alpha = 0.2) +
+  theme_bw()
+
+pet_plot +
+  xlab("Lag (years)") +
+  ylab("Median effect of PET=1 shock on RWI")
+
+
+cum_share <- cum_effects %>% 
+  group_by(lag) %>% 
+  summarise(med_effect = median(cwd_cum))
+
+
+
 
 median_effect <- lagged_effects %>%
   group_by(lag) %>%
@@ -227,6 +313,15 @@ median_effect %>%
   geom_ribbon(alpha = 0.2) +
   theme_bw()
 
+
+cwd_p <- ggplot() +
+  geom_line(aes(x = lag, y = med_effect), data = median_effect, color = "cornflowerblue") +
+  geom_ribbon(aes(x = lag, ymax = upper, ymin = lower), data = median_effect, 
+              fill = "cornflowerblue", alpha = 0.3) +
+  theme_bw()
+cwd_p
+
+
 p <- ggplot() +
   geom_line(aes(x = lag, y = cwd_effect, group = collection_id), data = lagged_effects, 
             alpha = 0.05) +
@@ -238,6 +333,9 @@ p <- ggplot() +
 p
 
 
+
+
+# Look at variation across terciles. Particularly interesting for pet
 median_effect <- lagged_effects %>%
   group_by(cwd_tercile, lag) %>%
   summarise(med_effect = median(cwd_effect),
@@ -248,18 +346,6 @@ median_effect <- lagged_effects %>%
 median_effect %>% 
   ggplot(aes(x = lag, y = med_effect, ymax = upper, ymin = lower)) +
   facet_grid(rows = median_effect$cwd_tercile) +
-  geom_line() +
-  geom_ribbon(alpha = 0.2) +
-  theme_bw()
-
-
-median_effect <- lagged_effects %>%
-  group_by(lag) %>% 
-  summarise(med_effect = median(pet_effect),
-            upper = quantile(pet_effect, 0.66, na.rm = T),
-            lower = quantile(pet_effect, 0.33, na.rm = T))
-median_effect %>% 
-  ggplot(aes(x = lag, y = med_effect, ymax = upper, ymin = lower)) +
   geom_line() +
   geom_ribbon(alpha = 0.2) +
   theme_bw()
@@ -296,6 +382,23 @@ cum_effects %>%
   filter(cwd_cum>thresh_low, cwd_cum<thresh_high) %>% 
   ggplot(aes(y = cwd_cum)) +
   geom_boxplot()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

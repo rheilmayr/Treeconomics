@@ -443,58 +443,47 @@ pet_trim_df <- trim_df %>%
 long_trim_df <- rbind(cwd_trim_df, pet_trim_df) %>% 
   mutate(`p<0.05` = p<0.05)
 
-long_trim_df %>% 
+cwd_median <- long_trim_df %>% filter(variable == "cwd") %>% pull(estimate) %>% median()
+pet_median <- long_trim_df %>% filter(variable == "pet") %>% pull(estimate) %>% median()
+
+cwd_est_plot <- long_trim_df %>%
+  filter(variable == "cwd") %>% 
   ggplot(aes(x = estimate, fill = `p<0.05`)) +
   geom_histogram(bins = 300) +
-  facet_wrap("variable", nrow = 2) +
-  scale_x_continuous(trans="log1p") +
+  # scale_x_continuous(trans="log1p") +
   theme_bw() +
-  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
-  xlim(-2, 2) +
-  scale_fill_manual(values = c("cornflowerblue", "darkblue"))
+  xlim(-1.5, 1.5) +
+  scale_fill_manual(values = c("steelblue2", "dodgerblue4")) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black", size = 1) +
+  geom_vline(xintercept = cwd_median, color = "tomato3", size = 1.5) +
+  xlab("Site-level impact of CWD on growth") +
+  ylab("Frequency") +
+  ylim(c(0, 200)) +
+  theme(legend.position = c(.9,.85),
+        legend.key = element_blank(),
+        legend.background = element_blank())
+
+pet_est_plot <- long_trim_df %>%
+  filter(variable == "pet") %>% 
+  ggplot(aes(x = estimate, fill = `p<0.05`)) +
+  geom_histogram(bins = 300) +
+  # scale_x_continuous(trans="log1p") +
+  theme_bw() +
+  xlim(-1.5, 1.5) +
+  scale_fill_manual(values = c("steelblue2", "dodgerblue4")) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black", size = 1) +
+  geom_vline(xintercept = pet_median, color = "tomato3", size = 1.5) +
+  xlab("Site-level impact of PET on growth") +
+  ylab("Frequency") +
+  ylim(c(0, 200)) +
+  theme(legend.position = c(.9,.85),
+        legend.key = element_blank(),
+        legend.background = element_blank())
+  
+
+cwd_est_plot / pet_est_plot
 
 
-
-long_trim_df <- trim_df %>% 
-  select(collection_id, genus, species_id, estimate_cwd.an,estimate_pet.an) %>% 
-  pivot_longer(-c(collection_id, genus, species_id))
-
-allsens_plot=ggplot(long_trim_df, aes(x=name, y=value, fill=name)) + 
-  geom_hline(yintercept=0,colour = 'black', linetype=2)+
-  geom_jitter(position=position_jitter(0.2),alpha=.1,aes(color=name))+
-  geom_boxplot(outlier.colour = NA, width = .5, alpha=.9)+
-  theme_bw(base_size = 20)+
-  theme(panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))+
-  scale_x_discrete(labels=c("estimate_cwd.an" = "CWD sens.", 
-                            "estimate_pet.an" = "PET sens."))+
-  ylim(-3,3)+
-  xlab("")+
-  ylab("Sensitivity (coefficient estimate)")+
-  guides(fill=F, color=F)+
-  scale_fill_manual(values=c('#21908CFF','#404788FF'))+
-  scale_color_manual(values=c('#21908CFF','#404788FF'))
-
-genus_plot=ggplot(long_trim_df, aes(x=name, y=value, fill=genus)) + 
-  geom_hline(yintercept=0,colour = 'black', linetype=2)+
-  #geom_jitter(position=position_jitter(0.2),alpha=.1,aes(color=genus))+
-  geom_boxplot(outlier.colour = NA)+
-  theme_bw(base_size = 20)+
-  theme(legend.position = c(.1,.5),legend.title = element_blank(),
-        panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))+
-  scale_x_discrete(labels=c("estimate_cwd.an" = "CWD sensitivity", 
-                            "estimate_pet.an" = "PET sensitivity"))+
-  ylim(-2,1.5)+
-  xlab("")+
-  ylab("Sensitivity (coefficient estimate)")+
-  guides(fill=F)+
-  scale_fill_viridis(discrete = T,option = "D")
-genus_plot
-
-allsens_plot+genus_plot+
-  plot_layout(widths = c(1,2))+
-  plot_annotation(tag_levels="a") & theme(plot.tag = element_text(face = 'bold', size=15))
   
                           
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
