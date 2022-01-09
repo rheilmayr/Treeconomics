@@ -43,6 +43,9 @@ library(fixest)
 
 select <- dplyr::select
 
+mc_n <- 100
+
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Import data --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -97,6 +100,7 @@ sp_info <- sp_info %>%
   select(species_id, genus, gymno_angio, family)
 flm_df <- flm_df %>% 
   left_join(sp_info, by = "species_id")
+
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Characterize site-level climate in relation to species range -------------
@@ -238,6 +242,7 @@ trim_df <- flm_df %>%
 # 
 # binned_margins
 
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Primary second stage model --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -295,6 +300,63 @@ mod_df %>%
   select(pred_rwi) %>% 
   summary() #CAUTION: Shouldn't mean here be much closer to 1? Investigate in first stage script....
 
+
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Random draws of coefs from first stage ---------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+draw_coefs <- function(n, cwd_est, pet_est, int_est, cwd_ste, pet_ste, int_ste, 
+                       cwd_pet_cov, pet_int_cov, cwd_int_cov){
+  mu <- c("cwd_coef" = cwd_est, 
+          "pet_coef" = pet_est, 
+          "int_coef" = int_est)
+  vcov <- matrix(data = NA, nrow = 3, ncol = 3)
+  vcov[1,1] <- cwd_ste^2
+  vcov[2,2] <- pet_ste^2
+  vcov[3,3] <- int_ste^2
+  vcov[1,2] <- cwd_pet_cov
+  vcov[2,1] <- cwd_pet_cov
+  vcov[1,3] <- cwd_int_cov
+  vcov[3,1] <- cwd_int_cov
+  vcov[2,3] <- pet_int_cov
+  vcov[3,2] <- pet_int_cov
+  
+  draw <- mvrnorm(n, mu, vcov)
+  draw <- as_tibble(draw)
+  draw$iter_n <- seq(1,n)
+  draw <- draw %>% select(iter_n, cwd_coef, pet_coef, int_coef)
+  return(draw)
+}
+
+run_ss <- function(data){
+  mod <- lm(cwd_coef ~ cwd.spstd + pet.spstd, data=data)
+  print(summary(mod))
+  return(mod)
+}
+
+mc_df <- trim_df %>%
+  mutate(coef_draws = pmap(list(n = mc_n, 
+                                cwd_est = trim_df$estimate_cwd.an, 
+                                pet_est = trim_df$estimate_pet.an,
+                                int_est = trim_df$estimate_intercept, 
+                                cwd_ste = trim_df$std.error_cwd.an,
+                                pet_ste = trim_df$std.error_pet.an, 
+                                int_ste = trim_df$std.error_intercept,
+                                cwd_pet_cov = trim_df$cov_cwd_pet, 
+                                cwd_int_cov = trim_df$cov_int_cwd,
+                                pet_int_cov = trim_df$cov_int_pet), 
+                           draw_coefs))
+
+mc_df <- mc_df %>% 
+  unnest(coef_draws) %>% 
+  select(collection_id, iter_n, cwd_coef, pet_coef, int_coef, cwd.spstd, 
+         pet.spstd, errorweights) %>% 
+  group_by(iter_n) %>% 
+  nest()
+
+mc_df <- mc_df %>%
+  mutate(ss_mod = data %>% map(run_ss))
 
 # #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # # Margins plots --------------------------------------------------------
