@@ -325,8 +325,8 @@ draw_coefs <- function(n, cwd_est, pet_est, int_est, cwd_ste, pet_ste, int_ste,
   
   draw <- mvrnorm(n, mu, vcov)
   draw <- as_tibble(draw)
-  draw$iter_n <- seq(1,n)
-  draw <- draw %>% select(iter_n, cwd_coef, pet_coef, int_coef)
+  draw$iter_idx <- seq(1,n)
+  draw <- draw %>% select(iter_idx, cwd_coef, pet_coef, int_coef)
   return(draw)
 }
 
@@ -359,9 +359,9 @@ mc_df <- trim_df %>%
 ## Nest draws into n separate datasets
 mc_df <- mc_df %>% 
   unnest(coef_draws) %>% 
-  select(collection_id, iter_n, cwd_coef, pet_coef, int_coef, cwd.spstd, 
+  select(collection_id, iter_idx, cwd_coef, pet_coef, int_coef, cwd.spstd, 
          pet.spstd, errorweights) %>% 
-  group_by(iter_n) %>% 
+  group_by(iter_idx) %>% 
   nest()
 
 
@@ -371,7 +371,7 @@ mc_df <- mc_df %>%
          ss_pet_mod = data %>% map(run_ss, outcome = "pet_coef"),
          ss_int_mod = data %>% map(run_ss, outcome = "int_coef")) %>% 
   unnest(c(ss_cwd_mod, ss_pet_mod, ss_int_mod)) %>% 
-  select(iter_n, parameter = var_cwd_coef, cwd_coef, pet_coef, int_coef)
+  select(iter_idx, parameter = var_cwd_coef, cwd_coef, pet_coef, int_coef)
 
 
 ## Save out coefficients that reflect uncertainty from both first and second stage models
