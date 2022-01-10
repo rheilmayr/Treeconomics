@@ -331,8 +331,14 @@ draw_coefs <- function(n, cwd_est, pet_est, int_est, cwd_ste, pet_ste, int_ste,
 }
 
 run_ss <- function(data, outcome = "cwd_coef"){
-  mod <- biglm(!!cwd_coef ~ cwd.spstd + pet.spstd, data=data)
-  return(mod)
+  formula <- as.formula(paste(outcome, " ~ cwd.spstd + pet.spstd"))
+  mod <- lm(formula, data=data)
+  vcov <- vcovCL(mod, cluster = data$collection_id)
+  coefs <- mod$coefficients
+  draw <- mvrnorm(1, coefs, vcov) %>% 
+    enframe(name = paste("var", outcome, sep = "_"), 
+            value = paste("coef", outcome, sep = "_"))
+  return(draw)
 }
 
 
@@ -361,10 +367,15 @@ mc_df <- mc_df %>%
          ss_pet_mod = data %>% map(run_ss, outcome = "pet_coef"),
          ss_int_mod = data %>% map(run_ss, outcome = "int_coef"))
 
+mc_df %>% unnest(c(ss_cwd_mod, ss_pet_mod, ss_int_mod))
+
 mc_df <- mc_df %>% 
   select(-data)
 
 saveRDS(mc_df, paste0(wdir, "out/second_stage/ss_mc_mods.rds"))
+
+mod <- mc_df[1,3][[1]]
+mod
 
 
 # #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
