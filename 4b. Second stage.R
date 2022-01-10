@@ -39,6 +39,7 @@ library(modi)
 library(margins)
 library(tidylog)
 library(fixest)
+library(biglm)
 
 
 select <- dplyr::select
@@ -329,11 +330,11 @@ draw_coefs <- function(n, cwd_est, pet_est, int_est, cwd_ste, pet_ste, int_ste,
   return(draw)
 }
 
-run_ss <- function(data){
-  mod <- lm(cwd_coef ~ cwd.spstd + pet.spstd, data=data)
-  print(summary(mod))
+run_ss <- function(data, outcome = "cwd_coef"){
+  mod <- biglm(!!cwd_coef ~ cwd.spstd + pet.spstd, data=data)
   return(mod)
 }
+
 
 mc_df <- trim_df %>%
   mutate(coef_draws = pmap(list(n = mc_n, 
@@ -356,7 +357,15 @@ mc_df <- mc_df %>%
   nest()
 
 mc_df <- mc_df %>%
-  mutate(ss_mod = data %>% map(run_ss))
+  mutate(ss_cwd_mod = data %>% map(run_ss, outcome = "cwd_coef"),
+         ss_pet_mod = data %>% map(run_ss, outcome = "pet_coef"),
+         ss_int_mod = data %>% map(run_ss, outcome = "int_coef"))
+
+mc_df <- mc_df %>% 
+  select(-data)
+
+saveRDS(mc_df, paste0(wdir, "out/second_stage/ss_mc_mods.rds"))
+
 
 # #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # # Margins plots --------------------------------------------------------
