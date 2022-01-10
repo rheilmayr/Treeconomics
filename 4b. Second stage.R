@@ -337,11 +337,11 @@ run_ss <- function(data, outcome = "cwd_coef"){
   coefs <- mod$coefficients
   draw <- mvrnorm(1, coefs, vcov) %>% 
     enframe(name = paste("var", outcome, sep = "_"), 
-            value = paste("coef", outcome, sep = "_"))
+            value = outcome)
   return(draw)
 }
 
-
+## Create n random draws of first stage coefficients for each site
 mc_df <- trim_df %>%
   mutate(coef_draws = pmap(list(n = mc_n, 
                                 cwd_est = trim_df$estimate_cwd.an, 
@@ -355,6 +355,8 @@ mc_df <- trim_df %>%
                                 pet_int_cov = trim_df$cov_int_pet), 
                            draw_coefs))
 
+
+## Nest draws into n separate datasets
 mc_df <- mc_df %>% 
   unnest(coef_draws) %>% 
   select(collection_id, iter_n, cwd_coef, pet_coef, int_coef, cwd.spstd, 
@@ -362,20 +364,18 @@ mc_df <- mc_df %>%
   group_by(iter_n) %>% 
   nest()
 
+
+## Run second stage model for each of the n datasets
 mc_df <- mc_df %>%
   mutate(ss_cwd_mod = data %>% map(run_ss, outcome = "cwd_coef"),
          ss_pet_mod = data %>% map(run_ss, outcome = "pet_coef"),
-         ss_int_mod = data %>% map(run_ss, outcome = "int_coef"))
+         ss_int_mod = data %>% map(run_ss, outcome = "int_coef")) %>% 
+  unnest(c(ss_cwd_mod, ss_pet_mod, ss_int_mod)) %>% 
+  select(iter_n, parameter = var_cwd_coef, cwd_coef, pet_coef, int_coef)
 
-mc_df %>% unnest(c(ss_cwd_mod, ss_pet_mod, ss_int_mod))
 
-mc_df <- mc_df %>% 
-  select(-data)
-
+## Save out coefficients that reflect uncertainty from both first and second stage models
 saveRDS(mc_df, paste0(wdir, "out/second_stage/ss_mc_mods.rds"))
-
-mod <- mc_df[1,3][[1]]
-mod
 
 
 # #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
