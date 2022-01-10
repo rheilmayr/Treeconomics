@@ -103,6 +103,10 @@ cmip_projections <- tibble(mod_n = 1:n_cmip_mods)
 cmip_projections <- cmip_projections %>% 
   mutate(cmip_rast = map(mod_n, pull_cmip_model))
 
+## Assign specific cmip realization to each MC iteration 
+cmip_assignments <- tibble(iter_n = seq(1, n_mc)) %>% 
+  mutate(cmip_idx = sample(seq(n_cmip_mods), n_mc))
+
 select_cwd <- function(raster_brick){
   cwd <- raster_brick %>% raster::subset("cwd")
   return(cwd)
@@ -169,10 +173,6 @@ ggsave(paste0(wdir, 'figures\\cwd_change.svg'), plot = binned_change)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Rescale CMIP predictions into species standardized climate ---------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-species_list <- niche %>% 
-  select(sp_code) %>% 
-  left_join(sp_info, by = "sp_code")
-
 rasterize_spstd <- function(spp_code, clim_raster){
   sp_niche <- niche %>%
     drop_na() %>% 
@@ -202,33 +202,56 @@ select_lyr <- function(brick, layer_name){
   return(lyr)
 }
 
-cmip_projections <- cmip_projections %>% 
-  mutate(cwd_rast = map(.x = cmip_rast, subset = "cwd", .f = subset),
-         pet_rast = map(.x = cmip_rast, subset = "pet", .f = subset))
 
-cmip_n <- dim(cmip_projections)[1]
-cmip_assignments <- tibble(iter_n = seq(1, n_mc)) %>% 
-  mutate(cmip_idx = sample(seq(cmip_n), n_mc))
 
-cwd_proj_mean <- brick(cmip_projections$cwd_rast) %>%  
-  calc(mean)
 
-pet_proj_mean <- brick(cmip_projections$pet_rast) %>% 
-  calc(mean)
-  
-clim_future <- brick(c(cwd_proj_mean, pet_proj_mean))  # TODO: In future, should incorporate variation across CMIP models rather than just mean. MC based off std in models? Bootstrap individual CMIP models?
-names(clim_future) = c("cwd", "pet")
-# clim_future <- (cmip_projections[1,2] %>% pull())[[1]]  
 
+## Create tibble of species
+species_list <- niche %>% 
+  select(sp_code) %>% 
+  left_join(sp_info, by = "sp_code") 
+
+
+## Create tibble of historic climates
+sp_historic <- species_list %>% 
+  mutate(clim_historic_sp = map(.x = sp_code, clim_raster = clim_historic, .f = rasterize_spstd))
+
+
+## Cross species with cmip models
 sp_predictions <- species_list %>% 
-  mutate(clim_future_sp = map(.x = sp_code, clim_raster = clim_future, .f = rasterize_spstd))
+  crossing(mod_n = seq(n_cmip_mods)) %>% 
+  left_join(cmip_projections, by = "mod_n")
+
+
+## Rescale each CMIP model based on each species' climate
+sp_predictions <- sp_predictions %>% 
+  mutate(clim_future_sp = pmap(list(spp_code = sp_code, 
+                                    clim_raster = cmip_rast), 
+                               .f = rasterize_spstd))
+
+
+# cmip_projections <- cmip_projections %>% 
+#   mutate(cwd_rast = map(.x = cmip_rast, subset = "cwd", .f = subset),
+#          pet_rast = map(.x = cmip_rast, subset = "pet", .f = subset))
+# 
+# 
+# 
+# ##
+# cwd_proj_mean <- brick(cmip_projections$cwd_rast) %>%  
+#   calc(mean)
+# 
+# pet_proj_mean <- brick(cmip_projections$pet_rast) %>% 
+#   calc(mean)
+#   
+# clim_future <- brick(c(cwd_proj_mean, pet_proj_mean))  # TODO: In future, should incorporate variation across CMIP models rather than just mean. MC based off std in models? Bootstrap individual CMIP models?
+# names(clim_future) = c("cwd", "pet")
+# # clim_future <- (cmip_projections[1,2] %>% pull())[[1]]  
+
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Calculate deviation from species' historic range ---------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-sp_predictions <- sp_predictions %>% 
-  mutate(clim_historic_sp = map(.x = sp_code, clim_raster = clim_historic, .f = rasterize_spstd))
 
 # sp_niche <- niche %>%
 #   drop_na() %>% 
