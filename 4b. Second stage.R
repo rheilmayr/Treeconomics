@@ -245,66 +245,6 @@ trim_df <- flm_df %>%
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Primary second stage model --------------------------------------------------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Run regression and cluster s.e.
-
-# trim_df <- trim_df %>% 
-#   filter(gymno_angio=="gymno")
-
-mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=flm_df)
-cluster_vcov <- vcovCL(mod, cluster = flm_df$collection_id)
-coeftest(mod, vcov = vcovCL, cluster = flm_df$collection_id)
-
-mod_df = trim_df
-mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=mod_df)
-cluster_vcov <- vcovCL(mod, cluster = mod_df$species_id)
-coeftest(mod, vcov = vcovCL, cluster = mod_df$species_id)
-saveRDS(mod, paste0(wdir, "out\\second_stage\\cwd_mod.rds"))
-saveRDS(cluster_vcov, paste0(wdir, "out\\second_stage\\cwd_mod_vcov.rds"))
-# saveRDS(sq_pet_mod, paste0(wdir, "out\\second_stage\\ss_sq_pet_mod.rds"))
-
-pet_mod <- lm(estimate_pet.an ~ cwd.spstd + pet.spstd, weights = pet_errorweights, data=mod_df)
-pet_cluster_vcov <- vcovCL(pet_mod, cluster = mod_df$collection_id)
-coeftest(pet_mod, cluster = mod_df$collection_id)
-saveRDS(pet_mod, paste0(wdir, "out\\second_stage\\pet_mod.rds"))
-saveRDS(pet_cluster_vcov, paste0(wdir, "out\\second_stage\\pet_mod_vcov.rds"))
-
-
-int_mod <- lm(estimate_intercept ~ cwd.spstd + pet.spstd, weights = int_errorweights, data = mod_df)
-int_cluster_vcov <- vcovCL(int_mod, cluster = mod_df$collection_id)
-coeftest(int_mod, cluster = mod_df$collection_id)
-saveRDS(int_mod, paste0(wdir, "out\\second_stage\\int_mod.rds"))
-saveRDS(int_cluster_vcov, paste0(wdir, "out\\second_stage\\int_mod_vcov.rds"))
-
-
-# Squared terms
-sq_cwd_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd + I(cwd.spstd^2) + I(pet.spstd^2), weights = errorweights, data=mod_df)
-coeftest(sq_cwd_mod, vcov = vcovCL, cluster = trim_df$collection_id)
-sq_cwd_cluster_vcov <- vcovCL(sq_cwd_mod, cluster = trim_df$collection_id)
-saveRDS(sq_cwd_mod, paste0(wdir, "out\\second_stage\\sq_cwd_mod.rds"))
-saveRDS(sq_cwd_cluster_vcov, paste0(wdir, "out\\second_stage\\sq_cwd_mod_vcov.rds"))
-
-sq_pet_mod <- lm(estimate_pet.an ~ cwd.spstd + pet.spstd + I(cwd.spstd^2) + I(pet.spstd^2), weights = pet_errorweights, data=mod_df)
-sq_pet_cluster_vcov <- vcovCL(sq_pet_mod, cluster = trim_df$collection_id)
-saveRDS(sq_pet_mod, paste0(wdir, "out\\second_stage\\sq_pet_mod.rds"))
-saveRDS(sq_pet_cluster_vcov, paste0(wdir, "out\\second_stage\\sq_pet_mod_vcov.rds"))
-
-sq_int_mod <- lm(estimate_intercept ~ cwd.spstd + pet.spstd + I(cwd.spstd^2) + I(pet.spstd^2), weights = int_errorweights, data=mod_df)
-sq_int_cluster_vcov <- vcovCL(sq_int_mod, cluster = trim_df$collection_id)
-saveRDS(sq_int_mod, paste0(wdir, "out\\second_stage\\sq_int_mod.rds"))
-saveRDS(sq_int_cluster_vcov, paste0(wdir, "out\\second_stage\\sq_int_mod_vcov.rds"))
-
-
-mod_df %>% 
-  mutate(pred_rwi = estimate_intercept + (estimate_pet.an * pet.spstd) + (estimate_cwd.an * cwd.spstd)) %>% 
-  select(pred_rwi) %>% 
-  summary() #CAUTION: Shouldn't mean here be much closer to 1? Investigate in first stage script....
-
-
-
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Random draws of coefs from first stage ---------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 draw_coefs <- function(n, cwd_est, pet_est, int_est, cwd_ste, pet_ste, int_ste, 
@@ -376,6 +316,70 @@ mc_df <- mc_df %>%
 
 ## Save out coefficients that reflect uncertainty from both first and second stage models
 saveRDS(mc_df, paste0(wdir, "out/second_stage/ss_mc_mods.rds"))
+
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Primary second stage model --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Run regression and cluster s.e.
+
+# trim_df <- trim_df %>% 
+#   filter(gymno_angio=="gymno")
+
+mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=flm_df)
+cluster_vcov <- vcovCL(mod, cluster = flm_df$collection_id)
+coeftest(mod, vcov = vcovCL, cluster = flm_df$collection_id)
+
+mod_df = trim_df
+mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=mod_df)
+cluster_vcov <- vcovCL(mod, cluster = mod_df$species_id)
+coeftest(mod, vcov = vcovCL, cluster = mod_df$species_id)
+saveRDS(mod, paste0(wdir, "out\\second_stage\\cwd_mod.rds"))
+saveRDS(cluster_vcov, paste0(wdir, "out\\second_stage\\cwd_mod_vcov.rds"))
+# saveRDS(sq_pet_mod, paste0(wdir, "out\\second_stage\\ss_sq_pet_mod.rds"))
+
+pet_mod <- lm(estimate_pet.an ~ cwd.spstd + pet.spstd, weights = pet_errorweights, data=mod_df)
+pet_cluster_vcov <- vcovCL(pet_mod, cluster = mod_df$collection_id)
+coeftest(pet_mod, cluster = mod_df$collection_id)
+saveRDS(pet_mod, paste0(wdir, "out\\second_stage\\pet_mod.rds"))
+saveRDS(pet_cluster_vcov, paste0(wdir, "out\\second_stage\\pet_mod_vcov.rds"))
+
+
+int_mod <- lm(estimate_intercept ~ cwd.spstd + pet.spstd, weights = int_errorweights, data = mod_df)
+int_cluster_vcov <- vcovCL(int_mod, cluster = mod_df$collection_id)
+coeftest(int_mod, cluster = mod_df$collection_id)
+saveRDS(int_mod, paste0(wdir, "out\\second_stage\\int_mod.rds"))
+saveRDS(int_cluster_vcov, paste0(wdir, "out\\second_stage\\int_mod_vcov.rds"))
+
+
+# Squared terms
+sq_cwd_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd + I(cwd.spstd^2) + I(pet.spstd^2), weights = errorweights, data=mod_df)
+coeftest(sq_cwd_mod, vcov = vcovCL, cluster = trim_df$collection_id)
+sq_cwd_cluster_vcov <- vcovCL(sq_cwd_mod, cluster = trim_df$collection_id)
+saveRDS(sq_cwd_mod, paste0(wdir, "out\\second_stage\\sq_cwd_mod.rds"))
+saveRDS(sq_cwd_cluster_vcov, paste0(wdir, "out\\second_stage\\sq_cwd_mod_vcov.rds"))
+
+sq_pet_mod <- lm(estimate_pet.an ~ cwd.spstd + pet.spstd + I(cwd.spstd^2) + I(pet.spstd^2), weights = pet_errorweights, data=mod_df)
+sq_pet_cluster_vcov <- vcovCL(sq_pet_mod, cluster = trim_df$collection_id)
+saveRDS(sq_pet_mod, paste0(wdir, "out\\second_stage\\sq_pet_mod.rds"))
+saveRDS(sq_pet_cluster_vcov, paste0(wdir, "out\\second_stage\\sq_pet_mod_vcov.rds"))
+
+sq_int_mod <- lm(estimate_intercept ~ cwd.spstd + pet.spstd + I(cwd.spstd^2) + I(pet.spstd^2), weights = int_errorweights, data=mod_df)
+sq_int_cluster_vcov <- vcovCL(sq_int_mod, cluster = trim_df$collection_id)
+saveRDS(sq_int_mod, paste0(wdir, "out\\second_stage\\sq_int_mod.rds"))
+saveRDS(sq_int_cluster_vcov, paste0(wdir, "out\\second_stage\\sq_int_mod_vcov.rds"))
+
+
+mod_df %>% 
+  mutate(pred_rwi = estimate_intercept + (estimate_pet.an * pet.spstd) + (estimate_cwd.an * cwd.spstd)) %>% 
+  select(pred_rwi) %>% 
+  summary() #CAUTION: Shouldn't mean here be much closer to 1? Investigate in first stage script....
+
+
+
+
+
 
 
 # #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
