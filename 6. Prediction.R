@@ -26,6 +26,8 @@ library(patchwork)
 library(tidyverse)
 library(prediction)
 
+n_mc <- 10
+
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data --------------------------------------------------------
@@ -34,9 +36,11 @@ library(prediction)
 wdir <- 'remote\\'
 
 # 1. Second stage model
-mod <- readRDS(paste0(wdir, "out\\second_stage\\cwd_mod.rds"))
-pet_mod <- readRDS(paste0(wdir, "out\\second_stage\\pet_mod.rds"))
-int_mod <- readRDS(paste0(wdir, "out\\second_stage\\int_mod.rds"))
+mod_df <- readRDS(paste0(wdir, "out\\second_stage\\ss_mc_mods.rds"))
+
+# mod <- readRDS(paste0(wdir, "out\\second_stage\\cwd_mod.rds"))
+# pet_mod <- readRDS(paste0(wdir, "out\\second_stage\\pet_mod.rds"))
+# int_mod <- readRDS(paste0(wdir, "out\\second_stage\\int_mod.rds"))
 
 # mod <- readRDS(paste0(wdir, "out\\second_stage\\ss_sq_mod.rds"))
 # pet_mod <- readRDS(paste0(wdir, "out\\second_stage\\ss_sq_pet_mod.rds"))
@@ -202,6 +206,9 @@ cmip_projections <- cmip_projections %>%
   mutate(cwd_rast = map(.x = cmip_rast, subset = "cwd", .f = subset),
          pet_rast = map(.x = cmip_rast, subset = "pet", .f = subset))
 
+cmip_n <- dim(cmip_projections)[1]
+cmip_assignments <- tibble(iter_n = seq(1, n_mc)) %>% 
+  mutate(cmip_idx = sample(seq(cmip_n), n_mc))
 
 cwd_proj_mean <- brick(cmip_projections$cwd_rast) %>%  
   calc(mean)
