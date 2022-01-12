@@ -41,6 +41,8 @@ library(tidylog)
 library(fixest)
 library(biglm)
 
+set.seed(5597)
+
 
 select <- dplyr::select
 

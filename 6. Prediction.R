@@ -27,7 +27,9 @@ library(tidyverse)
 library(prediction)
 library(tictoc)
 
-n_mc <- 10
+set.seed(5597)
+
+n_mc <- 5
 
 tic()
 
