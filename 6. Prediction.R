@@ -48,22 +48,24 @@ sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
 sp_info <- sp_info %>% 
   select(species_id, genus, gymno_angio, family) %>% 
   rename(sp_code = species_id)
-species_list <- sp_info[1:n_spp,] %>% 
-  select(sp_code)
+
 
 # 3. Species-standardized historic climate
-sp_hist_clim <- readRDS(paste0(wdir, "out//climate//sp_clim_.rds"))
+sp_hist_clim <- readRDS(paste0(wdir, "out//climate//sp_clim_historic.rds"))
 
 # 4. Species-standardized future possible climates
 sp_fut_clim <- readRDS(paste0(wdir, "out//climate//sp_clim_predictions.rds"))
 
+# species_list <- sp_info[1:n_spp,] %>% 
+#   select(sp_code)
 
+species_list <- sp_hist_clim %>% select(sp_code)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Organize CMIP models into tibble  ---------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ## Assign specific cmip realization to each MC iteration 
-n_cmip_mods <- dim(pet_future)[3]
+n_cmip_mods <- sp_fut_clim %>% pull(cmip_idx) %>% unique() %>% length()
 cmip_assignments <- tibble(iter_idx = seq(1, n_mc)) %>% 
   mutate(cmip_idx = sample(seq(n_cmip_mods), n_mc))
 
@@ -113,10 +115,8 @@ mod_df <- mod_df %>%
 sp_sensitivity <- species_list %>% 
   select(sp_code) %>% 
   crossing(iter_idx = seq(n_mc)) %>% 
-  left_join(mod_df, by = "iter_idx") 
-
-# %>% 
-#   left_join(sp_historic, by = "sp_code")
+  left_join(mod_df, by = "iter_idx")  %>% 
+  left_join(sp_hist_clim, by = "sp_code")
 
 
 ## Calculate species by n_mc versions of sensitivity rasters
@@ -176,8 +176,6 @@ rwi_quantiles <- sp_predictions %>%
   nest() %>% 
   mutate(rwi_quantiles = map(data, extract_quantiles)) %>% 
   select(-data)
-
-toc()
 
 
 
