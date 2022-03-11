@@ -26,8 +26,8 @@ library(patchwork)
 library(tidyverse)
 library(prediction)
 library(tictoc)
-# library(furrr)
-# future::plan(multisession, workers = 8)
+library(furrr)
+future::plan(multisession, workers = 4)
 
 set.seed(5597)
 
@@ -121,9 +121,11 @@ sp_sensitivity <- species_list %>%
 
 ## Calculate species by n_mc versions of sensitivity rasters
 sp_sensitivity <- sp_sensitivity %>% 
-  mutate(sensitivity = pmap(list(clim_historic_sp = clim_historic_sp,
+  mutate(sensitivity = future_pmap(list(clim_historic_sp = clim_historic_sp,
                                  coefs = ss_coefs),
-                            .f = predict_sens))
+                            .f = predict_sens,
+                            .options = furrr_options(seed = NULL)))
+
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -151,8 +153,8 @@ sp_predictions <- sp_sensitivity %>%
 
 ## Predict future RWI
 sp_predictions <- sp_predictions %>% 
-  mutate(rwi_predictions = map2(.x = clim_future_sp, .y = sensitivity, calc_rwi))
-
+  mutate(rwi_predictions = future_map2(.x = clim_future_sp, .y = sensitivity, calc_rwi,
+                                       .options = furrr_options(seed = NULL)))
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Summarize predictions using cell-wise quantiles   ----------------------
@@ -174,8 +176,11 @@ rwi_quantiles <- sp_predictions %>%
   select(sp_code, iter_idx, rwi_predictions) %>% 
   group_by(sp_code) %>% 
   nest() %>% 
-  mutate(rwi_quantiles = map(data, extract_quantiles)) %>% 
+  mutate(rwi_quantiles = future_map(data, extract_quantiles,
+                                    .options = furrr_options(seed = NULL))) %>% 
   select(-data)
+
+
 
 
 
