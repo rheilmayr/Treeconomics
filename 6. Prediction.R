@@ -26,13 +26,13 @@ library(patchwork)
 library(tidyverse)
 library(prediction)
 library(tictoc)
+# library(furrr)
+# future::plan(multisession, workers = 8)
 
 set.seed(5597)
 
 n_mc <- 5
-
-tic()
-
+n_spp <- 4
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data --------------------------------------------------------
@@ -43,6 +43,21 @@ wdir <- 'remote\\'
 # 1. Second stage model
 mod_df <- readRDS(paste0(wdir, "out\\second_stage\\ss_mc_mods.rds"))
 
+# 2. Species information
+sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
+sp_info <- sp_info %>% 
+  select(species_id, genus, gymno_angio, family) %>% 
+  rename(sp_code = species_id)
+species_list <- sp_info[1:n_spp,] %>% 
+  select(sp_code)
+
+# 3. Species-standardized historic climate
+sp_hist_clim <- readRDS(paste0(wdir, "out//climate//sp_clim_.rds"))
+
+# 4. Species-standardized future possible climates
+sp_fut_clim <- readRDS(paste0(wdir, "out//climate//sp_clim_predictions.rds"))
+
+
 # mod <- readRDS(paste0(wdir, "out\\second_stage\\cwd_mod.rds"))
 # pet_mod <- readRDS(paste0(wdir, "out\\second_stage\\pet_mod.rds"))
 # int_mod <- readRDS(paste0(wdir, "out\\second_stage\\int_mod.rds"))
@@ -51,249 +66,247 @@ mod_df <- readRDS(paste0(wdir, "out\\second_stage\\ss_mc_mods.rds"))
 # pet_mod <- readRDS(paste0(wdir, "out\\second_stage\\ss_sq_pet_mod.rds"))
 
 
-# 2. Historic climate raster
-clim_file <- paste0(wdir, 'in\\CRUData\\historic_raster\\HistoricCWD_AETGrids.Rdat')
-load(clim_file)
-cwd_historic <- sum(cwd_historic)
-aet_historic <- sum(aet_historic)
-pet_historic <- aet_historic + cwd_historic
-names(cwd_historic) = "cwd"
-names(pet_historic) = "pet"
-clim_historic <- raster::brick(list(cwd_historic, pet_historic))
+# # 2. Historic climate raster
+# clim_file <- paste0(wdir, 'in\\CRUData\\historic_raster\\HistoricCWD_AETGrids.Rdat')
+# load(clim_file)
+# cwd_historic <- sum(cwd_historic)
+# aet_historic <- sum(aet_historic)
+# pet_historic <- aet_historic + cwd_historic
+# names(cwd_historic) = "cwd"
+# names(pet_historic) = "pet"
+# clim_historic <- raster::brick(list(cwd_historic, pet_historic))
+# 
+# # 3. Climate projections from CMIP5
+# cmip <- load(paste0(wdir, 'in\\CMIP5 CWD\\cmip5_cwdaet_end.Rdat'))
+# pet_raster <- aet_raster + cwd_raster
+# pet_future <- pet_raster
+# cwd_future <- cwd_raster
+# rm(pet_raster)
+# rm(cwd_raster)
+# rm(aet_raster)
+# 
+# # 4. Species range maps
+# range_file <- paste0(wdir, 'in\\species_ranges\\merged_ranges.shp')
+# range_sf <- st_read(range_file)
+# 
+# # 5. Species climate niche
+# niche <- read.csv(paste0(wdir, "out\\climate\\clim_niche.csv")) %>% 
+#   select(-X)
 
-# 3. Climate projections from CMIP5
-cmip <- load(paste0(wdir, 'in\\CMIP5 CWD\\cmip5_cwdaet_end.Rdat'))
-pet_raster <- aet_raster + cwd_raster
-pet_future <- pet_raster
-cwd_future <- cwd_raster
-rm(pet_raster)
-rm(cwd_raster)
-rm(aet_raster)
 
-# 4. Species range maps
-range_file <- paste0(wdir, 'in\\species_ranges\\merged_ranges.shp')
-range_sf <- st_read(range_file)
-
-# 5. Species climate niche
-niche <- read.csv(paste0(wdir, "out\\climate\\clim_niche.csv")) %>% 
-  select(-X)
-
-# 6. Species information
-sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
-sp_info <- sp_info %>% 
-  select(species_id, genus, gymno_angio, family) %>% 
-  rename(sp_code = species_id)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Organize CMIP models into tibble  ---------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-pull_cmip_model <- function(cmip_idx){
-  cwd_lyr <- cwd_future[[cmip_idx]]
-  names(cwd_lyr) = "cwd"
-  pet_lyr <- pet_future[[cmip_idx]]
-  names(pet_lyr) = "pet"
-  future_clim <- brick(list(cwd_lyr, pet_lyr))
-  return(future_clim)
-}
-
-calc_cwd_change <- function(cmip_rast){
-  cwd_change <- ((cmip_rast %>% subset("cwd")) - cwd_historic)
-  # cwd_change <- (cmip_rast %>% subset("cwd") - cwd_historic) / cwd_historic
-  return(cwd_change)
-}
-
-n_cmip_mods <- dim(pet_future)[3]
-cmip_projections <- tibble(cmip_idx = 1:n_cmip_mods)
-cmip_projections <- cmip_projections %>% 
-  mutate(cmip_rast = map(cmip_idx, pull_cmip_model))
-
 ## Assign specific cmip realization to each MC iteration 
+n_cmip_mods <- dim(pet_future)[3]
 cmip_assignments <- tibble(iter_idx = seq(1, n_mc)) %>% 
   mutate(cmip_idx = sample(seq(n_cmip_mods), n_mc))
 
-select_cwd <- function(raster_brick){
-  cwd <- raster_brick %>% raster::subset("cwd")
-  return(cwd)
-}
-
-cmip_cwd <- cmip_projections %>% 
-  pull(cmip_rast) %>% 
-  lapply(select_cwd)
-
-names(cwd_historic) = "cwd.hist"
-names(pet_historic) = "pet.hist"
-clim_smry <- raster::brick(c(cwd_historic, pet_historic, cmip_cwd))
-clim_smry <- clim_smry %>% 
-  as.data.frame() %>% 
-  drop_na() %>% 
-  pivot_longer(c(-cwd.hist, -pet.hist), names_to = "cmip_mod", values_to = "future_cwd") %>% 
-  mutate(cwd_change = (future_cwd - cwd.hist),
-         cwd_pct_change = 100 * cwd_change / cwd.hist)
-
-# Plot change in cwd
-nbins = 26
-label_gaps <- 5
-label_pattern <- seq(1,nbins,label_gaps)
-plot_dat <- clim_smry %>% 
-  mutate(cwd.q = as.numeric(ntile(cwd.hist, nbins)),
-         pet.q = as.numeric(ntile(pet.hist, nbins)))
-
-cwd.quantiles = quantile(plot_dat$cwd.hist, probs = seq(0, 1, 1/nbins), names = TRUE) %>% 
-  round(2) %>% 
-  lapply(round)
-pet.quantiles = quantile(plot_dat$pet.hist, probs = seq(0, 1, 1/nbins), names = TRUE) %>% 
-  round(2) %>% 
-  lapply(round)
-cwd.breaks = seq(0.5, nbins+0.5, 1)
-pet.breaks = seq(0.5, nbins+0.5, 1)
-
-group_dat <- plot_dat %>% 
-  filter(cwd.hist>100) %>% 
-  group_by(cwd.q, pet.q) %>% 
-  dplyr::summarize(cwd_pct_change = mean(cwd_pct_change, na.rm = TRUE),
-                   cwd_change = mean(cwd_change, na.rm = TRUE),
-                   n = n()) %>% 
-  filter(n>1000)
-
-binned_change <- group_dat %>% 
-  ggplot(aes(x = cwd.q, y = pet.q, fill = cwd_change)) +
-  geom_tile() +
-  scale_fill_viridis_c() +
-  theme_bw(base_size = 22)+
-  ylab("Deviation from mean PET")+
-  xlab("Deviation from mean CWD")+
-  theme(legend.position = "right") +
-  labs(fill = "CWD change\nby 2100") +
-  scale_x_continuous(labels = cwd.quantiles[label_pattern], breaks = cwd.breaks[label_pattern]) +
-  scale_y_continuous(labels = pet.quantiles[label_pattern], breaks = pet.breaks[label_pattern]) +
-  ylab(bquote("Historic PET (mmH"[2]*"O)")) +
-  xlab(bquote("Historic CWD (mmH"[2]*"O)")) + 
-  coord_fixed()
-
-binned_change
-ggsave(paste0(wdir, 'figures\\cwd_change.svg'), plot = binned_change)
-
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Rescale CMIP predictions into species standardized climate ---------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-## NOTE: Could ideally move this out of this script? Maybe better as part of 
-## species niche script?
-rasterize_spstd <- function(spp_code, clim_raster){
-  sp_niche <- niche %>%
-    drop_na() %>% 
-    filter(sp_code == spp_code) %>% 
-    select(-sp_code) 
-  
-  sp_range <- range_sf %>% 
-    filter(sp_code == spp_code)
-  pet_sp <- clim_raster %>%
-    subset("pet") %>% 
-    mask(sp_range)
-  pet_spstd <- (pet_sp - sp_niche$pet_mean) / sp_niche$pet_sd
-  names(pet_spstd) = "pet.spstd"
-  
-  cwd_sp <- clim_raster %>% 
-    subset("cwd") %>% 
-    mask(sp_range)
-  cwd_spstd <- (cwd_sp - sp_niche$cwd_mean) / sp_niche$cwd_sd
-  names(cwd_spstd) = "cwd.spstd"
-  
-  clim.spstd <- raster::brick(list(cwd_spstd, pet_spstd))
-  return(clim.spstd)
-}
-
-select_lyr <- function(brick, layer_name){
-  lyr <- brick %>% subset(layer_name)
-  return(lyr)
-}
-
-
-
-## Create tibble of species
-species_list <- niche %>% 
-  select(sp_code) %>% 
-  left_join(sp_info, by = "sp_code") 
-
-species_list <- species_list[1:5,] ## WARNING: NEED TO DELETE
-
-
-## Cross species with cmip models
-sp_fut_clim <- species_list %>% 
-  crossing(cmip_idx = seq(n_cmip_mods)) %>% 
-  left_join(cmip_projections, by = "cmip_idx")
-
-
-## Rescale each CMIP model based on each species' climate
-sp_fut_clim <- sp_fut_clim %>% 
-  mutate(clim_future_sp = pmap(list(spp_code = sp_code, 
-                                    clim_raster = cmip_rast), 
-                               .f = rasterize_spstd))
-
-
-## Select down to base columns
-sp_fut_clim <- sp_fut_clim %>% 
-  select(sp_code, cmip_idx, cmip_rast, clim_future_sp)
-
+# pull_cmip_model <- function(cmip_idx){
+#   cwd_lyr <- cwd_future[[cmip_idx]]
+#   names(cwd_lyr) = "cwd"
+#   pet_lyr <- pet_future[[cmip_idx]]
+#   names(pet_lyr) = "pet"
+#   future_clim <- brick(list(cwd_lyr, pet_lyr))
+#   return(future_clim)
+# }
+# 
+# calc_cwd_change <- function(cmip_rast){
+#   cwd_change <- ((cmip_rast %>% subset("cwd")) - cwd_historic)
+#   # cwd_change <- (cmip_rast %>% subset("cwd") - cwd_historic) / cwd_historic
+#   return(cwd_change)
+# }
+# 
+# cmip_projections <- tibble(cmip_idx = 1:n_cmip_mods)
 # cmip_projections <- cmip_projections %>% 
-#   mutate(cwd_rast = map(.x = cmip_rast, subset = "cwd", .f = subset),
-#          pet_rast = map(.x = cmip_rast, subset = "pet", .f = subset))
+#   mutate(cmip_rast = map(cmip_idx, pull_cmip_model))
 # 
 # 
+# select_cwd <- function(raster_brick){
+#   cwd <- raster_brick %>% raster::subset("cwd")
+#   return(cwd)
+# }
 # 
-# ##
-# cwd_proj_mean <- brick(cmip_projections$cwd_rast) %>%  
-#   calc(mean)
+# cmip_cwd <- cmip_projections %>% 
+#   pull(cmip_rast) %>% 
+#   lapply(select_cwd)
 # 
-# pet_proj_mean <- brick(cmip_projections$pet_rast) %>% 
-#   calc(mean)
+# # names(cwd_historic) = "cwd.hist"
+# # names(pet_historic) = "pet.hist"
+# # clim_smry <- raster::brick(c(cwd_historic, pet_historic, cmip_cwd))
+# # clim_smry <- clim_smry %>% 
+# #   as.data.frame() %>% 
+# #   drop_na() %>% 
+# #   pivot_longer(c(-cwd.hist, -pet.hist), names_to = "cmip_mod", values_to = "future_cwd") %>% 
+# #   mutate(cwd_change = (future_cwd - cwd.hist),
+# #          cwd_pct_change = 100 * cwd_change / cwd.hist)
+# # 
+# # # Plot change in cwd
+# # nbins = 26
+# # label_gaps <- 5
+# # label_pattern <- seq(1,nbins,label_gaps)
+# # plot_dat <- clim_smry %>% 
+# #   mutate(cwd.q = as.numeric(ntile(cwd.hist, nbins)),
+# #          pet.q = as.numeric(ntile(pet.hist, nbins)))
+# # 
+# # cwd.quantiles = quantile(plot_dat$cwd.hist, probs = seq(0, 1, 1/nbins), names = TRUE) %>% 
+# #   round(2) %>% 
+# #   lapply(round)
+# # pet.quantiles = quantile(plot_dat$pet.hist, probs = seq(0, 1, 1/nbins), names = TRUE) %>% 
+# #   round(2) %>% 
+# #   lapply(round)
+# # cwd.breaks = seq(0.5, nbins+0.5, 1)
+# # pet.breaks = seq(0.5, nbins+0.5, 1)
+# # 
+# # group_dat <- plot_dat %>% 
+# #   filter(cwd.hist>100) %>% 
+# #   group_by(cwd.q, pet.q) %>% 
+# #   dplyr::summarize(cwd_pct_change = mean(cwd_pct_change, na.rm = TRUE),
+# #                    cwd_change = mean(cwd_change, na.rm = TRUE),
+# #                    n = n()) %>% 
+# #   filter(n>1000)
+# # 
+# # binned_change <- group_dat %>% 
+# #   ggplot(aes(x = cwd.q, y = pet.q, fill = cwd_change)) +
+# #   geom_tile() +
+# #   scale_fill_viridis_c() +
+# #   theme_bw(base_size = 22)+
+# #   ylab("Deviation from mean PET")+
+# #   xlab("Deviation from mean CWD")+
+# #   theme(legend.position = "right") +
+# #   labs(fill = "CWD change\nby 2100") +
+# #   scale_x_continuous(labels = cwd.quantiles[label_pattern], breaks = cwd.breaks[label_pattern]) +
+# #   scale_y_continuous(labels = pet.quantiles[label_pattern], breaks = pet.breaks[label_pattern]) +
+# #   ylab(bquote("Historic PET (mmH"[2]*"O)")) +
+# #   xlab(bquote("Historic CWD (mmH"[2]*"O)")) + 
+# #   coord_fixed()
+# # 
+# # binned_change
+# # ggsave(paste0(wdir, 'figures\\cwd_change.svg'), plot = binned_change)
+
+
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# # Rescale CMIP predictions into species standardized climate ---------------
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# ## NOTE: Could ideally move this out of this script? Maybe better as part of 
+# ## species niche script?
+# rasterize_spstd <- function(spp_code, clim_raster){
+#   sp_niche <- niche %>%
+#     drop_na() %>% 
+#     filter(sp_code == spp_code) %>% 
+#     select(-sp_code) 
 #   
-# clim_future <- brick(c(cwd_proj_mean, pet_proj_mean))  # TODO: In future, should incorporate variation across CMIP models rather than just mean. MC based off std in models? Bootstrap individual CMIP models?
-# names(clim_future) = c("cwd", "pet")
-# # clim_future <- (cmip_projections[1,2] %>% pull())[[1]]  
-
-
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Calculate deviation from species' historic range ---------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-# sp_niche <- niche %>%
-#   drop_na() %>% 
-#   filter(sp_code == spp_code) %>% 
-#   select(-sp_code) 
+#   sp_range <- range_sf %>% 
+#     filter(sp_code == spp_code)
+#   pet_sp <- clim_raster %>%
+#     subset("pet") %>% 
+#     mask(sp_range)
+#   pet_spstd <- (pet_sp - sp_niche$pet_mean) / sp_niche$pet_sd
+#   names(pet_spstd) = "pet.spstd"
+#   
+#   cwd_sp <- clim_raster %>% 
+#     subset("cwd") %>% 
+#     mask(sp_range)
+#   cwd_spstd <- (cwd_sp - sp_niche$cwd_mean) / sp_niche$cwd_sd
+#   names(cwd_spstd) = "cwd.spstd"
+#   
+#   clim.spstd <- raster::brick(list(cwd_spstd, pet_spstd))
+#   return(clim.spstd)
+# }
 # 
-# sp_range <- range_sf %>% 
-#   filter(sp_code == spp_code)
-# pet_historic_sp <- pet_historic %>%  
-#   mask(sp_range)
-# pet_historic_spstd <- (pet_historic_sp - sp_niche$pet_mean) / sp_niche$pet_sd
-# names(pet_historic_spstd) = "pet.spstd"
+# select_lyr <- function(brick, layer_name){
+#   lyr <- brick %>% subset(layer_name)
+#   return(lyr)
+# }
 # 
-# cwd_historic_sp <- cwd_historic %>% 
-#   mask(sp_range)
-# cwd_historic_spstd <- (cwd_historic_sp - sp_niche$cwd_mean) / sp_niche$cwd_sd
-# names(cwd_historic_spstd) = "cwd.spstd"
-
+# 
+# 
+# ## Create tibble of species
+# species_list <- niche %>% 
+#   select(sp_code) %>% 
+#   left_join(sp_info, by = "sp_code") 
+# 
+# 
+# 
+# ## Cross species with cmip models
+# sp_fut_clim <- species_list %>% 
+#   crossing(cmip_idx = seq(n_cmip_mods)) %>% 
+#   left_join(cmip_projections, by = "cmip_idx")
+# 
+# 
+# ## Rescale each CMIP model based on each species' climate
+# sp_fut_clim <- sp_fut_clim %>% 
+#   mutate(clim_future_sp = pmap(list(spp_code = sp_code, 
+#                                      clim_raster = cmip_rast), 
+#                                .f = rasterize_spstd))
+# 
+# 
+# ## Select down to base columns
+# sp_fut_clim <- sp_fut_clim %>% 
+#   select(sp_code, cmip_idx, cmip_rast, clim_future_sp)
+# 
+# # cmip_projections <- cmip_projections %>% 
+# #   mutate(cwd_rast = map(.x = cmip_rast, subset = "cwd", .f = subset),
+# #          pet_rast = map(.x = cmip_rast, subset = "pet", .f = subset))
+# # 
+# # 
+# # 
+# # ##
+# # cwd_proj_mean <- brick(cmip_projections$cwd_rast) %>%  
+# #   calc(mean)
+# # 
+# # pet_proj_mean <- brick(cmip_projections$pet_rast) %>% 
+# #   calc(mean)
+# #   
+# # clim_future <- brick(c(cwd_proj_mean, pet_proj_mean))  # TODO: In future, should incorporate variation across CMIP models rather than just mean. MC based off std in models? Bootstrap individual CMIP models?
+# # names(clim_future) = c("cwd", "pet")
+# # # clim_future <- (cmip_projections[1,2] %>% pull())[[1]]  
+# 
+# 
+# 
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# # Calculate deviation from species' historic range ---------------
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# 
+# # sp_niche <- niche %>%
+# #   drop_na() %>% 
+# #   filter(sp_code == spp_code) %>% 
+# #   select(-sp_code) 
+# # 
+# # sp_range <- range_sf %>% 
+# #   filter(sp_code == spp_code)
+# # pet_historic_sp <- pet_historic %>%  
+# #   mask(sp_range)
+# # pet_historic_spstd <- (pet_historic_sp - sp_niche$pet_mean) / sp_niche$pet_sd
+# # names(pet_historic_spstd) = "pet.spstd"
+# # 
+# # cwd_historic_sp <- cwd_historic %>% 
+# #   mask(sp_range)
+# # cwd_historic_spstd <- (cwd_historic_sp - sp_niche$cwd_mean) / sp_niche$cwd_sd
+# # names(cwd_historic_spstd) = "cwd.spstd"
+# 
+# 
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# # Create climate sensitivity rasters ---------------
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# # clim_historic_sp <- brick(list(cwd_historic_spstd, pet_historic_spstd))
+# # pet_sens <- raster::predict(clim_historic_sp, pet_mod)
+# # predict_sens <- function(clim_historic_sp){
+# #   cwd_sens <- raster::predict(clim_historic_sp, mod)
+# #   names(cwd_sens) = "cwd_sens"
+# #   pet_sens <- raster::predict(clim_historic_sp, pet_mod)
+# #   names(pet_sens) = "pet_sens"
+# #   intercept <- raster::predict(clim_historic_sp, int_mod)
+# #   names(intercept) = "intercept"
+# #   sensitivity <- raster::brick(cwd_sens, pet_sens, intercept) 
+# #   return(sensitivity)
+# # }
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Create climate sensitivity rasters ---------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# clim_historic_sp <- brick(list(cwd_historic_spstd, pet_historic_spstd))
-# pet_sens <- raster::predict(clim_historic_sp, pet_mod)
-# predict_sens <- function(clim_historic_sp){
-#   cwd_sens <- raster::predict(clim_historic_sp, mod)
-#   names(cwd_sens) = "cwd_sens"
-#   pet_sens <- raster::predict(clim_historic_sp, pet_mod)
-#   names(pet_sens) = "pet_sens"
-#   intercept <- raster::predict(clim_historic_sp, int_mod)
-#   names(intercept) = "intercept"
-#   sensitivity <- raster::brick(cwd_sens, pet_sens, intercept) 
-#   return(sensitivity)
-# }
-
-
 predict_sens <- function(clim_historic_sp, coefs){
   cwd_rast <- clim_historic_sp$cwd.spstd
   pet_rast <- clim_historic_sp$pet.spstd
@@ -322,10 +335,6 @@ predict_sens <- function(clim_historic_sp, coefs){
 }
 
 
-## Create tibble of historic climates
-sp_historic <- species_list %>% 
-  mutate(clim_historic_sp = map(.x = sp_code, clim_raster = clim_historic, .f = rasterize_spstd)) %>% 
-  as_tibble()
 
 
 ## Create n_mc nested tibbles of second stage coefficients
@@ -340,8 +349,10 @@ mod_df <- mod_df %>%
 sp_sensitivity <- species_list %>% 
   select(sp_code) %>% 
   crossing(iter_idx = seq(n_mc)) %>% 
-  left_join(mod_df, by = "iter_idx") %>% 
-  left_join(sp_historic, by = "sp_code")
+  left_join(mod_df, by = "iter_idx") 
+
+# %>% 
+#   left_join(sp_historic, by = "sp_code")
 
 
 ## Calculate species by n_mc versions of sensitivity rasters
@@ -479,8 +490,8 @@ create_prediction_df <- function(spp_predictions){
   return(clim_compare)
 }
 
-sp_predictions <- sp_predictions %>% 
-  group_by(sp_code) %>% 
+sp_prediction_test <- sp_predictions %>% 
+  group_by(sp_code, iter_idx) %>% 
   nest() %>% 
   mutate(pred_df = map(data, create_prediction_df)) %>% 
   select(-data) %>% 
