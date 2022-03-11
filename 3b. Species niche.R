@@ -138,11 +138,13 @@ rasterize_spstd <- function(spp_code, clim_raster){
 species_list <- niche_df %>% 
   select(sp_code)
 
-## Create tibble of historic climates (COULD MOVE TO species niche.R)
+## Create tibble of historic climates
 sp_historic <- species_list %>% 
   mutate(clim_historic_sp = map(.x = sp_code, clim_raster = clim_historic, .f = rasterize_spstd)) %>% 
   as_tibble()
 
+## Export historic
+saveRDS(sp_historic, paste0(wdir, "out//climate//sp_clim_historic.rds"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
