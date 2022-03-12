@@ -184,6 +184,21 @@ sp_fut_clim <- sp_fut_clim %>%
 sp_fut_clim <- sp_fut_clim %>% 
   select(sp_code, cmip_idx, clim_future_sp)
 
-## Export predictions
-saveRDS(sp_fut_clim, paste0(wdir, "out//climate//sp_clim_predictions.rds"))
+sp_fut_clim <- sp_fut_clim %>% 
+  group_by(sp_code) %>% 
+  nest()
+
+## Export predictions by species
+export_fut_clims <- function(spp_code, sp_fut){
+  # saveRDS(sp_fut, paste0(wdir, "out//climate//sp_clim_predictions//", spp_code, ".rds"))
+  saveRDS(sp_fut, paste0(wdir, "out//climate//sp_clim_predictions//", spp_code))
+  return("complete")
+}
+
+sp_fut_clim <- sp_fut_clim %>% 
+  mutate(done = pmap(list(spp_code = sp_code,
+            sp_fut = data),
+       .f = export_fut_clims))
+
+# saveRDS(sp_fut_clim, paste0(wdir, "out//climate//sp_clim_predictions//.rds"))
 
