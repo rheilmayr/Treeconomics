@@ -29,7 +29,8 @@ library(tictoc)
 library(furrr)
 future::plan(multisession, workers = 4)
 
-set.seed(5597)
+my_seed <- 5597
+set.seed(my_seed)
 
 n_mc <- 5
 n_spp <- 4
@@ -52,31 +53,58 @@ sp_info <- sp_info %>%
 
 # 3. Species-standardized historic climate
 sp_hist_clim <- readRDS(paste0(wdir, "out//climate//sp_clim_historic.rds"))
-
-# 4. Species-standardized future possible climates
-sp_fut_clim <- readRDS(paste0(wdir, "out//climate//sp_clim_predictions.rds"))
-
-# species_list <- sp_info[1:n_spp,] %>% 
-#   select(sp_code)
-
 species_list <- sp_hist_clim %>% select(sp_code)
 
+# 4. Directory of species-standardized future possible climates
+sp_fut_clim_dir <- paste0(wdir, "out\\climate\\sp_clim_predictions\\")
+
+
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Organize CMIP models into tibble  ---------------
+# Assign MC coefs and CMIP models  ---------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+## Join second stage coefficients to species list
+sp_mc <- species_list %>% 
+  select(sp_code) %>% 
+  crossing(iter_idx = seq(n_mc))
+
 ## Assign specific cmip realization to each MC iteration 
-n_cmip_mods <- sp_fut_clim %>% pull(cmip_idx) %>% unique() %>% length()
+sp_fut_clim_smpl <- readRDS(paste0(sp_fut_clim_dir, "abal"))
+n_cmip_mods <- sp_fut_clim_smpl %>% pull(cmip_idx) %>% unique() %>% length()
 cmip_assignments <- tibble(iter_idx = seq(1, n_mc)) %>% 
   mutate(cmip_idx = sample(seq(n_cmip_mods), n_mc))
 
+## Join cmip model assignments
+sp_mc <- sp_mc %>% 
+  left_join(cmip_assignments, by = "iter_idx")
+
+## Join second stage coefficients
+mod_df <- mod_df %>% 
+  filter(iter_idx %in% seq(n_mc)) %>% 
+  group_by(iter_idx) %>% 
+  nest() %>% 
+  rename(ss_coefs = data)
+
+sp_mc <- sp_mc %>% 
+  left_join(mod_df, by = "iter_idx") 
+
+# sp_mc <- sp_mc %>% 
+#   group_by(sp_code) %>% 
+#   nest()
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Create climate sensitivity rasters ---------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-predict_sens <- function(clim_historic_sp, coefs){
-  cwd_rast <- clim_historic_sp$cwd.spstd
-  pet_rast <- clim_historic_sp$pet.spstd
+predict_sens <- function(spp_code, coefs){
+  select <- dplyr::select
   
+  clim_historic_sp <- sp_hist_clim %>% 
+    filter(sp_code == spp_code) %>% 
+    pull(clim_historic_sp)
+  cwd_rast <- clim_historic_sp[[1]] %>% subset("cwd.spstd")
+  pet_rast <- clim_historic_sp[[1]] %>% subset("pet.spstd")
+  
+  # coefs <- (coefs %>% deframe())[[1]]
   cwd_coefs <- coefs %>% select(parameter, cwd_coef) %>% deframe()
   pet_coefs <- coefs %>% select(parameter, pet_coef) %>% deframe()
   int_coefs <- coefs %>% select(parameter, int_coef) %>% deframe()
@@ -102,59 +130,41 @@ predict_sens <- function(clim_historic_sp, coefs){
 
 
 
-
-## Create n_mc nested tibbles of second stage coefficients
-mod_df <- mod_df %>% 
-  filter(iter_idx %in% seq(n_mc)) %>% 
-  group_by(iter_idx) %>% 
-  nest() %>% 
-  rename(ss_coefs = data)
-
-
-## Join second stage coefficients to species list
-sp_sensitivity <- species_list %>% 
-  select(sp_code) %>% 
-  crossing(iter_idx = seq(n_mc)) %>% 
-  left_join(mod_df, by = "iter_idx")  %>% 
-  left_join(sp_hist_clim, by = "sp_code")
-
-
 ## Calculate species by n_mc versions of sensitivity rasters
-sp_sensitivity <- sp_sensitivity %>% 
-  mutate(sensitivity = future_pmap(list(clim_historic_sp = clim_historic_sp,
-                                 coefs = ss_coefs),
+sp_sensitivity <- sp_mc[1:20,] %>% 
+  mutate(sensitivity = future_pmap(list(spp_code = sp_code,
+                                        coefs = ss_coefs),
                             .f = predict_sens,
-                            .options = furrr_options(seed = NULL)))
-
+                            .options = furrr_options(seed = 5597, 
+                                                     packages = c( "dplyr", "raster"))))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Predict growth under future climate ---------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-calc_rwi <- function(cmip_rast, sensitivity){
+calc_rwi <- function(spp_code, cmip_id, sensitivity){
+  sp_fut_clim <- readRDS(paste0(sp_fut_clim_dir, spp_code))
+  cmip_rast <- sp_fut_clim %>% 
+    filter(cmip_idx == cmip_id) %>% 
+    pull(clim_future_sp)
+  
   cwd_sens = sensitivity %>% subset("cwd_sens")
   pet_sens = sensitivity %>% subset("pet_sens")
   intercept = sensitivity %>% subset("intercept")
-  rwi_rast <- intercept + (cmip_rast$cwd.spstd * cwd_sens) + (cmip_rast$pet.spstd * pet_sens)
+  rwi_rast <- intercept + (cmip_rast[[1]]$cwd.spstd * cwd_sens) + (cmip_rast[[1]]$pet.spstd * pet_sens)
   names(rwi_rast) = "rwi_pred"
   return(rwi_rast)
 }
 
 
-## Join cmip model assignments
-sp_sensitivity <- sp_sensitivity %>% 
-  left_join(cmip_assignments, by = "iter_idx")
-
-
-## Join relevant future climate to predicted sensitivity raster
-sp_predictions <- sp_sensitivity %>% 
-  left_join(sp_fut_clim, by = c("cmip_idx", "sp_code"))
-
-
 ## Predict future RWI
-sp_predictions <- sp_predictions %>% 
-  mutate(rwi_predictions = future_map2(.x = clim_future_sp, .y = sensitivity, calc_rwi,
-                                       .options = furrr_options(seed = NULL)))
+sp_predictions <- sp_sensitivity %>% 
+  mutate(rwi_predictions = future_pmap(list(spp_code = sp_code,
+                                            cmip_id = cmip_idx,
+                                            sensitivity = sensitivity),
+                                       .f = calc_rwi,
+                                       .options = furrr_options(seed = my_seed,
+                                                                packages = "raster")))
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Summarize predictions using cell-wise quantiles   ----------------------
@@ -177,7 +187,8 @@ rwi_quantiles <- sp_predictions %>%
   group_by(sp_code) %>% 
   nest() %>% 
   mutate(rwi_quantiles = future_map(data, extract_quantiles,
-                                    .options = furrr_options(seed = NULL))) %>% 
+                                    .options = furrr_options(seed = my_seed,
+                                                             packages = "raster"))) %>% 
   select(-data)
 
 
