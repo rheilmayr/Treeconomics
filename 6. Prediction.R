@@ -289,7 +289,7 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
   rwi_pclim_q <- clusterR(rwi_pclim_q, calc, args = list(fun = quantiles))
   endCluster()
 
-    names(rwi_pred_q) = c("rwi_pred_025", "rwi_pred_50", "rwi_pred_975")
+  names(rwi_pred_q) = c("rwi_pred_025", "rwi_pred_50", "rwi_pred_975")
   names(rwi_psens_q) = c("rwi_psens_025", "rwi_psens_50", "rwi_psens_975")
   names(rwi_pclim_q) = c("rwi_pclim_025", "rwi_pclim_50", "rwi_pclim_975")
   
@@ -328,7 +328,7 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
     pull(clim_historic_sp)
   
   ## Pull median future climate
-  clim_fut_sp <- calc_mean_fut_clim("juex")
+  clim_fut_sp <- calc_mean_fut_clim(spp_code)
   
   ## Stack rasters and convert to dataframe
   out_df <- brick(c(clim_historic_sp, 
@@ -357,10 +357,10 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
 mc_nests <- sp_mc %>%
   group_by(sp_code) %>%
   nest() %>% 
-  # filter(sp_code == "juex") %>%
+  # filter(sp_code == "abla") %>%
   drop_na()
 
-mc_nests <- mc_nests[42:126,] %>% 
+mc_nests <- mc_nests %>% 
   mutate(predictions = pmap(list(spp_code = sp_code,
                                    mc_data = data),
                               .f = calc_rwi_quantiles)) 
