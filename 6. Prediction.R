@@ -32,7 +32,7 @@ future::plan(multisession, workers = 4)
 my_seed <- 5597
 set.seed(my_seed)
 
-n_mc <- 250
+n_mc <- 20
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data --------------------------------------------------------
@@ -259,40 +259,37 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
                                                                   packages = "raster"))) %>% 
     unnest_wider(rwi_predictions)
    
-  ## For each species, calculate cell-wise quantiles of rwi from n_mc runs
+  # ## For each species, calculate cell-wise quantiles of rwi from n_mc runs
+  # rwi_pred_q <- sp_predictions %>%
+  #   pull(rwi_pred) %>%
+  #   brick() %>%
+  #   calc(quantiles)
+  # rwi_psens_q <- sp_predictions %>%
+  #   pull(rwi_psens) %>%
+  #   brick() %>%
+  #   calc(quantiles)
+  # rwi_pclim_q <- sp_predictions %>%
+  #   pull(rwi_pclim) %>%
+  #   brick() %>%
+  #   calc(quantiles)
+  
+  ## Would be faster to do the following rather than calc(quantiles) call, but often fails due to unspecified cluster error
   rwi_pred_q <- sp_predictions %>%
     pull(rwi_pred) %>%
-    brick() %>%
-    calc(quantiles)
+    brick()
   rwi_psens_q <- sp_predictions %>%
     pull(rwi_psens) %>%
-    brick() %>%
-    calc(quantiles)
+    brick()
   rwi_pclim_q <- sp_predictions %>%
     pull(rwi_pclim) %>%
-    brick() %>%
-    calc(quantiles)
-  
-  # ## Would be faster to do the following rather than calc(quantiles) call, but often fails due to unspecified cluster error
-  # rwi_pred_q <- sp_predictions %>% 
-  #   pull(rwi_pred) %>%
-  #   brick()
-  # rwi_psens_q <- sp_predictions %>% 
-  #   pull(rwi_psens) %>%
-  #   brick()
-  # rwi_pclim_q <- sp_predictions %>% 
-  #   pull(rwi_pclim) %>%
-  #   brick()
-  # beginCluster(n = 6)
-  # rwi_pred_q <- clusterR(rwi_pred_q, calc, args = list(fun = quantiles))
-  # rwi_psens_q <- clusterR(rwi_psens_q, calc, args = list(fun = quantiles))
-  # rwi_pclim_q <- clusterR(rwi_pclim_q, calc, args = list(fun = quantiles))
-  # endCluster()
+    brick()
+  beginCluster(n = 6)
+  rwi_pred_q <- clusterR(rwi_pred_q, calc, args = list(fun = quantiles))
+  rwi_psens_q <- clusterR(rwi_psens_q, calc, args = list(fun = quantiles))
+  rwi_pclim_q <- clusterR(rwi_pclim_q, calc, args = list(fun = quantiles))
+  endCluster()
 
-  remove(sp_predictions)
-  
-  
-  names(rwi_pred_q) = c("rwi_pred_025", "rwi_pred_50", "rwi_pred_975")
+    names(rwi_pred_q) = c("rwi_pred_025", "rwi_pred_50", "rwi_pred_975")
   names(rwi_psens_q) = c("rwi_psens_025", "rwi_psens_50", "rwi_psens_975")
   names(rwi_pclim_q) = c("rwi_pclim_025", "rwi_pclim_50", "rwi_pclim_975")
   
@@ -324,7 +321,6 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
   sens_int_q <- raster::mean(sens_int_q)
   names(sens_int_q) = "intercept"
   
-  remove(sens_pulls, sp_sensitivity)
   
   ## Pull historic climate
   clim_historic_sp <- sp_hist_clim %>% 
@@ -347,7 +343,12 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
   out_df %>% 
     saveRDS(file = paste0(wdir,"out/predictions/sp_rwi_pred/", spp_code, ".rds"))
   
+  ## Clear raster temp files from system
+  remove(sp_predictions)
+  remove(sens_pulls, sp_sensitivity)
   toc()
+  removeTmpFiles(0)
+  
   return("done")
 }
 
@@ -359,7 +360,7 @@ mc_nests <- sp_mc %>%
   # filter(sp_code == "juex") %>%
   drop_na()
 
-mc_nests <- mc_nests %>% 
+mc_nests <- mc_nests[42:126,] %>% 
   mutate(predictions = pmap(list(spp_code = sp_code,
                                    mc_data = data),
                               .f = calc_rwi_quantiles)) 
