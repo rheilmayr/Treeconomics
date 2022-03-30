@@ -87,7 +87,9 @@ trim_df <- flm_df %>%
   drop_na()
 
 # 5. Prediction rasters
-sp_predictions <- readRDS(paste0(wdir, "out/predictions/sp_predictions.rds"))
+rwi_list <- list.files(paste0(wdir, "out/predictions/sp_rwi_pred/"), pattern = ".rds", full.names = TRUE)
+sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
+# sp_predictions <- readRDS(paste0(wdir, "out/predictions/sp_predictions.rds"))
 
 
 # 6. Second stage model
