@@ -719,6 +719,19 @@ ggsave(paste0(wdir, 'figures\\3_genus_margins.svg'), margins_plot, width = 10, h
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Main summary figure ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+## ToDo - rwi_null should probably be calculated as part of the MC analysis in prediction script?
+sp_predictions <- sp_predictions %>% 
+  mutate(rwi_null = cwd.spstd * cwd_sens + pet.spstd * pet_sens + intercept,
+         rwi_change_50 = rwi_pred_50 - rwi_null,
+         rwi_change_975 = rwi_pred_975 - rwi_null,
+         rwi_change_025 = rwi_pred_025 - rwi_null,
+         rwi_change_psens_50 = rwi_psens_50 - rwi_null,
+         rwi_change_pclim_50 = rwi_pclim_50 - rwi_null,
+         rwi_change_pclim_975 = rwi_pclim_975 - rwi_null,
+         rwi_change_pclim_025 = rwi_pclim_025 - rwi_null,
+         cwd_change = cwd.fut - cwd.spstd,
+         pet_change = pet.fut - pet.spstd)
+
 plot_dat <- sp_predictions %>%
   filter(((abs(cwd.spstd)<2.5) & (abs(pet.spstd<2.5)))) %>%
   drop_na()
@@ -739,10 +752,14 @@ plot_dat <- plot_dat %>%
 
 plot_dat <- plot_dat %>% 
   group_by(cwd.q, pet.q) %>% 
-  summarize(rwi_pred = mean(rwi_pred, na.rm = TRUE),
-            rwi_change = mean(rwi_change, na.rm = TRUE),
-            rwi_change_psens = mean(rwi_change_psens, na.rm = TRUE),
-            rwi_change_pclim = mean(rwi_change_pclim, na.rm = TRUE),
+  summarize(rwi_pred = mean(rwi_pred_50, na.rm = TRUE),
+            rwi_change = mean(rwi_change_50, na.rm = TRUE),
+            rwi_change_lb = mean(rwi_change_025, na.rm = TRUE),
+            rwi_change_ub = mean(rwi_change_975, na.rm = TRUE),
+            rwi_change_psens = mean(rwi_change_psens_50, na.rm = TRUE),
+            rwi_change_pclim = mean(rwi_change_pclim_50, na.rm = TRUE),
+            rwi_change_pclim_lb = mean(rwi_change_pclim_025),
+            rwi_change_pclim_ub = mean(rwi_change_pclim_975),
             cwd_sens = mean(cwd_sens, na.rm = TRUE),
             pet_sens = mean(pet_sens, na.rm = TRUE),
             cwd_change = mean(cwd_change, na.rm = TRUE),
@@ -914,6 +931,103 @@ cwd_change_bin/pet_change_bin | cwd_sens_bin/ pet_sens_bin | rwi_bin
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Transect plots ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+pred_dat <- plot_dat %>% 
+  select(cwd.q, pet.q, 
+         rwi_change = rwi_change, 
+         rwi_change_lb = rwi_change_lb, 
+         rwi_change_ub = rwi_change_ub) %>% 
+  mutate(scenario = "rwi_change")
+
+pclim_dat <- plot_dat %>% 
+  select(cwd.q, pet.q, 
+         rwi_change = rwi_change_pclim, 
+         rwi_change_lb = rwi_change_pclim_lb, 
+         rwi_change_ub = rwi_change_pclim_ub) %>% 
+  mutate(scenario = "rwi_change_pclim")
+
+
+transect_dat <- pred_dat %>% 
+  rbind(pclim_dat) %>% 
+  mutate(scenario = fct_relevel(scenario, "rwi_change", "rwi_change_pclim"))
+
+transect_1 <- transect_dat %>% 
+  filter(pet.q == 1) %>% 
+  ggplot(aes(x = cwd.q, y = rwi_change, group = scenario, color = scenario)) +
+  geom_ribbon(aes(ymin = rwi_change_lb,
+                  ymax = rwi_change_ub,
+                  fill = scenario),
+              alpha = 0.2) +
+  geom_line(size = 2) +
+  theme_bw(base_size = 20)+
+  ylim(c(-2, 0.4)) +
+  xlim(c(-2, 2)) +
+  scale_linetype_manual(values=c("solid", "dotted", "dotted")) +
+  scale_fill_manual(name = "Scenario",
+                     labels = c("Full model", 
+                                "Variable shift in climate,\nconstant sensitivity"), 
+                     values = c("dark blue", "dark red", "dark green")) +
+  scale_color_manual(name = "Scenario",
+                     labels = c("Full model", 
+                                "Variable shift in climate,\nconstant sensitivity"), 
+                     values = c("dark blue", "dark red", "dark green")) +
+  ggtitle("Historic PET = 1 std above mean") +
+  ylab("Predicted change in RWI") +
+  xlab("Historic CWD (Deviation from species mean)") +
+  theme(legend.position = c(.18,.75),
+        legend.text = element_text(size=13),
+        legend.title = element_text(size=18),
+        legend.background = element_blank()) +
+  geom_hline(yintercept = 0, linetype = "dashed", size = 1)
+transect_1
+
+
+transect_2 <- transect_dat %>% 
+  filter(pet.q == -1) %>% 
+  ggplot(aes(x = cwd.q, y = rwi_change, group = scenario, color = scenario)) +
+  geom_ribbon(aes(ymin = rwi_change_lb,
+                  ymax = rwi_change_ub,
+                  fill = scenario),
+              alpha = 0.2) +
+  geom_line(size = 2) +
+  theme_bw(base_size = 20)+
+  ylim(c(-2, 0.2)) +
+  xlim(c(-2, 2)) +
+  scale_linetype_manual(values=c("solid", "dotted", "dotted"))+
+  scale_fill_manual(name = "Scenario",
+                    labels = c("Full model", 
+                               "Variable shift in climate,\nconstant sensitivity"), 
+                    values = c("dark blue", "dark red", "dark green")) +
+  scale_color_manual(name = "Scenario",
+                     labels = c("Full model", 
+                                "Variable shift in climate,\nconstant sensitivity"), 
+                     values = c("dark blue", "dark red", "dark green")) +
+  ggtitle("Historic PET = 1 std below mean") +
+  ylab("Predicted change in RWI") +
+  xlab("Historic CWD (Deviation from species mean)") +
+  theme(legend.position = c(.18,.25),
+        legend.text = element_text(size=13),
+        legend.title = element_text(size=18),
+        legend.background = element_blank()) +
+  geom_hline(yintercept = 0, linetype = "dashed", size = 1)
+
+
+locator <- rwi_bin + 
+  theme_bw(base_size = 20)+
+  theme(legend.position = c(.18,.83),
+        legend.text = element_text(size=13),
+        legend.title = element_text(size=18),
+        legend.background = element_blank())+
+  geom_hline(yintercept = 1, size = 1) + 
+  geom_hline(yintercept = -1, size = 1)
+
+locator | transect_1 / transect_2
+
+
+
+
+
+
+
 transect_dat <- plot_dat %>% 
   select(cwd.q, pet.q, rwi_change, rwi_change_psens, rwi_change_pclim) %>% 
   pivot_longer(c(rwi_change, rwi_change_psens, rwi_change_pclim), names_to = 'scenario', values_to = "rwi_change") %>% 
