@@ -1028,67 +1028,70 @@ locator | transect_1 / transect_2
 
 
 
-transect_dat <- plot_dat %>% 
-  select(cwd.q, pet.q, rwi_change, rwi_change_psens, rwi_change_pclim) %>% 
-  pivot_longer(c(rwi_change, rwi_change_psens, rwi_change_pclim), names_to = 'scenario', values_to = "rwi_change") %>% 
-  mutate(scenario = fct_relevel(scenario, "rwi_change", "rwi_change_psens", "rwi_change_pclim"))
+# transect_dat <- plot_dat %>% 
+#   select(cwd.q, pet.q, rwi_change, rwi_change_psens, rwi_change_pclim) %>% 
+#   pivot_longer(c(rwi_change, rwi_change_psens, rwi_change_pclim), names_to = 'scenario', values_to = "rwi_change") %>% 
+#   mutate(scenario = fct_relevel(scenario, "rwi_change", "rwi_change_psens", "rwi_change_pclim"))
+# 
+# transect_1 <- transect_dat %>% 
+#   filter(pet.q == 1) %>% 
+#   ggplot(aes(x = cwd.q, y = rwi_change, group = scenario, color = scenario)) +
+#   geom_line(size = 2) +
+#   theme_bw(base_size = 20)+
+#   ylim(c(-0.6, 0.2)) +
+#   xlim(c(-2, 2)) +
+#   scale_linetype_manual(values=c("solid", "dotted", "dotted")) +
+#   scale_color_manual(name = "Scenario",
+#                      labels = c("Full model", 
+#                                 "Constant shift in climate,\nvariable sensitivity",
+#                                 "Variable shift in climate,\nconstant sensitivity"), 
+#                      values = c("dark blue", "dark red", "dark green")) +
+#   ggtitle("Historic PET = 1 std above mean") +
+#   ylab("Predicted change in RWI") +
+#   xlab("Historic CWD (Deviation from species mean)") +
+#   theme(legend.position = c(.18,.75),
+#         legend.text = element_text(size=13),
+#         legend.title = element_text(size=18),
+#         legend.background = element_blank()) +
+#   geom_hline(yintercept = 0, linetype = "dashed", size = 1)
+# 
+# 
+# transect_2 <- transect_dat %>% 
+#   filter(pet.q == -1) %>% 
+#   ggplot(aes(x = cwd.q, y = rwi_change, group = scenario, color = scenario)) +
+#   geom_line(size = 2) +
+#   theme_bw(base_size = 20)+
+#   ylim(c(-0.4, 0.4)) +
+#   xlim(c(-2, 2)) +
+#   scale_linetype_manual(values=c("solid", "dotted", "dotted"))+
+#   scale_color_manual(name = "Scenario",
+#                      labels = c("Full model", 
+#                                 "Constant shift in climate,\nvariable sensitivity",
+#                                 "Variable shift in climate,\nconstant sensitivity"), 
+#                      values = c("dark blue", "dark red", "dark green")) +
+#   ggtitle("Historic PET = 1 std below mean") +
+#   ylab("Predicted change in RWI") +
+#   xlab("Historic CWD (Deviation from species mean)") +
+#   theme(legend.position = c(.18,.75),
+#       legend.text = element_text(size=13),
+#       legend.title = element_text(size=18),
+#       legend.background = element_blank()) +
+#   geom_hline(yintercept = 0, linetype = "dashed", size = 1)
+# 
+# 
+# locator <- rwi_bin + 
+#   theme_bw(base_size = 20)+
+#   theme(legend.position = c(.18,.83),
+#         legend.text = element_text(size=13),
+#         legend.title = element_text(size=18),
+#         legend.background = element_blank())+
+#   geom_hline(yintercept = 1, size = 1) + 
+#   geom_hline(yintercept = -1, size = 1)
+# 
+# locator | transect_1 / transect_2
 
-transect_1 <- transect_dat %>% 
-  filter(pet.q == 1) %>% 
-  ggplot(aes(x = cwd.q, y = rwi_change, group = scenario, color = scenario)) +
-  geom_line(size = 2) +
-  theme_bw(base_size = 20)+
-  ylim(c(-0.6, 0.2)) +
-  xlim(c(-2, 2)) +
-  scale_linetype_manual(values=c("solid", "dotted", "dotted")) +
-  scale_color_manual(name = "Scenario",
-                     labels = c("Full model", 
-                                "Constant shift in climate,\nvariable sensitivity",
-                                "Variable shift in climate,\nconstant sensitivity"), 
-                     values = c("dark blue", "dark red", "dark green")) +
-  ggtitle("Historic PET = 1 std above mean") +
-  ylab("Predicted change in RWI") +
-  xlab("Historic CWD (Deviation from species mean)") +
-  theme(legend.position = c(.18,.75),
-        legend.text = element_text(size=13),
-        legend.title = element_text(size=18),
-        legend.background = element_blank()) +
-  geom_hline(yintercept = 0, linetype = "dashed", size = 1)
 
 
-transect_2 <- transect_dat %>% 
-  filter(pet.q == -1) %>% 
-  ggplot(aes(x = cwd.q, y = rwi_change, group = scenario, color = scenario)) +
-  geom_line(size = 2) +
-  theme_bw(base_size = 20)+
-  ylim(c(-0.4, 0.4)) +
-  xlim(c(-2, 2)) +
-  scale_linetype_manual(values=c("solid", "dotted", "dotted"))+
-  scale_color_manual(name = "Scenario",
-                     labels = c("Full model", 
-                                "Constant shift in climate,\nvariable sensitivity",
-                                "Variable shift in climate,\nconstant sensitivity"), 
-                     values = c("dark blue", "dark red", "dark green")) +
-  ggtitle("Historic PET = 1 std below mean") +
-  ylab("Predicted change in RWI") +
-  xlab("Historic CWD (Deviation from species mean)") +
-  theme(legend.position = c(.18,.75),
-      legend.text = element_text(size=13),
-      legend.title = element_text(size=18),
-      legend.background = element_blank()) +
-  geom_hline(yintercept = 0, linetype = "dashed", size = 1)
-
-
-locator <- rwi_bin + 
-  theme_bw(base_size = 20)+
-  theme(legend.position = c(.18,.83),
-        legend.text = element_text(size=13),
-        legend.title = element_text(size=18),
-        legend.background = element_blank())+
-  geom_hline(yintercept = 1, size = 1) + 
-  geom_hline(yintercept = -1, size = 1)
-
-locator | transect_1 / transect_2
 
 # 
 # lgd_pos <- c(.2, .8)
