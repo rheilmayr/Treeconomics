@@ -39,7 +39,7 @@ library(Hmisc)
 library(prediction)
 library(colorspace)
 library(ggnewscale)
-
+library(reshape2)
 
 
 select <- dplyr::select
@@ -102,6 +102,14 @@ int_mod <- readRDS(paste0(wdir, "out/second_stage/int_mod.rds"))
 # 7. Genus model predictions
 genus_predictions <- readRDS(paste0(wdir, "out/second_stage/genus_mods.rds"))
 
+# 8. Climate model data
+cwdlist=list();aetlist=list()
+j=1
+for(i in c("start","mid","end")){
+  load(paste0(wdir,"in/CMIP5 CWD/cmip5_cwdaet_",i,".Rdat"))
+  cwdlist[[j]]=cwd_raster;aetlist[[j]]=aet_raster
+  j=j+1
+}
 
 # # 2. Species range maps
 # range_file <- paste0(wdir, 'in//species_ranges//merged_ranges.shp')
@@ -1022,10 +1030,51 @@ locator <- rwi_bin +
 
 locator | transect_1 / transect_2
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Changes in CWD and PET  ------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+petlist=list()
+for(i in 1:3) petlist[[i]]=cwdlist[[i]]+aetlist[[i]]
 
+petmeanchange_end=mean(petlist[[3]])-mean(petlist[[1]]);cwdmeanchange_end=mean(cwdlist[[3]])-mean(cwdlist[[1]])
 
+#find global spatial average of cwd and pet changes - calculate areas of grid cells
+area_grid=raster::area(petmeanchange_end)
+cwdchanges=cellStats((cwdlist[[3]]-cwdlist[[1]])*area_grid,stat="sum")/cellStats(area_grid,stat="sum")
+min=which.min(cwdchanges);max=which.max(cwdchanges)
+mincwd=cwdlist[[3]][[min]]-cwdlist[[1]][[min]];maxcwd=cwdlist[[3]][[max]]-cwdlist[[1]][[max]]
 
+#plot min and max cwd
+temp=as.matrix(cwdmeanchange_end)
+colnames(temp)=xFromCol(cwdmeanchange_end);rownames(temp)=yFromRow(cwdmeanchange_end)
+temp=melt(temp)
+colnames(temp)=c("lat","long","cwd")
+
+a=ggplot(temp,aes(x=long,y=lat,fill=cwd))+geom_raster()+theme_bw()+theme(axis.title=element_blank(),axis.text=element_blank(), axis.ticks=element_blank(),panel.grid=element_blank())
+a=a+scale_fill_continuous(type="viridis",na.value="white",limits=c(-200,3000),name="Change in CWD\n1970-2000 to 2091-2100\n(mm)")
+a=a+annotate("text",x=-142,y=-45,size=14,label="Mean")
+
+temp=as.matrix(mincwd)
+colnames(temp)=xFromCol(cwdmeanchange_end);rownames(temp)=yFromRow(cwdmeanchange_end)
+temp=melt(temp)
+colnames(temp)=c("lat","long","cwd")
+
+b=ggplot(temp,aes(x=long,y=lat,fill=cwd))+geom_raster()+theme_bw()+theme(axis.title=element_blank(),axis.text=element_blank(), axis.ticks=element_blank(),panel.grid=element_blank())
+b=b+scale_fill_continuous(type="viridis",guide=NULL,na.value="white",limits=c(-200,3000))
+b=b+annotate("text",x=-142,y=-50,size=8,label="Min")                                                                   
+                                                                        
+
+temp=as.matrix(maxcwd)
+colnames(temp)=xFromCol(cwdmeanchange_end);rownames(temp)=yFromRow(cwdmeanchange_end)
+temp=melt(temp)
+colnames(temp)=c("lat","long","cwd")
+
+d=ggplot(temp,aes(x=long,y=lat,fill=cwd))+geom_raster()+theme_bw()+theme(axis.title=element_blank(),axis.text=element_blank(), axis.ticks=element_blank(),panel.grid=element_blank())
+d=d+scale_fill_continuous(type="viridis",guide=NULL,na.value="white",limits=c(-200,3000))
+d=d+annotate("text",x=-142,y=-50,size=8,label="Max")   
+
+a/(b|d)
 
 
 # transect_dat <- plot_dat %>% 
