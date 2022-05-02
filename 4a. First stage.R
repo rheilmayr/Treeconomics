@@ -389,7 +389,7 @@ site_df <- dendro_df %>%
   filter(nobs>10) %>% 
   nest()
 
-site_df <- site_df[1:1000,]
+# site_df <- site_df[1:1000,]
 site_df <- site_df %>% 
   mutate(fs_result = map(data, fs_mod))
 
