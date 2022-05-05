@@ -40,13 +40,14 @@ library(margins)
 library(tidylog)
 library(fixest)
 library(biglm)
+library(boot)
 
 set.seed(5597)
 
 
 select <- dplyr::select
 
-mc_n <- 10000
+n_mc <- 10000
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -275,17 +276,18 @@ draw_coefs <- function(n, cwd_est, pet_est, int_est, cwd_ste, pet_ste, int_ste,
 run_ss <- function(data, outcome = "cwd_coef"){
   formula <- as.formula(paste(outcome, " ~ cwd.spstd + pet.spstd"))
   mod <- lm(formula, data=data)
-  vcov <- vcovCL(mod, cluster = data$collection_id)
   coefs <- mod$coefficients
-  draw <- mvrnorm(1, coefs, vcov) %>% 
-    enframe(name = paste("var", outcome, sep = "_"), 
-            value = outcome)
-  return(draw)
+  # vcov <- vcovCL(mod, cluster = data$collection_id)
+  # draw <- mvrnorm(1, coefs, vcov) %>% 
+  #   enframe(name = paste("var", outcome, sep = "_"), 
+  #           value = outcome)
+  # return(draw)
+  return(coefs)
 }
 
 ## Create n random draws of first stage coefficients for each site
 mc_df <- trim_df %>%
-  mutate(coef_draws = pmap(list(n = mc_n, 
+  mutate(coef_draws = pmap(list(n = n_mc, 
                                 cwd_est = trim_df$estimate_cwd.an, 
                                 pet_est = trim_df$estimate_pet.an,
                                 int_est = trim_df$estimate_intercept, 
@@ -302,22 +304,47 @@ mc_df <- trim_df %>%
 mc_df <- mc_df %>% 
   unnest(coef_draws) %>% 
   select(collection_id, iter_idx, cwd_coef, pet_coef, int_coef, cwd.spstd, 
-         pet.spstd, errorweights) %>% 
-  group_by(iter_idx) %>% 
-  nest()
+         pet.spstd, errorweights)
+# %>% 
+#   group_by(iter_idx) %>% 
+#   nest()
 
 
-## Run second stage model for each of the n datasets
-mc_df <- mc_df %>%
-  mutate(ss_cwd_mod = data %>% map(run_ss, outcome = "cwd_coef"),
-         ss_pet_mod = data %>% map(run_ss, outcome = "pet_coef"),
-         ss_int_mod = data %>% map(run_ss, outcome = "int_coef")) %>% 
-  unnest(c(ss_cwd_mod, ss_pet_mod, ss_int_mod)) %>% 
-  select(iter_idx, parameter = var_cwd_coef, cwd_coef, pet_coef, int_coef)
+
+## Bootstrap second stage model
+bs_ss <- function(data, i){
+  data2 <- data[i,]
+  cwd_mod <- data2 %>% 
+    run_ss(outcome = "cwd_coef")
+  pet_mod <- data2 %>% 
+    run_ss(outcome = "pet_coef")
+  int_mod <- data2 %>% 
+    run_ss(outcome = "int_coef")
+  return(c(int_mod[1], int_mod[2], int_mod[3],
+           cwd_mod[1], cwd_mod[2], cwd_mod[3],
+           pet_mod[1], pet_mod[2], pet_mod[3]))
+}
+
+n_obs <- dim(mc_df)[1]
+n_sites <- trim_df %>% pull(collection_id) %>% unique() %>% length()
+
+boot_ss_coefs <- boot(mc_df, bs_ss, R = n_mc,
+                      sim = "parametric",  
+                      ran.gen=function(d,p) d[sample(1:n_obs, n_sites), ])
+
+
+# ## Run second stage model for each of the n datasets
+# mc_df <- mc_df %>%
+#   mutate(ss_cwd_mod = data %>% map(run_ss, outcome = "cwd_coef"),
+#          ss_pet_mod = data %>% map(run_ss, outcome = "pet_coef"),
+#          ss_int_mod = data %>% map(run_ss, outcome = "int_coef")) %>% 
+#   unnest(c(ss_cwd_mod, ss_pet_mod, ss_int_mod)) %>% 
+#   select(iter_idx, parameter = var_cwd_coef, cwd_coef, pet_coef, int_coef)
 
 
 ## Save out coefficients that reflect uncertainty from both first and second stage models
-saveRDS(mc_df, paste0(wdir, "out/second_stage/ss_mc_mods.rds"))
+saveRDS(boot_ss_coefs, paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
+# saveRDS(mc_df, paste0(wdir, "out/second_stage/ss_mc_mods.rds"))
 
 
 
@@ -326,7 +353,7 @@ saveRDS(mc_df, paste0(wdir, "out/second_stage/ss_mc_mods.rds"))
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Run regression and cluster s.e.
 
-# trim_df <- trim_df %>% 
+# trim_df <- trim_df %>%
 #   filter(gymno_angio=="gymno")
 
 mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=flm_df)
@@ -373,9 +400,9 @@ saveRDS(sq_int_mod, paste0(wdir, "out\\second_stage\\sq_int_mod.rds"))
 saveRDS(sq_int_cluster_vcov, paste0(wdir, "out\\second_stage\\sq_int_mod_vcov.rds"))
 
 
-mod_df %>% 
-  mutate(pred_rwi = estimate_intercept + (estimate_pet.an * pet.spstd) + (estimate_cwd.an * cwd.spstd)) %>% 
-  select(pred_rwi) %>% 
+mod_df %>%
+  mutate(pred_rwi = estimate_intercept + (estimate_pet.an * pet.spstd) + (estimate_cwd.an * cwd.spstd)) %>%
+  select(pred_rwi) %>%
   summary() #CAUTION: Shouldn't mean here be much closer to 1? Investigate in first stage script....
 
 
