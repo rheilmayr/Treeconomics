@@ -293,6 +293,7 @@ cwdnam <- paste("cwd_cbv1.l", 1:5, sep="")
 xnam <- append(petnam, cwdnam)
 fmla <- as.formula(paste("rwi ~ ", paste(xnam, collapse= "+")) %>% paste0(" | collection_id"))
 lagmod=feols(fmla, data=cb_df)
+# TODO: Make sure this is clustering by site
 # lagmod2=felm(rwi ~ cwd_cb + pet_cb | collection_id, data=gendat) # replace with fixest. Note - felm seems to return same results as lm?
 
 
