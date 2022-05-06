@@ -27,12 +27,14 @@ library(tidyverse)
 library(prediction)
 library(tictoc)
 library(furrr)
-future::plan(multisession, workers = 4)
+
+n_cores <- 6
+future::plan(multisession, workers = n_cores)
 
 my_seed <- 5597
 set.seed(my_seed)
 
-n_mc <- 100
+n_mc <- 10
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data --------------------------------------------------------
@@ -99,7 +101,8 @@ sp_mc <- sp_mc %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define functions ---------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-predict_sens <- function(sppp_code, coefs){
+predict_sens <- function(sppp_code, int_int, int_cwd, int_pet, cwd_int, 
+                         cwd_cwd, cwd_pet, pet_int, pet_cwd, pet_pet){
   ## Function used to predict species' sensitivity rasters based on historic 
   ## climate and randomly drawn parameters from second stage model.
   
@@ -111,19 +114,19 @@ predict_sens <- function(sppp_code, coefs){
   cwd_rast <- clim_historic_sp[[1]] %>% subset("cwd.spstd")
   pet_rast <- clim_historic_sp[[1]] %>% subset("pet.spstd")
   
-  cwd_sens <- coefs$cwd_int +
-              coefs$cwd_cwd * cwd_rast +
-              coefs$cwd_pet * pet_rast
+  cwd_sens <- cwd_int +
+              cwd_cwd * cwd_rast +
+              cwd_pet * pet_rast
   names(cwd_sens) = "cwd_sens"
   
-  pet_sens <- coefs$pet_int +
-              coefs$pet_cwd * cwd_rast +
-              coefs$pet_pet * pet_rast
+  pet_sens <- pet_int +
+              pet_cwd * cwd_rast +
+              pet_pet * pet_rast
   names(pet_sens) = "pet_sens"
   
-  intercept <- coefs$int_int +
-               coefs$int_cwd * cwd_rast +
-               coefs$int_pet * pet_rast
+  intercept <- int_int +
+               int_cwd * cwd_rast +
+               int_pet * pet_rast
   names(intercept) = "intercept"
   
   sensitivity <- raster::brick(cwd_sens, pet_sens, intercept) 
@@ -186,7 +189,7 @@ calc_rwi_partials <- function(sppp_code, cmip_id, sensitivity){
 
 quantiles <- function(x){
   ## Defines quantiles used to summarize MC runs
-  quantile(x, c(0.025, 0.5, .975), na.rm=TRUE)
+  quantile(x, c(0.025, 0.975), na.rm=TRUE)
 }
 
 # extract_quantiles <- function(rwi_preds){
@@ -239,6 +242,8 @@ calc_mean_fut_clim <- function(sppp_code){
   return(out_brick)
 }
 
+sp_mc <- sp_mc %>% 
+  mutate(ss_coefs = list(int_int, int_cwd, int_pet, cwd_int, cwd_cwd, cwd_pet, pet_int, pet_cwd, pet_pet))
 
 calc_rwi_quantiles <- function(spp_code, mc_data){
   tic()
@@ -248,10 +253,26 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
   ## Calculate n_mc versions of species' sensitivity raster
   sp_sensitivity <- mc_data %>% 
     mutate(sensitivity = future_pmap(list(sppp_code = spp_code,
-                                          coefs = ss_coefs),
-                              .f = predict_sens,
-                              .options = furrr_options(seed = my_seed, 
-                                                       packages = c( "dplyr", "raster"))))
+                                          int_int = int_int,
+                                          int_cwd = int_cwd,
+                                          int_pet = int_pet,
+                                          cwd_int = cwd_int,
+                                          cwd_cwd = cwd_cwd,
+                                          cwd_pet = cwd_pet,
+                                          pet_int = pet_int,
+                                          pet_cwd = pet_cwd,
+                                          pet_pet = pet_pet),
+                                     .f = predict_sens,
+                                     .options = furrr_options(seed = my_seed, 
+                                                              packages = c( "dplyr", "raster"))))
+  
+  
+  # sp_sensitivity <- mc_data %>% 
+  #   mutate(sensitivity = future_pmap(list(sppp_code = spp_code,
+  #                                         coefs = ss_coefs),
+  #                             .f = predict_sens,
+  #                             .options = furrr_options(seed = my_seed, 
+  #                                                      packages = c( "dplyr", "raster"))))
 
 
   ## Predict future RWI for each of n_mc run
@@ -288,15 +309,15 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
   rwi_pclim_q <- sp_predictions %>%
     pull(rwi_pclim) %>%
     brick()
-  beginCluster(n = 6)
+  beginCluster(n = n_cores)
   rwi_pred_q <- clusterR(rwi_pred_q, calc, args = list(fun = quantiles))
   rwi_psens_q <- clusterR(rwi_psens_q, calc, args = list(fun = quantiles))
   rwi_pclim_q <- clusterR(rwi_pclim_q, calc, args = list(fun = quantiles))
   endCluster()
 
-  names(rwi_pred_q) = c("rwi_pred_025", "rwi_pred_50", "rwi_pred_975")
-  names(rwi_psens_q) = c("rwi_psens_025", "rwi_psens_50", "rwi_psens_975")
-  names(rwi_pclim_q) = c("rwi_pclim_025", "rwi_pclim_50", "rwi_pclim_975")
+  names(rwi_pred_q) = c("rwi_pred_025", "rwi_pred_975")
+  names(rwi_psens_q) = c("rwi_psens_025", "rwi_psens_975")
+  names(rwi_pclim_q) = c("rwi_pclim_025", "rwi_pclim_975")
   
   ## Generate rasters summarizing mean estimate of sensitivity
   sens_pulls <- sp_sensitivity %>%
@@ -332,7 +353,7 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
     filter(sp_code == spp_code) %>% 
     pull(clim_historic_sp)
   
-  ## Pull median future climate
+  ## Pull mean future climate
   clim_fut_sp <- calc_mean_fut_clim(spp_code)
   
   ## Stack rasters and convert to dataframe
@@ -367,7 +388,7 @@ mc_nests <- sp_mc %>%
 
 mc_nests <- mc_nests %>% 
   mutate(predictions = pmap(list(spp_code = sp_code,
-                                   mc_data = data),
+                                 mc_data = data),
                               .f = calc_rwi_quantiles)) 
 # %>% 
 #   select(-data) %>% 
