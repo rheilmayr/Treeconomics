@@ -34,7 +34,7 @@ future::plan(multisession, workers = n_cores)
 my_seed <- 5597
 set.seed(my_seed)
 
-n_mc <- 10
+n_mc <- 100
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data --------------------------------------------------------
@@ -172,10 +172,10 @@ calc_rwi_partials <- function(sppp_code, cmip_id, sensitivity){
   rwi_rast <- intercept + (cmip_rast$cwd.spstd * cwd_sens) + (cmip_rast$pet.spstd * pet_sens)
   names(rwi_rast) = "rwi_pred"
   
-  mean_fut_cwd <- cmip_rast %>% subset("cwd.spstd") %>% cellStats(stat = "mean")
-  mean_fut_pet <- cmip_rast %>% subset("pet.spstd") %>% cellStats(stat = "mean")
-  rwi_psens <- intercept + (mean_fut_cwd * cwd_sens) + (mean_fut_pet * pet_sens)
-  names(rwi_psens) = "rwi_psens"
+  # mean_fut_cwd <- cmip_rast %>% subset("cwd.spstd") %>% cellStats(stat = "mean")
+  # mean_fut_pet <- cmip_rast %>% subset("pet.spstd") %>% cellStats(stat = "mean")
+  # rwi_psens <- intercept + (mean_fut_cwd * cwd_sens) + (mean_fut_pet * pet_sens)
+  # names(rwi_psens) = "rwi_psens"
   
   
   mean_cwd_sens <- sensitivity %>% subset("cwd_sens") %>% cellStats(stat = "mean")
@@ -184,7 +184,9 @@ calc_rwi_partials <- function(sppp_code, cmip_id, sensitivity){
   rwi_pclim <- mean_intercept + (cmip_rast$cwd.spstd * mean_cwd_sens) + (cmip_rast$pet.spstd * mean_pet_sens)
   names(rwi_pclim) = "rwi_pclim"
   
-  return(list("rwi_pred" = rwi_rast, "rwi_psens" = rwi_psens, "rwi_pclim" = rwi_pclim))
+  # return(list("rwi_pred" = rwi_rast, "rwi_psens" = rwi_psens, "rwi_pclim" = rwi_pclim))
+  
+  return(list("rwi_pred" = rwi_rast, "rwi_pclim" = rwi_pclim))
 }
 
 quantiles <- function(x){
@@ -242,8 +244,6 @@ calc_mean_fut_clim <- function(sppp_code){
   return(out_brick)
 }
 
-sp_mc <- sp_mc %>% 
-  mutate(ss_coefs = list(int_int, int_cwd, int_pet, cwd_int, cwd_cwd, cwd_pet, pet_int, pet_cwd, pet_pet))
 
 calc_rwi_quantiles <- function(spp_code, mc_data){
   tic()
@@ -298,27 +298,34 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
   #   pull(rwi_pclim) %>%
   #   brick() %>%
   #   calc(quantiles)
-  
-  ## Would be faster to do the following rather than calc(quantiles) call, but often fails due to unspecified cluster error
   rwi_pred_q <- sp_predictions %>%
     pull(rwi_pred) %>%
     brick()
-  rwi_psens_q <- sp_predictions %>%
-    pull(rwi_psens) %>%
-    brick()
+  # rwi_psens_q <- sp_predictions %>%
+  #   pull(rwi_psens) %>%
+  #   brick()
   rwi_pclim_q <- sp_predictions %>%
     pull(rwi_pclim) %>%
     brick()
+  
   beginCluster(n = n_cores)
+  rwi_pred_mean <- raster::mean(rwi_pred_q)
   rwi_pred_q <- clusterR(rwi_pred_q, calc, args = list(fun = quantiles))
-  rwi_psens_q <- clusterR(rwi_psens_q, calc, args = list(fun = quantiles))
+  
+  # rwi_psens_q <- clusterR(rwi_psens_q, calc, args = list(fun = quantiles))
+  rwi_pclim_mean <- raster::mean(rwi_pclim_q)
   rwi_pclim_q <- clusterR(rwi_pclim_q, calc, args = list(fun = quantiles))
   endCluster()
 
   names(rwi_pred_q) = c("rwi_pred_025", "rwi_pred_975")
-  names(rwi_psens_q) = c("rwi_psens_025", "rwi_psens_975")
+  names(rwi_pred_mean) = c("rwi_pred_mean")
+  rwi_pred_q = brick(c(rwi_pred_q, rwi_pred_mean))
+  # names(rwi_psens_q) = c("rwi_psens_025", "rwi_psens_975")
   names(rwi_pclim_q) = c("rwi_pclim_025", "rwi_pclim_975")
+  names(rwi_pclim_mean) = c("rwi_pclim_mean")
+  rwi_pclim_q = brick(c(rwi_pclim_q, rwi_pclim_mean))
   
+    
   ## Generate rasters summarizing mean estimate of sensitivity
   sens_pulls <- sp_sensitivity %>%
     mutate(cwd = pmap(list(brick = sensitivity, layer_name = "cwd_sens"),
@@ -360,7 +367,7 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
   out_df <- brick(c(clim_historic_sp, 
                     clim_fut_sp,
                     sens_cwd_q, sens_pet_q, sens_int_q, 
-                    rwi_pred_q, rwi_psens_q, rwi_pclim_q)) %>% 
+                    rwi_pred_q, rwi_pclim_q)) %>% 
     as.data.frame(xy = TRUE) %>% 
     mutate(sp_code = spp_code) %>% 
     drop_na()
