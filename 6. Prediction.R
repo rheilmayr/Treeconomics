@@ -41,8 +41,18 @@ n_mc <- 100
 wdir <- 'remote\\'
 
 # 1. Second stage model
-mod_df <- readRDS(paste0(wdir, "out\\second_stage\\ss_mc_mods.rds"))
-
+old_mod_df <- readRDS(paste0(wdir, "out\\second_stage\\ss_mc_mods.rds"))
+boot_ss <- readRDS(paste0(wdir, "out\\second_stage\\ss_bootstrap.rds"))
+ 
+mod_df <- boot_ss$t
+colnames(mod_df) <- c("int_int", "int_cwd", "int_pet",
+                       "cwd_int", "cwd_cwd", "cwd_pet",
+                       "pet_int", "pet_cwd", "pet_pet")
+mod_df <- mod_df %>% 
+  as_tibble() %>% 
+  mutate(iter_idx = seq(1:10000)) %>% 
+  filter(iter_idx <= n_mc)
+  
 # 2. Species information
 sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
 sp_info <- sp_info %>% 
@@ -78,11 +88,10 @@ sp_mc <- sp_mc %>%
   left_join(cmip_assignments, by = "iter_idx")
 
 ## Join second stage coefficients
-mod_df <- mod_df %>% 
-  filter(iter_idx %in% seq(n_mc)) %>% 
-  group_by(iter_idx) %>% 
-  nest() %>% 
-  rename(ss_coefs = data)
+# mod_df <- mod_df %>% 
+#   group_by(iter_idx) %>% 
+#   nest() %>% 
+#   rename(ss_coefs = data)
 
 sp_mc <- sp_mc %>% 
   left_join(mod_df, by = "iter_idx") 
@@ -102,23 +111,19 @@ predict_sens <- function(sppp_code, coefs){
   cwd_rast <- clim_historic_sp[[1]] %>% subset("cwd.spstd")
   pet_rast <- clim_historic_sp[[1]] %>% subset("pet.spstd")
   
-  cwd_coefs <- coefs %>% select(parameter, cwd_coef) %>% deframe()
-  pet_coefs <- coefs %>% select(parameter, pet_coef) %>% deframe()
-  int_coefs <- coefs %>% select(parameter, int_coef) %>% deframe()
-  
-  cwd_sens <- cwd_coefs[["(Intercept)"]] +
-              cwd_coefs[["cwd.spstd"]] * cwd_rast +
-              cwd_coefs[["pet.spstd"]] * pet_rast
+  cwd_sens <- coefs$cwd_int +
+              coefs$cwd_cwd * cwd_rast +
+              coefs$cwd_pet * pet_rast
   names(cwd_sens) = "cwd_sens"
   
-  pet_sens <- pet_coefs[["(Intercept)"]] +
-              pet_coefs[["cwd.spstd"]] * cwd_rast +
-              pet_coefs[["pet.spstd"]] * pet_rast
+  pet_sens <- coefs$pet_int +
+              coefs$pet_cwd * cwd_rast +
+              coefs$pet_pet * pet_rast
   names(pet_sens) = "pet_sens"
   
-  intercept <- int_coefs[["(Intercept)"]] +
-               int_coefs[["cwd.spstd"]] * cwd_rast +
-               int_coefs[["pet.spstd"]] * pet_rast
+  intercept <- coefs$int_int +
+               coefs$int_cwd * cwd_rast +
+               coefs$int_pet * pet_rast
   names(intercept) = "intercept"
   
   sensitivity <- raster::brick(cwd_sens, pet_sens, intercept) 
