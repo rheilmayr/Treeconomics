@@ -34,7 +34,7 @@ future::plan(multisession, workers = n_cores)
 my_seed <- 5597
 set.seed(my_seed)
 
-n_mc <- 100
+n_mc <- 20
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data --------------------------------------------------------
@@ -374,7 +374,7 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
   
   ## Write out
   out_df %>% 
-    saveRDS(file = paste0(wdir,"out/predictions/sp_rwi_pred/", spp_code, ".rds"))
+    saveRDS(file = paste0(wdir,"out/predictions/sp_rwi_pred_20/", spp_code, ".rds"))
   
   ## Clear raster temp files from system
   remove(sp_predictions)
