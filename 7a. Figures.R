@@ -87,7 +87,7 @@ trim_df <- flm_df %>%
   drop_na()
 
 # 5. Prediction rasters
-rwi_list <- list.files(paste0(wdir, "out/predictions/sp_rwi_pred/"), pattern = ".rds", full.names = TRUE)
+rwi_list <- list.files(paste0(wdir, "out/predictions/sp_rwi_pred_20/"), pattern = ".rds", full.names = TRUE)
 sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
 # sp_predictions <- readRDS(paste0(wdir, "out/predictions/sp_predictions.rds"))
 
@@ -730,11 +730,10 @@ ggsave(paste0(wdir, 'figures\\3_genus_margins.svg'), margins_plot, width = 10, h
 ## ToDo - rwi_null should probably be calculated as part of the MC analysis in prediction script?
 sp_predictions <- sp_predictions %>% 
   mutate(rwi_null = cwd.spstd * cwd_sens + pet.spstd * pet_sens + intercept,
-         rwi_change_50 = rwi_pred_50 - rwi_null,
+         rwi_change_mean = rwi_pred_mean - rwi_null,
          rwi_change_975 = rwi_pred_975 - rwi_null,
          rwi_change_025 = rwi_pred_025 - rwi_null,
-         rwi_change_psens_50 = rwi_psens_50 - rwi_null,
-         rwi_change_pclim_50 = rwi_pclim_50 - rwi_null,
+         rwi_change_pclim_mean = rwi_pclim_mean - rwi_null,
          rwi_change_pclim_975 = rwi_pclim_975 - rwi_null,
          rwi_change_pclim_025 = rwi_pclim_025 - rwi_null,
          cwd_change = cwd.fut - cwd.spstd,
@@ -760,12 +759,11 @@ plot_dat <- plot_dat %>%
 
 plot_dat <- plot_dat %>% 
   group_by(cwd.q, pet.q) %>% 
-  summarize(rwi_pred = mean(rwi_pred_50, na.rm = TRUE),
-            rwi_change = mean(rwi_change_50, na.rm = TRUE),
+  summarize(rwi_pred = mean(rwi_pred_mean, na.rm = TRUE),
+            rwi_change = mean(rwi_change_mean, na.rm = TRUE),
             rwi_change_lb = mean(rwi_change_025, na.rm = TRUE),
             rwi_change_ub = mean(rwi_change_975, na.rm = TRUE),
-            rwi_change_psens = mean(rwi_change_psens_50, na.rm = TRUE),
-            rwi_change_pclim = mean(rwi_change_pclim_50, na.rm = TRUE),
+            rwi_change_pclim = mean(rwi_change_pclim_mean, na.rm = TRUE),
             rwi_change_pclim_lb = mean(rwi_change_pclim_025),
             rwi_change_pclim_ub = mean(rwi_change_pclim_975),
             cwd_sens = mean(cwd_sens, na.rm = TRUE),
