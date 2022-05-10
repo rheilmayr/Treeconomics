@@ -1031,49 +1031,156 @@ locator | transect_1 / transect_2
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Changes in CWD and PET  ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+cwdmeanchange_end=mean(cwdlist[[3]])-mean(cwdlist[[1]])
 
-petlist=list()
-for(i in 1:3) petlist[[i]]=cwdlist[[i]]+aetlist[[i]]
+#overlay species ranges to only show changes for areas with species we are considering
+ranges=st_read(paste0(wdir,"in/species_ranges/merged_ranges.shp"))
+r=raster(nrows=nrow(cwdlist[[1]]),ncols=ncol(cwdlist[[1]]));extent(r)=extent(cwdlist[[1]])
+ranges_raster=rasterize(ranges,r,field=1)
+test=rasterToPolygons(ranges_raster,dissolve = TRUE)
+testsf=st_as_sf(test)
 
-petmeanchange_end=mean(petlist[[3]])-mean(petlist[[1]]);cwdmeanchange_end=mean(cwdlist[[3]])-mean(cwdlist[[1]])
+world <- ne_download(scale = "medium", type="land",returnclass = "sf",category="physical")
+world=st_crop(world,extent(cwdmeanchange_end))
+world=st_transform(world,projection(cwdmeanchange_end))
 
-#find global spatial average of cwd and pet changes - calculate areas of grid cells
-area_grid=raster::area(petmeanchange_end)
-cwdchanges=cellStats((cwdlist[[3]]-cwdlist[[1]])*area_grid,stat="sum")/cellStats(area_grid,stat="sum")
-min=which.min(cwdchanges);max=which.max(cwdchanges)
-mincwd=cwdlist[[3]][[min]]-cwdlist[[1]][[min]];maxcwd=cwdlist[[3]][[max]]-cwdlist[[1]][[max]]
-
-#plot min and max cwd
+#clip raster to species range
+cwdmeanchange_end=raster::mask(cwdmeanchange_end,test)
 temp=as.matrix(cwdmeanchange_end)
 colnames(temp)=xFromCol(cwdmeanchange_end);rownames(temp)=yFromRow(cwdmeanchange_end)
 temp=melt(temp)
 colnames(temp)=c("lat","long","cwd")
 
-a=ggplot(temp,aes(x=long,y=lat,fill=cwd))+geom_raster()+theme_bw()+theme(axis.title=element_blank(),axis.text=element_blank(), axis.ticks=element_blank(),panel.grid=element_blank())
-a=a+scale_fill_continuous(type="viridis",na.value="white",limits=c(-200,3000),name="Change in CWD\n1970-2000 to 2091-2100\n(mm)")
-a=a+annotate("text",x=-142,y=-45,size=14,label="Mean")
+#find global spatial average of cwd and pet changes - calculate areas of grid cells
+# cwdchanges=cellStats((mask(cwdlist[[3]],test)-mask(cwdlist[[1]],test))*area_grid,stat="sum")/cellStats(area_grid,stat="sum")
+# min=which.min(cwdchanges);max=which.max(cwdchanges)
+# mincwd=cwdlist[[3]][[min]]-cwdlist[[1]][[min]];maxcwd=cwdlist[[3]][[max]]-cwdlist[[1]][[max]]
 
-temp=as.matrix(mincwd)
-colnames(temp)=xFromCol(cwdmeanchange_end);rownames(temp)=yFromRow(cwdmeanchange_end)
+world_raster=rasterize(world,r,field=1)
+world_raster=data.frame(temp[,1:2],melt(as.matrix(world_raster))[,3])
+colnames(world_raster)=c("lat","long","land")
+world_raster$land[which(world_raster$land==1)]="land"
+
+a=ggplot(temp,aes(x=long,y=lat,fill=cwd))
+a=a+geom_tile(data=world_raster%>%filter(!is.na(land)),inherit.aes=FALSE,aes(x=long,y=lat),fill="grey")
+a=a+theme_bw()+theme(axis.title=element_blank(),axis.text=element_blank(), axis.ticks=element_blank(),panel.grid=element_blank())
+a=a+scale_fill_continuous(type="viridis",na.value="transparent",name="Change in CWD\n1970-2000 to 2091-2100\n(mm per year)")
+a=a+geom_raster()
+a=a+annotate("text",x=-150,y=-45,size=10,label="a)")
+# 
+# 
+# mincwd=raster::mask(mincwd,test)
+# temp=as.matrix(mincwd)
+# colnames(temp)=xFromCol(cwdmeanchange_end);rownames(temp)=yFromRow(cwdmeanchange_end)
+# temp=melt(temp)
+# colnames(temp)=c("lat","long","cwd")
+# 
+# b=ggplot(temp,aes(x=long,y=lat,fill=cwd))
+# b=b+geom_tile(data=world_raster%>%filter(!is.na(land)),inherit.aes=FALSE,aes(x=long,y=lat),fill="grey")
+# b=b+theme_bw()+theme(axis.title=element_blank(),axis.text=element_blank(), axis.ticks=element_blank(),panel.grid=element_blank())
+# b=b+scale_fill_continuous(type="viridis",na.value="transparent",limits=c(-200,2700),guide=NULL)
+# b=b+annotate("text",x=-142,y=-45,size=8,label="Min")+geom_raster()
+# 
+# maxcwd=raster::mask(maxcwd,test)
+# temp=as.matrix(maxcwd)
+# colnames(temp)=xFromCol(cwdmeanchange_end);rownames(temp)=yFromRow(cwdmeanchange_end)
+# temp=melt(temp)
+# colnames(temp)=c("lat","long","cwd")
+# 
+# d=ggplot(temp,aes(x=long,y=lat,fill=cwd))
+# d=d+geom_tile(data=world_raster%>%filter(!is.na(land)),inherit.aes=FALSE,aes(x=long,y=lat),fill="lightgrey")
+# d=d+theme_bw()+theme(axis.title=element_blank(),axis.text=element_blank(), axis.ticks=element_blank(),panel.grid=element_blank())
+# d=d+scale_fill_continuous(type="viridis",na.value="transparent",limits=c(-200,2700),guide=NULL)
+# d=d+annotate("text",x=-142,y=-45,size=8,label="Max")+geom_raster()
+
+#a/(b+d)
+
+#get spatial averages in cwd and pet across species range for all three time points for all model runs
+cwdchange_dist=matrix(nrow=dim(cwdlist[[1]])[3],ncol=length(cwdlist))
+petchange_dist=matrix(nrow=dim(petlist[[1]])[3],ncol=length(petlist))
+
+area_mask=mask(area_grid,test)
+
+for(i in 1:length(cwdlist)){
+  cwd_temp=cellStats(cwdlist[[i]]*area_mask,stat="sum")/cellStats(area_mask,stat="sum")
+  pet_temp=cellStats(petlist[[i]]*area_mask,stat="sum")/cellStats(area_mask,stat="sum")
+  cwdchange_dist[,i]=cwd_temp;petchange_dist[,i]=pet_temp
+  print(i)
+}
+
+colnames(cwdchange_dist)=c("Historic","Mid-Century","End-Century")
+colnames(petchange_dist)=c("Historic","Mid-Century","End-Century")
+cwdchange_dist=as.data.frame(cwdchange_dist);cwdchange_dist$Model=1:nrow(cwdchange_dist)
+petchange_dist=as.data.frame(petchange_dist);petchange_dist$Model=1:nrow(petchange_dist)
+
+cwdchange_dist=cwdchange_dist%>%pivot_longer(c("Historic","Mid-Century","End-Century"),names_to="Time",values_to="CWD")
+petchange_dist=petchange_dist%>%pivot_longer(c("Historic","Mid-Century","End-Century"),names_to="Time",values_to="PET")
+
+changedist=cbind(cwdchange_dist,petchange_dist[,3])
+changedist=changedist%>%pivot_longer(c("CWD","PET"),names_to="Variable",values_to="CWD_PET")
+changedist$Time=ordered(changedist$Time,c("Historic","Mid-Century","End-Century"))
+changedist$Variable=ordered(changedist$Variable,c("PET","CWD"))
+historic=changedist%>%group_by(Variable,Time)%>%dplyr::summarise(hist_mean=quantile(CWD_PET,0.5))
+changedist$CWD_PET[which(changedist$Time=="Historic")]=NA
+
+e=ggplot(changedist,aes(x=Time,y=CWD_PET,col=Variable))+geom_boxplot(position="identity",width=0.15,inherit.aes=FALSE,aes(x=Time,y=CWD_PET,group=interaction(Variable,Time)),col="black",outlier.shape = NA)
+e=e+scale_y_continuous(limits=c(400,1500),name="CWD or PET (mm per yer)")
+e=e+geom_jitter(width=0.1)+theme_bw()
+e=e+geom_line(data=historic,aes(x=Time,y=hist_mean,group=Variable),col="black",lty=2)
+e=e+geom_point(data=historic%>%filter(Time=="Historic"),aes(y=hist_mean,col=Variable),x="Historic",size=3)
+e=e+labs(x="",color="")
+e=e+scale_color_manual(values=c("#972c25","#8e9169"))
+e=e+scale_x_discrete(labels=c("Historic"="Historic\n1970-2000","Mid-Century"="Mid-Century\n2045-2055","End-Century"="End-Century\n2090-2100"))
+e=e+annotate("text",x=0.7,y=470,size=10,label="b)")
+x11()
+a/e
+
+###Supplementary Figure Showing PET map with AET and PET changes
+
+petlist=list()
+for(i in 1:3) petlist[[i]]=cwdlist[[i]]+aetlist[[i]]
+
+petmeanchange_end=mean(petlist[[3]])-mean(petlist[[1]])
+
+petmeanchange_end=raster::mask(petmeanchange_end,test)
+temp=as.matrix(petmeanchange_end)
+colnames(temp)=xFromCol(petmeanchange_end);rownames(temp)=yFromRow(petmeanchange_end)
 temp=melt(temp)
 colnames(temp)=c("lat","long","cwd")
 
-b=ggplot(temp,aes(x=long,y=lat,fill=cwd))+geom_raster()+theme_bw()+theme(axis.title=element_blank(),axis.text=element_blank(), axis.ticks=element_blank(),panel.grid=element_blank())
-b=b+scale_fill_continuous(type="viridis",guide=NULL,na.value="white",limits=c(-200,3000))
-b=b+annotate("text",x=-142,y=-50,size=8,label="Min")                                                                   
-                                                                        
+a=ggplot(temp,aes(x=long,y=lat,fill=cwd))
+a=a+geom_tile(data=world_raster%>%filter(!is.na(land)),inherit.aes=FALSE,aes(x=long,y=lat),fill="grey")
+a=a+theme_bw()+theme(axis.title=element_blank(),axis.text=element_blank(), axis.ticks=element_blank(),panel.grid=element_blank())
+a=a+scale_fill_continuous(type="viridis",na.value="transparent",name="Change in PET\n1970-2000 to 2091-2100\n(mm per year)")
+a=a+geom_raster()
 
-temp=as.matrix(maxcwd)
-colnames(temp)=xFromCol(cwdmeanchange_end);rownames(temp)=yFromRow(cwdmeanchange_end)
-temp=melt(temp)
-colnames(temp)=c("lat","long","cwd")
+#get model averages of AET changes
+aetchange_dist=matrix(nrow=length(aetlist[[1]]),ncol=3)
+for(i in 1:length(cwdlist)){
+  aet_temp=cellStats(aetlist[[i]]*area_mask,stat="sum")/cellStats(area_mask,stat="sum")
+  aetchange_dist[,i]=aet_temp
+  print(i)
+}
 
-d=ggplot(temp,aes(x=long,y=lat,fill=cwd))+geom_raster()+theme_bw()+theme(axis.title=element_blank(),axis.text=element_blank(), axis.ticks=element_blank(),panel.grid=element_blank())
-d=d+scale_fill_continuous(type="viridis",guide=NULL,na.value="white",limits=c(-200,3000))
-d=d+annotate("text",x=-142,y=-50,size=8,label="Max")   
+colnames(aetchange_dist)=c("Historic","Mid-Century","End-Century")
+aetchange_dist=as.data.frame(aetchange_dist);aetchange_dist$Model=1:nrow(aetchange_dist)
+aetchange_dist=aetchange_dist%>%pivot_longer(c("Historic","Mid-Century","End-Century"),names_to="Time",values_to="AET")
 
-a/(b|d)
+changedist=cbind(petchange_dist,aetchange_dist[,3])
+changedist=changedist%>%pivot_longer(c("PET","AET"),names_to="Variable",values_to="PET_AET")
+changedist$Time=ordered(changedist$Time,c("Historic","Mid-Century","End-Century"))
+historic=changedist%>%group_by(Variable,Time)%>%dplyr::summarise(hist_mean=quantile(PET_AET,0.5))
+changedist$PET_AET[which(changedist$Time=="Historic")]=NA
 
+e=ggplot(changedist,aes(x=Time,y=PET_AET,col=Variable))+geom_boxplot(position="identity",width=0.15,inherit.aes=FALSE,aes(x=Time,y=PET_AET,group=interaction(Variable,Time)),col="black",outlier.shape = NA)
+e=e+scale_y_continuous(limits=c(400,1500),name="PET or AET (mm per yer)")
+e=e+geom_jitter(width=0.1)+theme_bw()
+e=e+geom_line(data=historic,aes(x=Time,y=hist_mean,group=Variable),col="black",lty=2)
+e=e+geom_point(data=historic%>%filter(Time=="Historic"),aes(y=hist_mean,col=Variable),x="Historic",size=3)
+e=e+labs(x="",color="")
+e=e+scale_color_manual(values=c("#972c25","#8e9169"))
+e=e+scale_x_discrete(labels=c("Historic"="Historic\n1970-2000","Mid-Century"="Mid-Century\n2045-2055","End-Century"="End-Century\n2090-2100"))
+e=e+annotate("text",x=0.7,y=470,size=10,label="b)")
 
 # transect_dat <- plot_dat %>% 
 #   select(cwd.q, pet.q, rwi_change, rwi_change_psens, rwi_change_pclim) %>% 
