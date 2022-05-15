@@ -40,6 +40,10 @@ library(prediction)
 library(colorspace)
 library(ggnewscale)
 library(reshape2)
+library(ggExtra)
+library(ggsn)
+library(maptools)
+library(broom)
 
 
 select <- dplyr::select
@@ -47,6 +51,10 @@ summarize <- dplyr::summarize
 
 options(scipen=999)
 
+theme_set(
+  theme_bw(base_size = 25)+
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
+)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data ------------------------------------
@@ -179,20 +187,64 @@ div_palette <- scale_colour_brewer(
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # ITRDB map, histogram, and climate with species ranges ------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-world <- ne_countries(scale = "medium", returnclass = "sf")
+# world <- ne_countries(scale = "medium", returnclass = "sf")
+# 
+# map <- ggplot() +
+#   theme_bw(base_size = 15)+
+#   geom_sf(data = world, color = "darkgrey", fill ="lightgrey", alpha=.9) +
+#   #geom_sf(data = sp_range, fill = 'lightblue', alpha = .9, colour = NA) +
+#   geom_sf(data = flm_df, color = "#443A83FF", alpha = .2) +
+#   ylab("Latitude")+
+#   xlab("Longitude")
+# map
 
-map <- ggplot() +
-  theme_bw(base_size = 22)+
-  geom_sf(data = world, color = "lightgrey", fill = "lightgrey") +
-  #geom_sf(data = sp_range, fill = 'lightblue', alpha = .9, colour = NA) +
-  geom_sf(data = flm_df, color = 'darkblue', alpha = .2) +
+world <- map_data("world")
+
+site_loc <- site_smry %>% 
+  select(collection_id, latitude, longitude)
+
+xr <- seq(-180, 180, 45)
+xlabels <- parse(text=str_c(abs(xr), "^o"))
+yr <- seq(-90, 90, 35)
+ylabels <- parse(text=str_c(abs(yr), "^o"))
+
+map <-ggplot() +
+  geom_map(data = world, map = world,
+           aes(x=long, y=lat, map_id = region),
+           color = "black", fill = "lightgray", size = 0.1,alpha=.7) +
+  theme_bw(base_size =20)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  geom_point(data = site_loc, aes(y = latitude, x = longitude), color = "#443A83FF")+
+  #geom_sf(data = flm_df, color = "#443A83FF", alpha = .2) +
   ylab("Latitude")+
-  xlab("Longitude")
+  xlab("Longitude")+
+  scale_x_continuous("Longitude", breaks = xr, labels = xlabels) +
+  scale_y_continuous("Latitude", breaks = yr, labels = ylabels)
+
 map
+
+
+# map <- ggplot() +
+#   geom_map(data = world, map = world,
+#            aes(x=long, y=lat, map_id = region),
+#            color = "black", fill = "lightgray", size = 0.1,alpha=.7) +
+#   theme_bw(base_size =35)+
+#   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+#   geom_sf(data = flm_df, color = "#443A83FF", alpha = .2) +
+#   ylab("Latitude")+
+#   xlab("Longitude")
+# map
+
+
 
 #ggsave(paste0(wdir, 'figures\\1a_itrdb_map.svg'), plot = map, width = 9, height = 6, units = "in")
 
+mean(flm_df$cwd.ave)
+range(flm_df$cwd.ave)
+mean(flm_df$pet.ave)
+range(flm_df$pet.ave)
 
+ggplot(flm_df)
 
 histogram_conceptual <- ggplot(flm_df, aes(x = cwd.spstd)) + 
   geom_histogram(bins = 40, alpha=0.5, fill = "#404788FF") +
@@ -238,22 +290,35 @@ cwd_historic_df <- cwd_historic_df %>%
          x <= lon_lims[2],
          y >= lat_lims[1],
          y <= lat_lims[2])
-world <- ne_coastline(scale = "medium", returnclass = "sf")
+#world <- ne_coastline(scale = "medium", returnclass = "sf")
 
 range_map <- ggplot() +
-  geom_tile(data = cwd_historic_df, aes(x = x, y = y, fill = cwd)) +
-  scale_fill_viridis_c(name = bquote('Historic CWD (mmH2O)')) +
-  geom_sf(data = world) +
-  new_scale_fill() +
-  geom_sf(data = sp_range, aes(colour = sp_code), fill = NA) +
-  # geom_sf(data = sp_range, aes(color = sp_code, fill = sp_code), alpha = .1) +
-  scale_colour_discrete(name = "Species") +
-  theme_bw(base_size = 22) +
+  #geom_tile(data = cwd_historic_df, aes(x = x, y = y, fill = layer)) +
+  #scale_fill_viridis_c(name = bquote('Historic CWD (mmH2O)')) +
+  #geom_sf(data = world, aes(fill ="lightgrey"), alpha=.9) +
+  #new_scale_fill() +
+  #geom_sf(data = sp_range, aes(colour = sp_code), fill = NA) +
+  geom_map(data = world, map = world,
+           aes(x=long, y=lat, map_id = region),
+           color = "black", fill = "lightgray",alpha=.3, size = 0.1) +
+  geom_sf(data = sp_range, aes(color = sp_code, fill = sp_code), alpha = .4) +
+  scale_fill_viridis_d(name = bquote('Species')) +
+  scale_color_viridis_d(name = bquote('Species')) +
+  #scale_colour_discrete(name = "Species") +
+  #scale_fill_discrete(name = "Species") +
   ylab("Latitude")+
   xlab("Longitude")+
-  coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
+  coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)+
+  theme_bw(base_size = 20)+
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        plot.title = element_text(hjust = 0.5),
+        legend.position = c(0.90, 0.27),
+        legend.background=element_blank())
+
+
 range_map
 
+map/range_map + plot_layout(heights=c(1.3,2))
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Observation frequency plot --------------------------------------------------------
@@ -263,6 +328,9 @@ xmax <- 2.5
 
 ### Summary plot of sample distribution
 hex <- flm_df %>% ggplot(aes(x = cwd.spstd, y = pet.spstd, weight = nobs)) +
+  geom_hline(yintercept = 0, size = 1, linetype = 2) +
+  geom_vline(xintercept = 0, size = 1, linetype = 2) +
+  geom_point(alpha=.0)+
   geom_hex() +
   xlim(xmin, xmax) +
   ylim(xmin, xmax) +
@@ -270,17 +338,76 @@ hex <- flm_df %>% ggplot(aes(x = cwd.spstd, y = pet.spstd, weight = nobs)) +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") + 
   coord_fixed() +
-  geom_hline(yintercept = 0, size = 1, linetype = 2) +
-  geom_vline(xintercept = 0, size = 1, linetype = 2) +
-  theme_bw(base_size = 35)+
+  scale_fill_viridis_c(name = bquote('Species')) +
+  scale_color_viridis_c(name = bquote('Species')) +
+  theme_bw(base_size = 31)+
   theme(legend.position = c(.15,.83),
-        legend.text = element_text(size=18),
-        legend.title = element_text(size=23),
-        legend.background = element_blank())
+        legend.text = element_text(size=15),
+        legend.title = element_text(size=17),
+        legend.background = element_blank(),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank())
 hex
+hex2 <- ggMarginal(hex, type="histogram", fill ="#404788FF", alpha=.5)
+hex2
+
+figs1 <- map/range_map
+figs1+
+  plot_annotation(tag_levels = 'A') & theme(
+    plot.tag = element_text(face = 'bold', size=12, family ="Helvetica"),
+    text=element_text(family ="Helvetica"))
 
 
+##hypothesis figure
+hyp <- as.data.frame(rbind(h1="H1: Range-edge", h0="H0: Consistent", h2="H2: Drought-naive"))
+colnames(hyp)="hyp"
 
+h1 <- desc(10:1)
+h0 <- rep(-5.5,times=10)
+h2 <- desc(1:10)
+
+
+hypdat <- rbind(h1,h0, h2)
+
+newdat <- cbind(hypdat, hyp) %>% 
+  pivot_longer(-hyp) %>% 
+  mutate(cwd=rep(1:10, times=3))
+
+hypfig <- ggplot(newdat, aes(x=cwd,y=value, color=hyp))+
+  #geom_smooth()+
+  scale_color_viridis_d(name = bquote('Sensitivity')) +
+  theme_bw(base_size = 22)+
+  theme(axis.text.x = element_blank(), axis.text.y = element_blank(),
+        axis.ticks.x = element_blank(), axis.ticks.y=element_blank(),
+        legend.background = element_blank(),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  annotate("segment", x = 0, xend = 9, y = -10, yend = -1, size=1.1, color="#404788FF",
+           arrow = arrow(type="closed", length = unit(.3,"cm")))+
+  annotate("segment", x = 0, xend = 9, y = -5.5, yend = -5.5,size=1.1, color="grey",
+           arrow = arrow(type="closed", length = unit(.3,"cm")))+
+  annotate("segment", x = 0, xend = 9, y = -1, yend = -10,size=1.1, color="#20A387FF",
+           arrow = arrow(type="closed", length = unit(.3,"cm")))+
+  annotate("text", x = 1.5, y = -8, angle =50, 
+           size=7, label = "H2: Drought-naive", family ="Helvetica")+
+  annotate("text", x = 1.7, y = -5.1, 
+           size=7, label = "H0: Consistent", family ="Helvetica")+
+  annotate("text", x = 2, y = -2.4, angle =-50, 
+           size=7, label = "H1: Range-edge", family ="Helvetica")+
+  #xlab("Climate water deficit (mm/H20)")+
+  labs(y="RWI sensitivity",x=expression(Climate~water~deficit~(mm/H[2]*O)))
+
+hypfig
+
+
+map/range_map|hex2+hypfig
+
+
+figs1
+
+figs1+plot_layout(widths = c(1,1,.5))+
+  plot_annotation(tag_levels = 'A') & theme(
+    plot.tag = element_text(face = 'bold', size=12, family ="Helvetica"),
+    text=element_text(family ="Helvetica"))
+figs1
 
 #ggsave(paste0(wdir, 'figures\\1b_obs_density.svg'), plot = hex, width = 12, height = 12)
 
@@ -489,13 +616,13 @@ pet_est_plot <- long_trim_df %>%
   theme(legend.position = c(.9,.85),
         legend.key = element_blank(),
         legend.background = element_blank())
-  
+
 
 cwd_est_plot / pet_est_plot
 
 
-  
-                          
+
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Main sensitivity plot --------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -539,17 +666,19 @@ binned_margins <- plot_dat_b %>%
   xlab("Deviation from mean CWD")+
   theme_bw(base_size = 22)+
   theme(legend.position = c(.18,.83),
-    legend.key = element_blank(),
-    legend.background = element_blank())+
-    #panel.grid.major = element_blank(), 
-    #panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))+
+        legend.key = element_blank(),
+        legend.background = element_blank())+
+  #panel.grid.major = element_blank(), 
+  #panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))+
   labs(fill = "Marginal effect\nof CWD") +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") +
   coord_fixed() +
   geom_hline(yintercept = 0, size = 1, linetype = 2) +
-  geom_vline(xintercept = 0, size = 1, linetype = 2)
-  
+  geom_vline(xintercept = 0, size = 1, linetype = 2)+
+  theme(panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
+
 
 binned_margins
 # ggsave(paste0(wdir, 'figures\\binned_margins.svg'), plot = binned_margins)
@@ -659,32 +788,33 @@ margins_plot <- ggplot(sq_predictions, aes(x = cwd.spstd)) +
   xlim(c(pred_min, pred_max)) +
   theme_bw(base_size = 25)+
   theme(panel.grid.major = element_blank(), 
-          panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
+        panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
 
 margins_plot
 
 
 histogram <- ggplot(mod_df, aes(x = cwd.spstd)) + 
-  geom_histogram(bins = 40, alpha = 0.8, fill = "#404788FF") +
+  geom_histogram(bins = 40, alpha = 0.8, fill = "#404788FF", color="white") +
   xlim(c(pred_min, pred_max)) +
   theme_bw(base_size = 25) + 
   ylab("# sites") +
+  xlab("Historic CWD\n(Deviation from species mean)") + 
   theme(aspect.ratio = 0.3,
-        axis.title.x = element_blank(),
-        axis.text.x = element_blank(),
-        axis.ticks.x = element_blank(),
+        #axis.title.x = element_blank(),
+        #axis.text.x = element_blank(),
+        #axis.ticks.x = element_blank(),
         panel.grid.major = element_blank(), 
         panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
 histogram
 
 
 out_fig <- binned_margins + (histogram / margins_plot)+ 
-  plot_layout(widths = c(1,1))+
-  plot_annotation(tag_levels="a") & theme(plot.tag = element_text(face = 'bold', size=23))
+  # plot_layout(widths = c(1,1))+
+  plot_annotation(tag_levels="A") & theme(plot.tag = element_text(face = 'bold', size=23))
 
 
 out_fig
-ggsave(paste0(wdir, 'figures\\2_cwd_margins.svg'), plot = out_fig, width = 20, height = 12, units = "in")
+#ggsave(paste0(wdir, 'figures\\2_cwd_margins.svg'), plot = out_fig, width = 20, height = 12, units = "in")
 #ggsave(paste0(wdir, 'figures\\2_cwd_margins.png'), plot = out_fig, width = 20, height = 12, units = "in")
 #ggsave(paste0(wdir, 'figures\\2_cwd_margins_only.svg'), plot = margins_plot, width = 15, height = 9, units = "in")
 
@@ -721,7 +851,7 @@ margins_plot <- genus_predictions %>%
 #   geom_text(data = genus_coefs, aes(x = -1.8, y = 0, label = lab))
 
 margins_plot
-ggsave(paste0(wdir, 'figures\\3_genus_margins.svg'), margins_plot, width = 10, height = 8, units = "in")
+#ggsave(paste0(wdir, 'figures\\3_genus_margins.svg'), margins_plot, width = 10, height = 8, units = "in")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -969,9 +1099,9 @@ transect_1 <- transect_dat %>%
   xlim(c(-2, 2)) +
   scale_linetype_manual(values=c("solid", "dotted", "dotted")) +
   scale_fill_manual(name = "Scenario",
-                     labels = c("Full model", 
-                                "Variable shift in climate,\nconstant sensitivity"), 
-                     values = c("dark blue", "dark red", "dark green")) +
+                    labels = c("Full model", 
+                               "Variable shift in climate,\nconstant sensitivity"), 
+                    values = c("dark blue", "dark red", "dark green")) +
   scale_color_manual(name = "Scenario",
                      labels = c("Full model", 
                                 "Variable shift in climate,\nconstant sensitivity"), 
@@ -1034,16 +1164,21 @@ locator | transect_1 / transect_2
 cwdmeanchange_end=mean(cwdlist[[3]])-mean(cwdlist[[1]])
 
 #overlay species ranges to only show changes for areas with species we are considering
+range_dissolve <- st_read(paste0(wdir,"in/species_ranges/merged_ranges_dissolve.shp"))
+
 ranges=st_read(paste0(wdir,"in/species_ranges/merged_ranges.shp"))
 r=raster(nrows=nrow(cwdlist[[1]]),ncols=ncol(cwdlist[[1]]));extent(r)=extent(cwdlist[[1]])
 ranges_raster=rasterize(ranges,r,field=1)
 test=rasterToPolygons(ranges_raster,dissolve = TRUE)
 testsf=st_as_sf(test)
 
+plot(ranges)
+
 world <- ne_download(scale = "medium", type="land",returnclass = "sf",category="physical")
 world=st_crop(world,extent(cwdmeanchange_end))
 world=st_transform(world,projection(cwdmeanchange_end))
 
+library(reshape2)
 #clip raster to species range
 cwdmeanchange_end=raster::mask(cwdmeanchange_end,test)
 temp=as.matrix(cwdmeanchange_end)
