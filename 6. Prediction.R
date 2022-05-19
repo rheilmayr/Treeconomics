@@ -83,7 +83,7 @@ sp_mc <- species_list %>%
   crossing(iter_idx = seq(n_mc))
 
 ## Assign specific cmip realization to each MC iteration 
-sp_fut_clim_smpl <- readRDS(paste0(sp_fut_clim_dir, "abal"))
+sp_fut_clim_smpl <- readRDS(paste0(sp_fut_clim_dir, "abal.gz"))
 n_cmip_mods <- sp_fut_clim_smpl %>% pull(cmip_idx) %>% unique() %>% length()
 cmip_assignments <- tibble(iter_idx = seq(1, n_mc)) %>% 
   mutate(cmip_idx = sample(seq(n_cmip_mods), n_mc, replace = TRUE))
@@ -140,7 +140,7 @@ calc_rwi <- function(sppp_code, cmip_id, sensitivity){
   ## Function used to predict species' RWI rasters based on predicted 
   ## sensitivity raster and assigned CMIP model of future climate
   
-  sp_fut_clim <- readRDS(paste0(sp_fut_clim_dir, sppp_code))
+  sp_fut_clim <- readRDS(paste0(sp_fut_clim_dir, sppp_code, "gz"))
   
   cmip_rast <- sp_fut_clim %>% 
     filter(cmip_idx == cmip_id) %>% 
@@ -161,7 +161,7 @@ calc_rwi_partials <- function(sppp_code, cmip_id, sensitivity){
   ## sensitivity raster and assigned CMIP model of future climate. Also
   ## integrates calculations of partialling our climate / sensitivity variations
   
-  sp_fut_clim <- readRDS(paste0(sp_fut_clim_dir, sppp_code))
+  sp_fut_clim <- readRDS(paste0(sp_fut_clim_dir, sppp_code, ".gz"))
   
   cmip_rast <- sp_fut_clim %>% 
     filter(cmip_idx == cmip_id) %>% 
@@ -224,7 +224,7 @@ pull_layer <- function(brick, layer_name){
 
 
 calc_mean_fut_clim <- function(sppp_code){
-  sp_fut_clim <- readRDS(paste0(sp_fut_clim_dir, sppp_code))
+  sp_fut_clim <- readRDS(paste0(sp_fut_clim_dir, sppp_code, ".gz"))
   clim_pulls <- sp_fut_clim %>%
     mutate(cwd.fut = pmap(list(brick = clim_future_sp, layer_name = "cwd.spstd"),
                           .f = pull_layer),
