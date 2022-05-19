@@ -25,6 +25,7 @@ library(sf)
 library(rgeos)
 library(stringr)
 library(raster)
+library(readr)
 select <- dplyr::select
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -173,8 +174,7 @@ sp_fut_clim <- species_list %>%
   crossing(cmip_idx = seq(n_cmip_mods)) %>% 
   left_join(cmip_projections, by = "cmip_idx")
 
-
-## Rescale each CMIP model based on each species' climate
+## Rescale each CMIP model based on each species' climate - in future could furrr/parallelize this to speed up this script
 sp_fut_clim <- sp_fut_clim %>% 
   mutate(clim_future_sp = pmap(list(spp_code = sp_code, 
                                     clim_raster = cmip_rast), 
@@ -190,8 +190,8 @@ sp_fut_clim <- sp_fut_clim %>%
 
 ## Export predictions by species
 export_fut_clims <- function(spp_code, sp_fut){
-  # saveRDS(sp_fut, paste0(wdir, "out//climate//sp_clim_predictions//", spp_code, ".rds"))
-  saveRDS(sp_fut, paste0(wdir, "out//climate//sp_clim_predictions//", spp_code, ".gz"))
+  # saveRDS(sp_fut, paste0(wdir, "out//climate//sp_clim_predictions//", spp_code))
+  write_rds(sp_fut, paste0(wdir, "out//climate//sp_clim_predictions//", spp_code, ".gz"), compress = "gz")
   return("complete")
 }
 
