@@ -11,9 +11,7 @@
 # - essentialcwd_data.csv: File detailing plot-level weather history
 #
 # ToDo:
-# - add nobs
-# - fix joins to prevent duplicate species_id
-# - think through how to deal with CWD outliers
+# - Think through places where Monte carlo uncertainties can be added to figures
 # - track down lost observations - currently dropping a lot due to NAN or failed RWI generation
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
