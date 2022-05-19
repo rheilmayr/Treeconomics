@@ -41,7 +41,8 @@ n_mc <- 100
 # Load data --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define path
-wdir <- 'remote\\'
+wdir <- 'remote/'
+
 out_dir <- paste0(wdir,"out/predictions/sp_rwi_pred_", as.character(n_mc), "/")
 dir.create(file.path(out_dir), showWarnings = FALSE)
 
