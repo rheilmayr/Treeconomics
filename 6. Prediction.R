@@ -41,6 +41,9 @@ n_mc <- 20
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define path
 wdir <- 'remote\\'
+out_dir <- paste0(wdir,"out/predictions/sp_rwi_pred_", as.character(n_mc), "/")
+dir.create(file.path(out_dir), showWarnings = FALSE)
+
 
 # 1. Second stage model
 old_mod_df <- readRDS(paste0(wdir, "out\\second_stage\\ss_mc_mods.rds"))
@@ -374,7 +377,7 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
   
   ## Write out
   out_df %>% 
-    saveRDS(file = paste0(wdir,"out/predictions/sp_rwi_pred_20/", spp_code, ".rds"))
+    saveRDS(file = paste0(out_dir, spp_code, ".rds"))
   
   ## Clear raster temp files from system
   remove(sp_predictions)
