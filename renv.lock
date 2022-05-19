@@ -1507,6 +1507,13 @@
       "Repository": "CRAN",
       "Hash": "732b2dcfa8608f2569f4c08dd4cf4f10"
     },
+    "snow": {
+      "Package": "snow",
+      "Version": "0.4-4",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "40b74690debd20c57d93d8c246b305d4"
+    },
     "sp": {
       "Package": "sp",
       "Version": "1.4-7",

@@ -27,6 +27,7 @@ library(tidyverse)
 library(prediction)
 library(tictoc)
 library(furrr)
+library(snow)
 
 n_cores <- 6
 future::plan(multisession, workers = n_cores)
@@ -34,7 +35,7 @@ future::plan(multisession, workers = n_cores)
 my_seed <- 5597
 set.seed(my_seed)
 
-n_mc <- 20
+n_mc <- 100
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data --------------------------------------------------------
