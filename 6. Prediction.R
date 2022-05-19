@@ -82,6 +82,12 @@ sp_mc <- species_list %>%
   select(sp_code) %>% 
   crossing(iter_idx = seq(n_mc))
 
+
+# sp_fut_clim_smpl2 <- read_rds(paste0(sp_fut_clim_dir, "abal"))
+# write_rds(sp_fut_clim_smpl2, paste0(wdir, "out//climate//sp_clim_predictions//", spp_code, ".rds"))
+
+
+
 ## Assign specific cmip realization to each MC iteration 
 sp_fut_clim_smpl <- readRDS(paste0(sp_fut_clim_dir, "abal.gz"))
 n_cmip_mods <- sp_fut_clim_smpl %>% pull(cmip_idx) %>% unique() %>% length()
@@ -140,7 +146,7 @@ calc_rwi <- function(sppp_code, cmip_id, sensitivity){
   ## Function used to predict species' RWI rasters based on predicted 
   ## sensitivity raster and assigned CMIP model of future climate
   
-  sp_fut_clim <- readRDS(paste0(sp_fut_clim_dir, sppp_code, "gz"))
+  sp_fut_clim <- readRDS(paste0(sp_fut_clim_dir, sppp_code, ".gz"))
   
   cmip_rast <- sp_fut_clim %>% 
     filter(cmip_idx == cmip_id) %>% 
@@ -189,7 +195,7 @@ calc_rwi_partials <- function(sppp_code, cmip_id, sensitivity){
   
   # return(list("rwi_pred" = rwi_rast, "rwi_psens" = rwi_psens, "rwi_pclim" = rwi_pclim))
   
-  return(list("rwi_pred" = rwi_rast, "rwi_pclim" = rwi_pclim))
+  return(list("rwi_pred" = c(rwi_rast), "rwi_pclim" = c(rwi_pclim)))
 }
 
 quantiles <- function(x){
@@ -285,8 +291,12 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
                                               sensitivity = sensitivity),
                                          .f = calc_rwi_partials,
                                          .options = furrr_options(seed = my_seed,
-                                                                  packages = "raster"))) %>% 
-    unnest_wider(rwi_predictions)
+                                                                  packages = "raster"))) 
+  
+  sp_predictions <- sp_predictions %>% 
+    unnest_wider(rwi_predictions) %>% 
+    mutate(rwi_pred = rwi_pred[[1]],
+           rwi_pclim = rwi_pclim[[1]])
    
   # ## For each species, calculate cell-wise quantiles of rwi from n_mc runs
   # rwi_pred_q <- sp_predictions %>%
@@ -377,7 +387,7 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
   
   ## Write out
   out_df %>% 
-    saveRDS(file = paste0(out_dir, spp_code, ".rds"))
+    write_rds(file = paste0(out_dir, spp_code, ".gz"), compress = "gz")
   
   ## Clear raster temp files from system
   remove(sp_predictions)
