@@ -33,7 +33,6 @@ n_cores <- 12
 future::plan(multisession, workers = n_cores)
 
 my_seed <- 5597
-set.seed(my_seed)
 
 n_mc <- 1000
 
@@ -249,6 +248,8 @@ calc_mean_fut_clim <- function(sppp_code){
 
 
 calc_rwi_quantiles <- function(spp_code, mc_data){
+  set.seed(my_seed) # Re-setting seed at start of each iteration to ensure interrupted jobs still produce replicable results
+
   tic()
   ## Iterating through each species
   print(spp_code)
