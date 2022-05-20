@@ -59,18 +59,11 @@ mod_df <- mod_df %>%
   mutate(iter_idx = seq(1:10000)) %>% 
   filter(iter_idx <= n_mc)
   
-# # 2. Species information
-# sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
-# sp_info <- sp_info %>% 
-#   select(species_id, genus, gymno_angio, family) %>% 
-#   rename(sp_code = species_id)
-
-
-# 3. Species-standardized historic climate
+# 2. Species-standardized historic climate
 sp_hist_clim <- readRDS(paste0(wdir, "out/climate/sp_clim_historic.rds"))
 species_list <- sp_hist_clim %>% select(sp_code)
 
-# 4. Directory of species-standardized future possible climates
+# 3. Directory of species-standardized future possible climates
 sp_fut_clim_dir <- paste0(wdir, "out/climate/sp_clim_predictions/")
 
 
