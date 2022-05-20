@@ -42,7 +42,6 @@ n_mc <- 20
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define path
 wdir <- 'remote/'
-
 out_dir <- paste0(wdir,"out/predictions/sp_rwi_pred_", as.character(n_mc), "/")
 dir.create(file.path(out_dir), showWarnings = FALSE)
 
