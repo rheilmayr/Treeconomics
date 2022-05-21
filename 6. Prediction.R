@@ -29,6 +29,7 @@ library(tictoc)
 library(furrr)
 library(snow)
 library(profvis)
+library(tmap)
 
 n_cores <- availableCores() - 2
 future::plan(multisession, workers = n_cores)
@@ -404,6 +405,8 @@ mc_nests <- mc_nests %>%
                                  mc_data = data),
                               .f = calc_rwi_quantiles)) 
 
+
+
 spp_code = "abal"
 mc_data = (mc_nests %>% filter(sp_code == spp_code) %>% pull(data))[[1]]
 l = profvis(calc_rwi_quantiles(spp_code, mc_data))
@@ -491,5 +494,19 @@ l = profvis(calc_rwi_quantiles(spp_code, mc_data))
 #   saveRDS(file = paste0(wdir,"out/predictions/sp_predictions.rds") )
 
 
+crs <- crs(cwd_rast)
+cwd_df <- cwd_rast %>% as.data.frame(xy = TRUE) 
+raster_template <- cwd_df %>% select(x,y)
+cwd_df <- cwd_df %>% 
+  drop_na()
 
+cwd_df2 <- raster_template %>% 
+  left_join(cwd_df, by = c("x", "y"))
+cwd_rast2 <- rasterFromXYZ(cwd_df2, crs = crs)
 
+tm_raster(cwd_rast2)
+data("World")
+
+tmap_mode("view")
+tm_shape(cwd_rast) +
+  tm_raster()
