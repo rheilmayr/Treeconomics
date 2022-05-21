@@ -12,6 +12,7 @@
 # Todo ideas:
 # - PRIORITY: Should use both spatial and annual variation in CWD / AET 
 # - to characterize niche - Waiting on new data from Fran (5/21/22)
+# - PRIORITY: SHOULD ADJUST MASKING TO ENSURE THAT WE'RE EXTRACTING EVERY PIXEL THAT OVERLAPS RANGE
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -108,11 +109,14 @@ species_list <- range_sf %>%
   unique() %>% 
   enframe(name = NULL) %>% 
   rename(sp_code = value) %>% 
+  arrange(sp_code) %>% 
   drop_na()
 
 clim_df <- species_list %>% 
   mutate(clim_vals = map(sp_code, pull_clim))
 
+
+## Summarize meand and sd of each species' climate
 niche_df <- clim_df %>% 
   unnest(clim_vals) %>% 
   group_by(sp_code) %>% 
@@ -121,12 +125,55 @@ niche_df <- clim_df %>%
             cwd_mean = mean(cwd),
             cwd_sd = sd(cwd))
 
+
 ## Export species niche description
 write.csv(niche_df, paste0(wdir, "out//climate//clim_niche.csv"))
 
 # ## Export historic climates
 # write_rds(clim_df, paste0(wdir, "out//climate//sp_clim_historic.gz"), compress = "gz")
 
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Standardize historic climate -------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+sp_standardize <- function(val, sp_mean, sp_sd){
+  std_val <- (val - sp_mean) / sp_sd
+  return(std_val)
+}
+
+sp_std_historic_df <- function(hist_clim_vals, pet_mean, pet_sd, cwd_mean, cwd_sd){
+  hist_clim_vals <- hist_clim_vals %>% 
+    mutate_at(vars(starts_with("cwd")), 
+              ~sp_standardize(.x, cwd_mean, cwd_sd)) %>% 
+    mutate_at(vars(starts_with("pet")), 
+              ~sp_standardize(.x, pet_mean, pet_sd))
+  return(hist_clim_vals)
+}
+
+
+sp_std_future_df <- function(cmip_df, hist_clim_vals, pet_mean, pet_sd, cwd_mean, cwd_sd){
+  valid_locations <- hist_clim_vals %>% select(x,y)
+  cmip_df <- valid_locations %>% 
+    left_join(cmip_df, by = c("x", "y"))
+  cmip_df <- cmip_df %>% 
+    mutate_at(vars(starts_with("cwd")), 
+              ~sp_standardize(.x, cwd_mean, cwd_sd)) %>% 
+    mutate_at(vars(starts_with("pet")), 
+              ~sp_standardize(.x, pet_mean, pet_sd))
+  return(cmip_df)
+}
+
+
+clim_df <- clim_df %>% 
+  left_join(niche_df, by = "sp_code")
+
+clim_df <- clim_df %>% 
+  mutate(clim_historic_sp = pmap(list(hist_clim_vals = clim_vals,
+                                    pet_mean = pet_mean,
+                                    pet_sd = pet_sd,
+                                    cwd_mean = cwd_mean,
+                                    cwd_sd = cwd_sd), 
+                               .f = sp_std_historic_df))
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Pull CMIP projections -----------------------------------------------
@@ -171,28 +218,8 @@ cmip_df <- cmip_df %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Summarize future climate for each species ------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-sp_standardize <- function(val, sp_mean, sp_sd){
-  std_val <- (val - sp_mean) / sp_sd
-  return(std_val)
-}
-
-sp_std_df <- function(cmip_df, hist_clim_vals, pet_mean, pet_sd, cwd_mean, cwd_sd){
-  valid_locations <- hist_clim_vals %>% select(x,y)
-  cmip_df <- valid_locations %>% 
-    left_join(cmip_df, by = c("x", "y"))
-  cmip_df <- cmip_df %>% 
-    mutate_at(vars(starts_with("cwd")), 
-              ~sp_standardize(.x, cwd_mean, cwd_sd)) %>% 
-    mutate_at(vars(starts_with("pet")), 
-              ~sp_standardize(.x, pet_mean, pet_sd))
-  return(cmip_df)
-}
-
-
-
 ## Cross species list with nested cmip data
-sp_fut_clim <- niche_df %>% 
-  left_join(clim_df, by = "sp_code") %>% 
+sp_fut_clim <- clim_df %>% 
   mutate(cmip_df = cmip_df$data)
 
 
@@ -204,12 +231,12 @@ sp_fut_clim <- sp_fut_clim %>%
                                     pet_sd = pet_sd,
                                     cwd_mean = cwd_mean,
                                     cwd_sd = cwd_sd), 
-                               .f = sp_std_df)) %>% 
+                               .f = sp_std_future_df)) %>% 
   select(-cmip_df)
 
 
 ## Check final result as raster
-species = "pipo"
+species = "acsh"
 test_clim <- (sp_fut_clim %>% filter(sp_code == species) %>% pull(clim_future_sp))[[1]]
 crs_template <- crs(cwd_future)
 raster_template <- cwd_future %>% as.data.frame(xy = TRUE) %>% select(x,y)
@@ -220,7 +247,7 @@ range <- range_sf %>% filter(sp_code == species)
 tmap_mode("view")
 
 tm_shape(test_clim$cwd_cmip1) +
-  tm_raster() +
+  tm_raster(palette = "-RdYlGn") +
   tm_facets(as.layers = TRUE) +
 tm_shape(range) + 
   tm_fill(col = "lightblue")
