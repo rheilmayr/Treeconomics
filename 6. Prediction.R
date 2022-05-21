@@ -28,13 +28,14 @@ library(prediction)
 library(tictoc)
 library(furrr)
 library(snow)
+library(profvis)
 
 n_cores <- availableCores() - 2
 future::plan(multisession, workers = n_cores)
 
 my_seed <- 5597
 
-n_mc <- 1000
+n_mc <- 100
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data --------------------------------------------------------
@@ -269,7 +270,7 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
                                      .f = predict_sens,
                                      .options = furrr_options(seed = my_seed, 
                                                               packages = c( "dplyr", "raster"))))
-  
+
   
   # sp_sensitivity <- mc_data %>% 
   #   mutate(sensitivity = future_pmap(list(sppp_code = spp_code,
@@ -332,7 +333,6 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
   names(rwi_pclim_q) = c("rwi_pclim_025", "rwi_pclim_975")
   names(rwi_pclim_mean) = c("rwi_pclim_mean")
   rwi_pclim_q = brick(c(rwi_pclim_q, rwi_pclim_mean))
-  
     
   ## Generate rasters summarizing mean estimate of sensitivity
   sens_pulls <- sp_sensitivity %>%
@@ -361,8 +361,7 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
     brick()
   sens_int_q <- raster::mean(sens_int_q)
   names(sens_int_q) = "intercept"
-  
-  
+
   ## Pull historic climate
   clim_historic_sp <- sp_hist_clim %>% 
     filter(sp_code == spp_code) %>% 
@@ -370,7 +369,7 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
   
   ## Pull mean future climate
   clim_fut_sp <- calc_mean_fut_clim(spp_code)
-  
+
   ## Stack rasters and convert to dataframe
   out_df <- brick(c(clim_historic_sp, 
                     clim_fut_sp,
@@ -384,6 +383,7 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
   out_df %>% 
     write_rds(file = paste0(out_dir, spp_code, ".gz"), compress = "gz")
   
+  toc()
   ## Clear raster temp files from system
   remove(sp_predictions)
   remove(sens_pulls, sp_sensitivity)
@@ -403,6 +403,11 @@ mc_nests <- mc_nests %>%
   mutate(predictions = pmap(list(spp_code = sp_code,
                                  mc_data = data),
                               .f = calc_rwi_quantiles)) 
+
+spp_code = "abal"
+mc_data = (mc_nests %>% filter(sp_code == spp_code) %>% pull(data))[[1]]
+l = profvis(calc_rwi_quantiles(spp_code, mc_data))
+
 # %>% 
 #   select(-data) %>% 
 #   unnest(predictions)
