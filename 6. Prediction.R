@@ -394,11 +394,9 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
 }
 
 
-
 mc_nests <- sp_mc %>%
   group_by(sp_code) %>%
   nest() %>% 
-  # filter(sp_code == "abla") %>%
   drop_na()
 
 mc_nests <- mc_nests %>% 
