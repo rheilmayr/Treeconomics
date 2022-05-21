@@ -29,7 +29,7 @@ library(tictoc)
 library(furrr)
 library(snow)
 
-n_cores <- 12
+n_cores <- availableCores() - 2
 future::plan(multisession, workers = n_cores)
 
 my_seed <- 5597
