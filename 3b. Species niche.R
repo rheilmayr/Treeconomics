@@ -253,4 +253,4 @@ tm_shape(range) +
   tm_fill(col = "lightblue")
 
 ## Export predictions
-write_rds(sp_fut_clim, paste0(wdir, "out/climate/sp_clim_predictions.rds", compress = "gz"))
+write_rds(sp_fut_clim, paste0(wdir, "out/climate/sp_clim_predictions.", compress = "gz"))
