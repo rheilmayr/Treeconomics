@@ -343,7 +343,7 @@ boot_ss_coefs <- boot(mc_df, bs_ss, R = n_mc,
 
 
 ## Save out coefficients that reflect uncertainty from both first and second stage models
-saveRDS(boot_ss_coefs, paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
+write_rds(boot_ss_coefs, paste0(wdir, "out/second_stage/ss_bootstrap."), compress = "gz")
 # saveRDS(mc_df, paste0(wdir, "out/second_stage/ss_mc_mods.rds"))
 
 
