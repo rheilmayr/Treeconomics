@@ -218,6 +218,7 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
     unnest(rwi_predictions)
 
   ## Drop occasional observations with missing CMIP data
+  ## TODO: Trace back to see why this is necessary
   sp_predictions <- sp_predictions[complete.cases(sp_predictions %>% select(cwd_cmip, pet_cmip)),] %>% 
     lazy_dt()
   
