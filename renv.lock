@@ -499,6 +499,13 @@
       "Repository": "CRAN",
       "Hash": "5b31f43f60613477ee28abec9ab07f1b"
     },
+    "dtplyr": {
+      "Package": "dtplyr",
+      "Version": "1.2.1",
+      "Source": "Repository",
+      "Repository": "CRAN",
+      "Hash": "f5d195cd5fcc0a77499d9da698ef2ea3"
+    },
     "e1071": {
       "Package": "e1071",
       "Version": "1.7-9",
