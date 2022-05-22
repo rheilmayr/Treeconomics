@@ -17,13 +17,14 @@
 # Package imports --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 library(fixest)
-library(raster)
+# library(raster)
 library(sp)
 library(sf)
 library(rnaturalearth)
 library(rnaturalearthdata)
 library(patchwork)
 library(tidyverse)
+library(dtplyr)
 library(prediction)
 library(tictoc)
 library(furrr)
@@ -36,7 +37,7 @@ future::plan(multisession, workers = n_cores)
 
 my_seed <- 5597
 
-n_mc <- 100
+n_mc <- 10000
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data --------------------------------------------------------
@@ -48,7 +49,6 @@ dir.create(file.path(out_dir), showWarnings = FALSE)
 
 
 # 1. Second stage model
-old_mod_df <- readRDS(paste0(wdir, "out/second_stage/ss_mc_mods.rds"))
 boot_ss <- readRDS(paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
  
 mod_df <- boot_ss$t
@@ -60,12 +60,16 @@ mod_df <- mod_df %>%
   mutate(iter_idx = seq(1:10000)) %>% 
   filter(iter_idx <= n_mc)
   
-# 2. Species-standardized historic climate
-sp_hist_clim <- readRDS(paste0(wdir, "out/climate/sp_clim_historic.rds"))
-species_list <- sp_hist_clim %>% select(sp_code)
+# 2. Species-standardized historic and future climate
+sp_clim <- read_rds(paste0(wdir, "out/climate/sp_clim_predictions.gz"))
+species_list <- sp_clim %>% select(sp_code)
 
-# 3. Directory of species-standardized future possible climates
-sp_fut_clim_dir <- paste0(wdir, "out/climate/sp_clim_predictions/")
+
+# sp_hist_clim <- readRDS(paste0(wdir, "out/climate/sp_clim_historic.rds"))
+# species_list <- sp_hist_clim %>% select(sp_code)
+# 
+# # 3. Directory of species-standardized future possible climates
+# sp_fut_clim_dir <- paste0(wdir, "out/climate/sp_clim_predictions/")
 
 
 
@@ -75,7 +79,8 @@ sp_fut_clim_dir <- paste0(wdir, "out/climate/sp_clim_predictions/")
 ## Join second stage coefficients to species list
 sp_mc <- species_list %>% 
   select(sp_code) %>% 
-  crossing(iter_idx = seq(n_mc))
+  crossing(iter_idx = seq(n_mc)) %>% 
+  left_join(mod_df, by = "iter_idx")
 
 
 # sp_fut_clim_smpl2 <- read_rds(paste0(sp_fut_clim_dir, "abal"))
@@ -84,8 +89,7 @@ sp_mc <- species_list %>%
 
 
 ## Assign specific cmip realization to each MC iteration 
-sp_fut_clim_smpl <- readRDS(paste0(sp_fut_clim_dir, "abal.gz"))
-n_cmip_mods <- sp_fut_clim_smpl %>% pull(cmip_idx) %>% unique() %>% length()
+n_cmip_mods <- 47
 cmip_assignments <- tibble(iter_idx = seq(1, n_mc)) %>% 
   mutate(cmip_idx = sample(seq(n_cmip_mods), n_mc, replace = TRUE))
 
@@ -93,14 +97,14 @@ cmip_assignments <- tibble(iter_idx = seq(1, n_mc)) %>%
 sp_mc <- sp_mc %>% 
   left_join(cmip_assignments, by = "iter_idx")
 
-## Join second stage coefficients
-# mod_df <- mod_df %>% 
-#   group_by(iter_idx) %>% 
-#   nest() %>% 
+# ## Join second stage coefficients
+# mod_df <- mod_df %>%
+#   group_by(iter_idx) %>%
+#   nest() %>%
 #   rename(ss_coefs = data)
-
-sp_mc <- sp_mc %>% 
-  left_join(mod_df, by = "iter_idx") 
+# 
+# sp_mc <- sp_mc %>% 
+#   left_join(mod_df, by = "iter_idx") 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define functions ---------------
@@ -112,101 +116,52 @@ predict_sens <- function(sppp_code, int_int, int_cwd, int_pet, cwd_int,
   
   select <- dplyr::select
   
-  clim_historic_sp <- sp_hist_clim %>% 
+  sp_df <- (sp_clim %>% 
     filter(sp_code == sppp_code) %>% 
-    pull(clim_historic_sp)
-  cwd_rast <- clim_historic_sp[[1]] %>% subset("cwd.spstd")
-  pet_rast <- clim_historic_sp[[1]] %>% subset("pet.spstd")
+    pull(clim_historic_sp))[[1]] %>% 
+    lazy_dt()
   
-  cwd_sens <- cwd_int +
-              cwd_cwd * cwd_rast +
-              cwd_pet * pet_rast
-  names(cwd_sens) = "cwd_sens"
+  sp_df <- sp_df %>% 
+    rename(cwd_hist = cwd,
+           pet_hist = pet) %>% 
+    mutate(cwd_sens = cwd_int + cwd_cwd * cwd_hist + cwd_pet * pet_hist,
+           pet_sens = pet_int + pet_cwd * cwd_hist + pet_pet * pet_hist,
+           intercept = int_int + int_cwd * cwd_hist + int_pet * pet_hist) %>% 
+    as_tibble()
   
-  pet_sens <- pet_int +
-              pet_cwd * cwd_rast +
-              pet_pet * pet_rast
-  names(pet_sens) = "pet_sens"
-  
-  intercept <- int_int +
-               int_cwd * cwd_rast +
-               int_pet * pet_rast
-  names(intercept) = "intercept"
-  
-  sensitivity <- raster::brick(cwd_sens, pet_sens, intercept) 
-  return(sensitivity)
+  return(sp_df)
 }
-
-calc_rwi <- function(sppp_code, cmip_id, sensitivity){
-  ## Function used to predict species' RWI rasters based on predicted 
-  ## sensitivity raster and assigned CMIP model of future climate
-  
-  sp_fut_clim <- readRDS(paste0(sp_fut_clim_dir, sppp_code, ".gz"))
-  
-  cmip_rast <- sp_fut_clim %>% 
-    filter(cmip_idx == cmip_id) %>% 
-    pull(clim_future_sp)
-  
-  cwd_sens = sensitivity %>% subset("cwd_sens")
-  pet_sens = sensitivity %>% subset("pet_sens")
-  intercept = sensitivity %>% subset("intercept")
-  rwi_rast <- intercept + (cmip_rast[[1]]$cwd.spstd * cwd_sens) + (cmip_rast[[1]]$pet.spstd * pet_sens)
-  names(rwi_rast) = "rwi_pred"
-  return(rwi_rast)
-}
-
 
 
 calc_rwi_partials <- function(sppp_code, cmip_id, sensitivity){
+  select <- dplyr::select
+  
   ## Function used to predict species' RWI rasters based on predicted 
   ## sensitivity raster and assigned CMIP model of future climate. Also
   ## integrates calculations of partialling our climate / sensitivity variations
   
-  sp_fut_clim <- readRDS(paste0(sp_fut_clim_dir, sppp_code, ".gz"))
+  ## Calculate mean sensitivity paramaters for partialled prediction
+  mean_cwd_sens <- sensitivity$cwd_sens %>% mean()
+  mean_pet_sens <- sensitivity$pet_sens %>% mean()
+  mean_intercept <- sensitivity$intercept %>% mean() 
   
-  cmip_rast <- sp_fut_clim %>% 
-    filter(cmip_idx == cmip_id) %>% 
+  ## Predict future RWI
+  sp_fut_clim <- sp_clim %>% 
+    filter(sp_code == sppp_code) %>% 
     pull(clim_future_sp)
+  sp_fut_clim <- sp_fut_clim[[1]] %>% 
+    lazy_dt() %>% 
+    select(x,y,
+           cwd_cmip = paste0("cwd_cmip", as.character(cmip_id)),
+           pet_cmip = paste0("pet_cmip", as.character(cmip_id))) %>% 
+    left_join(sensitivity, by = c("x", "y")) %>% 
+    mutate(rwi_pred = intercept + pet_cmip * pet_sens + cwd_cmip * cwd_sens,
+           rwi_pclim = mean_intercept + (pet_cmip * mean_pet_sens) + (cwd_cmip * mean_cwd_sens)) %>% 
+    as_tibble()
   
-  cmip_rast = cmip_rast[[1]]
-  
-  cwd_sens = sensitivity %>% subset("cwd_sens")
-  pet_sens = sensitivity %>% subset("pet_sens")
-  intercept = sensitivity %>% subset("intercept")
-  rwi_rast <- intercept + (cmip_rast$cwd.spstd * cwd_sens) + (cmip_rast$pet.spstd * pet_sens)
-  names(rwi_rast) = "rwi_pred"
-  
-  # mean_fut_cwd <- cmip_rast %>% subset("cwd.spstd") %>% cellStats(stat = "mean")
-  # mean_fut_pet <- cmip_rast %>% subset("pet.spstd") %>% cellStats(stat = "mean")
-  # rwi_psens <- intercept + (mean_fut_cwd * cwd_sens) + (mean_fut_pet * pet_sens)
-  # names(rwi_psens) = "rwi_psens"
-  
-  
-  mean_cwd_sens <- sensitivity %>% subset("cwd_sens") %>% cellStats(stat = "mean")
-  mean_pet_sens <- sensitivity %>% subset("pet_sens") %>% cellStats(stat = "mean")
-  mean_intercept <-sensitivity %>% subset("intercept") %>% cellStats(stat = "mean") 
-  rwi_pclim <- mean_intercept + (cmip_rast$cwd.spstd * mean_cwd_sens) + (cmip_rast$pet.spstd * mean_pet_sens)
-  names(rwi_pclim) = "rwi_pclim"
-  
-  # return(list("rwi_pred" = rwi_rast, "rwi_psens" = rwi_psens, "rwi_pclim" = rwi_pclim))
-  
-  return(list("rwi_pred" = c(rwi_rast), "rwi_pclim" = c(rwi_pclim)))
+  return(sp_fut_clim)
 }
 
-quantiles <- function(x){
-  ## Defines quantiles used to summarize MC runs
-  quantile(x, c(0.025, 0.975), na.rm=TRUE)
-}
-
-# extract_quantiles <- function(rwi_preds){
-#   ## Extracts desired quantiles for MC runs
-#   
-#   rwi_quantiles <- rwi_preds %>% 
-#     pull(rwi_predictions) %>%
-#     brick() %>% 
-#     calc(quantiles)
-#   return(rwi_quantiles)
-# }
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -224,35 +179,10 @@ pull_layer <- function(brick, layer_name){
 }
 
 
-calc_mean_fut_clim <- function(sppp_code){
-  sp_fut_clim <- readRDS(paste0(sp_fut_clim_dir, sppp_code, ".gz"))
-  clim_pulls <- sp_fut_clim %>%
-    mutate(cwd.fut = pmap(list(brick = clim_future_sp, layer_name = "cwd.spstd"),
-                          .f = pull_layer),
-           pet.fut = pmap(list(brick = clim_future_sp, layer_name = "pet.spstd"),
-                          .f = pull_layer))
-  
-  cwd.fut.q <- clim_pulls %>%
-    pull(cwd.fut) %>%
-    brick()
-  cwd.fut.q <- raster::mean(cwd.fut.q)
-  names(cwd.fut.q) = "cwd.fut"
-  
-  pet.fut.q <- clim_pulls %>%
-    pull(pet.fut) %>%
-    brick()
-  pet.fut.q <- raster::mean(pet.fut.q)
-  names(pet.fut.q) = "pet.fut"
-  
-  out_brick <- brick(c(cwd.fut.q, pet.fut.q))
-  return(out_brick)
-}
-
-
 calc_rwi_quantiles <- function(spp_code, mc_data){
   set.seed(my_seed) # Re-setting seed at start of each iteration to ensure interrupted jobs still produce replicable results
-
   tic()
+
   ## Iterating through each species
   print(spp_code)
   
@@ -270,17 +200,9 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
                                           pet_pet = pet_pet),
                                      .f = predict_sens,
                                      .options = furrr_options(seed = my_seed, 
-                                                              packages = c( "dplyr", "raster"))))
+                                                              packages = c( "dplyr", "raster", "dtplyr"))))
 
   
-  # sp_sensitivity <- mc_data %>% 
-  #   mutate(sensitivity = future_pmap(list(sppp_code = spp_code,
-  #                                         coefs = ss_coefs),
-  #                             .f = predict_sens,
-  #                             .options = furrr_options(seed = my_seed, 
-  #                                                      packages = c( "dplyr", "raster"))))
-
-
   ## Predict future RWI for each of n_mc run
   sp_predictions <- sp_sensitivity %>% 
     mutate(rwi_predictions = future_pmap(list(sppp_code = spp_code,
@@ -288,109 +210,40 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
                                               sensitivity = sensitivity),
                                          .f = calc_rwi_partials,
                                          .options = furrr_options(seed = my_seed,
-                                                                  packages = "raster"))) 
+                                                                  packages = c("raster", "dplyr", "dtplyr")))) 
   
   sp_predictions <- sp_predictions %>% 
-    unnest_wider(rwi_predictions) %>% 
-    mutate(rwi_pred = rwi_pred[[1]],
-           rwi_pclim = rwi_pclim[[1]])
-   
-  # ## For each species, calculate cell-wise quantiles of rwi from n_mc runs
-  # rwi_pred_q <- sp_predictions %>%
-  #   pull(rwi_pred) %>%
-  #   brick() %>%
-  #   calc(quantiles)
-  # rwi_psens_q <- sp_predictions %>%
-  #   pull(rwi_psens) %>%
-  #   brick() %>%
-  #   calc(quantiles)
-  # rwi_pclim_q <- sp_predictions %>%
-  #   pull(rwi_pclim) %>%
-  #   brick() %>%
-  #   calc(quantiles)
-  rwi_pred_q <- sp_predictions %>%
-    pull(rwi_pred) %>%
-    brick()
-  # rwi_psens_q <- sp_predictions %>%
-  #   pull(rwi_psens) %>%
-  #   brick()
-  rwi_pclim_q <- sp_predictions %>%
-    pull(rwi_pclim) %>%
-    brick()
-  
-  beginCluster(n = n_cores)
-  rwi_pred_mean <- raster::mean(rwi_pred_q)
-  rwi_pred_q <- clusterR(rwi_pred_q, calc, args = list(fun = quantiles))
-  
-  # rwi_psens_q <- clusterR(rwi_psens_q, calc, args = list(fun = quantiles))
-  rwi_pclim_mean <- raster::mean(rwi_pclim_q)
-  rwi_pclim_q <- clusterR(rwi_pclim_q, calc, args = list(fun = quantiles))
-  endCluster()
+    select(iter_idx, rwi_predictions) %>% 
+    unnest(rwi_predictions) %>% 
+    lazy_dt()
 
-  names(rwi_pred_q) = c("rwi_pred_025", "rwi_pred_975")
-  names(rwi_pred_mean) = c("rwi_pred_mean")
-  rwi_pred_q = brick(c(rwi_pred_q, rwi_pred_mean))
-  # names(rwi_psens_q) = c("rwi_psens_025", "rwi_psens_975")
-  names(rwi_pclim_q) = c("rwi_pclim_025", "rwi_pclim_975")
-  names(rwi_pclim_mean) = c("rwi_pclim_mean")
-  rwi_pclim_q = brick(c(rwi_pclim_q, rwi_pclim_mean))
+  ## Store historic climate to re-join later
+  hist_df <- sp_predictions %>% 
+    filter(iter_idx == 1) %>% 
+    select(x, y, cwd_hist, pet_hist)
     
-  ## Generate rasters summarizing mean estimate of sensitivity
-  sens_pulls <- sp_sensitivity %>%
-    mutate(cwd = pmap(list(brick = sensitivity, layer_name = "cwd_sens"),
-                      .f = pull_layer),
-           pet = pmap(list(brick = sensitivity, layer_name = "pet_sens"),
-                      .f = pull_layer),
-           intercept = pmap(list(brick = sensitivity, layer_name = "intercept"),
-                            .f = pull_layer))
-  
-  sens_cwd_q <- sens_pulls %>%
-    pull(cwd) %>%
-    brick()
-  sens_cwd_q <- raster::mean(sens_cwd_q)
-  names(sens_cwd_q) = "cwd_sens"
-  
-  
-  sens_pet_q <- sens_pulls %>%
-    pull(pet) %>%
-    brick()
-  sens_pet_q <- raster::mean(sens_pet_q)
-  names(sens_pet_q) = "pet_sens"
-  
-  sens_int_q <- sens_pulls %>%
-    pull(intercept) %>%
-    brick()
-  sens_int_q <- raster::mean(sens_int_q)
-  names(sens_int_q) = "intercept"
-
-  ## Pull historic climate
-  clim_historic_sp <- sp_hist_clim %>% 
-    filter(sp_code == spp_code) %>% 
-    pull(clim_historic_sp)
-  
-  ## Pull mean future climate
-  clim_fut_sp <- calc_mean_fut_clim(spp_code)
-
-  ## Stack rasters and convert to dataframe
-  out_df <- brick(c(clim_historic_sp, 
-                    clim_fut_sp,
-                    sens_cwd_q, sens_pet_q, sens_int_q, 
-                    rwi_pred_q, rwi_pclim_q)) %>% 
-    as.data.frame(xy = TRUE) %>% 
-    mutate(sp_code = spp_code) %>% 
-    drop_na()
+  ## For each species, calculate cell-wise quantiles of variables from n_mc runs
+  sp_predictions <- sp_predictions %>% 
+    group_by(x, y) %>% 
+    summarise(rwi_pred_mean = mean(rwi_pred),
+              rwi_pred_025 = quantile(rwi_pred, 0.025),
+              rwi_pred_975 = quantile(rwi_pred, 0.975),
+              rwi_pclim_mean = mean(rwi_pclim),
+              rwi_pclim_025 = quantile(rwi_pclim, 0.025),
+              rwi_pclim_975 = quantile(rwi_pclim, 0.975),
+              cwd_sens = mean(cwd_sens),
+              pet_sens = mean(pet_sens),
+              int_sens = mean(intercept),
+              cwd_fut = mean(cwd_cmip),
+              pet_fut = mean(pet_cmip)) %>% 
+    left_join(hist_df, by = c("x", "y")) %>% 
+    as_tibble()
   
   ## Write out
-  out_df %>% 
+  sp_predictions %>% 
     write_rds(file = paste0(out_dir, spp_code, ".gz"), compress = "gz")
   
   toc()
-  ## Clear raster temp files from system
-  remove(sp_predictions)
-  remove(sens_pulls, sp_sensitivity)
-  toc()
-  removeTmpFiles(0)
-  
   return("done")
 }
 
@@ -407,9 +260,15 @@ mc_nests <- mc_nests %>%
 
 
 
-spp_code = "abal"
-mc_data = (mc_nests %>% filter(sp_code == spp_code) %>% pull(data))[[1]]
-l = profvis(calc_rwi_quantiles(spp_code, mc_data))
+## Profiling of main function
+# spp_code = "abal"
+# mc_data = (mc_nests %>% filter(sp_code == spp_code) %>% pull(data))[[1]]
+# l = profvis(calc_rwi_quantiles(spp_code, mc_data))
+
+
+
+
+
 
 # %>% 
 #   select(-data) %>% 
@@ -494,7 +353,7 @@ l = profvis(calc_rwi_quantiles(spp_code, mc_data))
 #   saveRDS(file = paste0(wdir,"out/predictions/sp_predictions.rds") )
 
 
-crs <- crs(cwd_rast)
+crs_template <- crs(cwd_future)
 cwd_df <- cwd_rast %>% as.data.frame(xy = TRUE) 
 raster_template <- cwd_df %>% select(x,y)
 cwd_df <- cwd_df %>% 
@@ -510,3 +369,72 @@ data("World")
 tmap_mode("view")
 tm_shape(cwd_rast) +
   tm_raster()
+
+tmap_mode("view")
+tm_shape(cwd_vals) +
+  tm_raster()
+
+
+
+
+
+
+############ FUNCTION GRAVEYARD
+
+calc_rwi <- function(sppp_code, cmip_id, sensitivity){
+  ## Function used to predict species' RWI rasters based on predicted 
+  ## sensitivity raster and assigned CMIP model of future climate
+  
+  sp_fut_clim <- readRDS(paste0(sp_fut_clim_dir, sppp_code, ".gz"))
+  
+  cmip_rast <- sp_fut_clim %>% 
+    filter(cmip_idx == cmip_id) %>% 
+    pull(clim_future_sp)
+  
+  cwd_sens = sensitivity %>% subset("cwd_sens")
+  pet_sens = sensitivity %>% subset("pet_sens")
+  intercept = sensitivity %>% subset("intercept")
+  rwi_rast <- intercept + (cmip_rast[[1]]$cwd.spstd * cwd_sens) + (cmip_rast[[1]]$pet.spstd * pet_sens)
+  names(rwi_rast) = "rwi_pred"
+  return(rwi_rast)
+}
+
+quantiles <- function(x){
+  ## Defines quantiles used to summarize MC runs
+  quantile(x, c(0.025, 0.975), na.rm=TRUE)
+}
+
+# extract_quantiles <- function(rwi_preds){
+#   ## Extracts desired quantiles for MC runs
+#   
+#   rwi_quantiles <- rwi_preds %>% 
+#     pull(rwi_predictions) %>%
+#     brick() %>% 
+#     calc(quantiles)
+#   return(rwi_quantiles)
+# }
+
+
+calc_mean_fut_clim <- function(sppp_code){
+  sp_fut_clim <- readRDS(paste0(sp_fut_clim_dir, sppp_code, ".gz"))
+  clim_pulls <- sp_fut_clim %>%
+    mutate(cwd.fut = pmap(list(brick = clim_future_sp, layer_name = "cwd.spstd"),
+                          .f = pull_layer),
+           pet.fut = pmap(list(brick = clim_future_sp, layer_name = "pet.spstd"),
+                          .f = pull_layer))
+  
+  cwd.fut.q <- clim_pulls %>%
+    pull(cwd.fut) %>%
+    brick()
+  cwd.fut.q <- raster::mean(cwd.fut.q)
+  names(cwd.fut.q) = "cwd.fut"
+  
+  pet.fut.q <- clim_pulls %>%
+    pull(pet.fut) %>%
+    brick()
+  pet.fut.q <- raster::mean(pet.fut.q)
+  names(pet.fut.q) = "pet.fut"
+  
+  out_brick <- brick(c(cwd.fut.q, pet.fut.q))
+  return(out_brick)
+}
