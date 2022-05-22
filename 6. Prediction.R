@@ -37,7 +37,7 @@ future::plan(multisession, workers = n_cores)
 
 my_seed <- 5597
 
-n_mc <- 10000
+n_mc <- 100
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data --------------------------------------------------------
@@ -203,6 +203,7 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
                                                               packages = c( "dplyr", "raster", "dtplyr"))))
 
   
+  
   ## Predict future RWI for each of n_mc run
   sp_predictions <- sp_sensitivity %>% 
     mutate(rwi_predictions = future_pmap(list(sppp_code = spp_code,
@@ -211,12 +212,15 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
                                          .f = calc_rwi_partials,
                                          .options = furrr_options(seed = my_seed,
                                                                   packages = c("raster", "dplyr", "dtplyr")))) 
-  
+
   sp_predictions <- sp_predictions %>% 
     select(iter_idx, rwi_predictions) %>% 
-    unnest(rwi_predictions) %>% 
-    lazy_dt()
+    unnest(rwi_predictions)
 
+  ## Drop occasional observations with missing CMIP data
+  sp_predictions <- sp_predictions[complete.cases(sp_predictions %>% select(cwd_cmip, pet_cmip)),] %>% 
+    lazy_dt()
+  
   ## Store historic climate to re-join later
   hist_df <- sp_predictions %>% 
     filter(iter_idx == 1) %>% 
@@ -235,7 +239,8 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
               pet_sens = mean(pet_sens),
               int_sens = mean(intercept),
               cwd_fut = mean(cwd_cmip),
-              pet_fut = mean(pet_cmip)) %>% 
+              pet_fut = mean(pet_cmip),
+              .groups = "drop") %>%
     left_join(hist_df, by = c("x", "y")) %>% 
     as_tibble()
   
@@ -260,10 +265,10 @@ mc_nests <- mc_nests %>%
 
 
 
-## Profiling of main function
-# spp_code = "abal"
-# mc_data = (mc_nests %>% filter(sp_code == spp_code) %>% pull(data))[[1]]
-# l = profvis(calc_rwi_quantiles(spp_code, mc_data))
+# Profiling of main function
+spp_code = "juex"
+mc_data = (mc_nests %>% filter(sp_code == spp_code) %>% pull(data))[[1]]
+l = profvis(calc_rwi_quantiles(spp_code, mc_data))
 
 
 
