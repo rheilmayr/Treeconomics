@@ -29,6 +29,7 @@ library(prediction)
 library(tictoc)
 library(furrr)
 library(snow)
+library(profvis)
 library(tmap)
 
 n_cores <- availableCores() - 2
@@ -36,7 +37,7 @@ future::plan(multisession, workers = n_cores)
 
 my_seed <- 5597
 
-n_mc <- 100
+n_mc <- 10000
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data --------------------------------------------------------
