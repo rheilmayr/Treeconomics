@@ -10,9 +10,6 @@
 # - 
 #
 # Todo ideas:
-# - PRIORITY: Should use both spatial and annual variation in CWD / AET 
-# - to characterize niche - Waiting on new data from Fran (5/21/22)
-# - PRIORITY: SHOULD ADJUST MASKING TO ENSURE THAT WE'RE EXTRACTING EVERY PIXEL THAT OVERLAPS RANGE
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -29,11 +26,12 @@ library(stringr)
 library(raster)
 library(readr)
 library(tmap)
-library(furrr)
+library(tictoc)
 select <- dplyr::select
 
 
-n_cores <- availableCores() - 2
+library(furrr)
+n_cores <- 6
 future::plan(multisession, workers = n_cores)
 
 
@@ -83,7 +81,9 @@ pull_clim <- function(spp_code){
   print(spp_code)
   # Pull relevant range map
   sp_range <- range_sf %>%
-    filter(sp_code == spp_code)
+    filter(sp_code == spp_code) %>% 
+    rasterize(cwd_historic, getCover=TRUE)
+  sp_range[sp_range==0] <- NA
 
   # Pull cwd and aet values
   cwd_vals <- cwd_historic %>% 
@@ -113,7 +113,10 @@ species_list <- range_sf %>%
   drop_na()
 
 clim_df <- species_list %>% 
-  mutate(clim_vals = map(sp_code, pull_clim))
+  mutate(clim_vals = future_map(sp_code, 
+                                .f = pull_clim,
+                                .options = furrr_options(packages = c( "dplyr", "raster", "sf")),
+                                .progress = TRUE))
 
 
 ## Summarize meand and sd of each species' climate
@@ -168,12 +171,13 @@ clim_df <- clim_df %>%
   left_join(niche_df, by = "sp_code")
 
 clim_df <- clim_df %>% 
-  mutate(clim_historic_sp = pmap(list(hist_clim_vals = clim_vals,
-                                    pet_mean = pet_mean,
-                                    pet_sd = pet_sd,
-                                    cwd_mean = cwd_mean,
-                                    cwd_sd = cwd_sd), 
-                               .f = sp_std_historic_df))
+  mutate(clim_historic_sp = future_pmap(list(hist_clim_vals = clim_vals,
+                                             pet_mean = pet_mean,
+                                             pet_sd = pet_sd,
+                                             cwd_mean = cwd_mean,
+                                             cwd_sd = cwd_sd),
+                                        .f = sp_std_historic_df,
+                                        .options = furrr_options(packages = c( "dplyr"))))
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Pull CMIP projections -----------------------------------------------
@@ -225,13 +229,14 @@ sp_fut_clim <- clim_df %>%
 
 
 sp_fut_clim <- sp_fut_clim %>% 
-  mutate(clim_future_sp = pmap(list(cmip_df = cmip_df,
+  mutate(clim_future_sp = future_pmap(list(cmip_df = cmip_df,
                                     hist_clim_vals = clim_vals,
                                     pet_mean = pet_mean,
                                     pet_sd = pet_sd,
                                     cwd_mean = cwd_mean,
                                     cwd_sd = cwd_sd), 
-                               .f = sp_std_future_df)) %>% 
+                               .f = sp_std_future_df,
+                               .options = furrr_options(packages = c( "dplyr")))) %>% 
   select(-cmip_df)
 
 
