@@ -93,7 +93,7 @@ trim_df <- flm_df %>%
   drop_na()
 
 # 5. Prediction rasters
-rwi_list <- list.files(paste0(wdir, "out/predictions/sp_rwi_pred_20/"), pattern = ".rds", full.names = TRUE)
+rwi_list <- list.files(paste0(wdir, "out/predictions/sp_rwi_pred_100/"), pattern = ".gz", full.names = TRUE)
 sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
 # sp_predictions <- readRDS(paste0(wdir, "out/predictions/sp_predictions.rds"))
 
@@ -857,18 +857,18 @@ margins_plot
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ## ToDo - rwi_null should probably be calculated as part of the MC analysis in prediction script?
 sp_predictions <- sp_predictions %>% 
-  mutate(rwi_null = cwd.spstd * cwd_sens + pet.spstd * pet_sens + intercept,
+  mutate(rwi_null = cwd_hist * cwd_sens + pet_hist * pet_sens + int_sens,
          rwi_change_mean = rwi_pred_mean - rwi_null,
          rwi_change_975 = rwi_pred_975 - rwi_null,
          rwi_change_025 = rwi_pred_025 - rwi_null,
          rwi_change_pclim_mean = rwi_pclim_mean - rwi_null,
          rwi_change_pclim_975 = rwi_pclim_975 - rwi_null,
          rwi_change_pclim_025 = rwi_pclim_025 - rwi_null,
-         cwd_change = cwd.fut - cwd.spstd,
-         pet_change = pet.fut - pet.spstd)
+         cwd_change = cwd_fut - cwd_hist,
+         pet_change = pet_fut - pet_hist)
 
 plot_dat <- sp_predictions %>%
-  filter(((abs(cwd.spstd)<2.5) & (abs(pet.spstd<2.5)))) %>%
+  filter(((abs(cwd_hist)<2.5) & (abs(pet_hist<2.5)))) %>%
   drop_na()
 
 seq_min <- -2.625
@@ -879,9 +879,9 @@ convert_bin <- function(n){
   sequence[n] + 0.125
 }
 plot_dat <- plot_dat %>% 
-  mutate(cwd.q = cut(cwd.spstd, breaks = sequence, labels = FALSE),
+  mutate(cwd.q = cut(cwd_hist, breaks = sequence, labels = FALSE),
          cwd.q = convert_bin(cwd.q),
-         pet.q = cut(pet.spstd, breaks = sequence, labels = FALSE),
+         pet.q = cut(pet_hist, breaks = sequence, labels = FALSE),
          pet.q = convert_bin(pet.q))
 
 
