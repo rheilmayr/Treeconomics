@@ -32,12 +32,12 @@ library(snow)
 library(profvis)
 library(tmap)
 
-n_cores <- availableCores() - 2
+n_cores <- availableCores() - 4
 future::plan(multisession, workers = n_cores)
 
 my_seed <- 5597
 
-n_mc <- 100
+n_mc <- 10000
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data --------------------------------------------------------
@@ -49,7 +49,7 @@ dir.create(file.path(out_dir), showWarnings = FALSE)
 
 
 # 1. Second stage model
-boot_ss <- readRDS(paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
+boot_ss <- readRDS(paste0(wdir, "out/second_stage/ss_bootstrap.gz"))
  
 mod_df <- boot_ss$t
 colnames(mod_df) <- c("int_int", "int_cwd", "int_pet",
@@ -214,6 +214,7 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
               int_sens = mean(intercept),
               cwd_fut = mean(cwd_cmip),
               pet_fut = mean(pet_cmip),
+              sp_code = spp_code,
               .groups = "drop") %>%
     left_join(hist_df, by = c("x", "y")) %>% 
     as_tibble()
@@ -231,6 +232,7 @@ mc_nests <- sp_mc %>%
   group_by(sp_code) %>%
   nest() %>% 
   drop_na()
+
 
 mc_nests <- mc_nests %>% 
   mutate(predictions = pmap(list(spp_code = sp_code,
