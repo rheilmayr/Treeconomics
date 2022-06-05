@@ -42,6 +42,7 @@ library(ggExtra)
 library(ggsn)
 library(maptools)
 library(broom)
+library(ggExtra)
 
 
 select <- dplyr::select
@@ -93,7 +94,7 @@ trim_df <- flm_df %>%
   drop_na()
 
 # 5. Prediction rasters
-rwi_list <- list.files(paste0(wdir, "out/predictions/sp_rwi_pred_100/"), pattern = ".gz", full.names = TRUE)
+rwi_list <- list.files(paste0(wdir, "out/predictions/sp_rwi_pred_10000/"), pattern = ".gz", full.names = TRUE)
 sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
 # sp_predictions <- readRDS(paste0(wdir, "out/predictions/sp_predictions.rds"))
 
@@ -336,8 +337,8 @@ hex <- flm_df %>% ggplot(aes(x = cwd.spstd, y = pet.spstd, weight = nobs)) +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") + 
   coord_fixed() +
-  scale_fill_viridis_c(name = bquote('Species')) +
-  scale_color_viridis_c(name = bquote('Species')) +
+  scale_fill_viridis_c() +
+  # scale_color_viridis_c(name = bquote('Species')) +
   theme_bw(base_size = 31)+
   theme(legend.position = c(.15,.83),
         legend.text = element_text(size=15),
@@ -345,8 +346,8 @@ hex <- flm_df %>% ggplot(aes(x = cwd.spstd, y = pet.spstd, weight = nobs)) +
         legend.background = element_blank(),
         panel.grid.major = element_blank(), panel.grid.minor = element_blank())
 hex
-hex2 <- ggMarginal(hex, type="histogram", fill ="#404788FF", alpha=.5)
-hex2
+# hex2 <- ggMarginal(hex, type="histogram", fill ="#404788FF", alpha=.5)
+# hex2
 
 figs1 <- map/range_map
 figs1+
@@ -481,8 +482,8 @@ figs1
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # CWD
 fullrange_cwd <- sp_predictions %>% 
-  select(cwd.spstd) 
-fullrange_quantiles <- (fullrange_cwd$cwd.spstd) %>% 
+  select(cwd_hist) 
+fullrange_quantiles <- (fullrange_cwd$cwd_hist) %>% 
   quantile(probs = seq(0, 1, 0.01))
 
 itrdb_cwd <- mod_df %>% 
@@ -495,14 +496,14 @@ itrdb_hist <- itrdb_cwd %>%
   geom_histogram(bins = 50) +
   xlim(-2.5, 5) +
   theme_bw() +
-  ggtitle("Frequency among ITRDB sites")
+  ggtitle("CWD frequency among ITRDB sites")
 
 fullrange_hist <- fullrange_cwd %>% 
-  ggplot(aes(x = cwd.spstd)) +
+  ggplot(aes(x = cwd_hist)) +
   geom_histogram(bins = 50) +
   xlim(-2.5, 5) +
   theme_bw() +
-  ggtitle("Frequency across species ranges")
+  ggtitle("CWD frequency across species ranges")
 
 quantile_df <- tibble(itrdb = itrdb_quantiles, fullrange = fullrange_quantiles)
 
@@ -511,8 +512,8 @@ qq_plot <- quantile_df %>%
   geom_point() +
   # xlim(c(-2, 2)) +
   # ylim(c(-2, 2)) +
-  xlim(c(-3, 15)) +
-  ylim(c(-3, 15)) +
+  xlim(c(-4, 15)) +
+  ylim(c(-4, 15)) +
   geom_abline(intercept = 0, slope = 1) +
   theme_bw() +
   coord_fixed() +
@@ -523,8 +524,8 @@ qq_plot <- quantile_df %>%
 
 # PET
 fullrange_pet <- sp_predictions %>% 
-  select(pet.spstd) 
-fullrange_pquantiles <- (fullrange_pet$pet.spstd) %>% 
+  select(pet_hist) 
+fullrange_pquantiles <- (fullrange_pet$pet_hist) %>% 
   quantile(probs = seq(0, 1, 0.01))
 
 itrdb_pet <- mod_df %>% 
@@ -537,15 +538,15 @@ itrdb_pet_hist <- itrdb_pet %>%
   geom_histogram(bins = 50) +
   xlim(-2.5, 5) +
   theme_bw() +
-  ggtitle("Frequency among ITRDB sites")
+  ggtitle("PET frequency among ITRDB sites")
 
 
 fullrange_pet_hist <- fullrange_pet %>% 
-  ggplot(aes(x = pet.spstd)) +
+  ggplot(aes(x = pet_hist)) +
   geom_histogram(bins = 50) +
   xlim(-2.5, 5) +
   theme_bw() +
-  ggtitle("Frequency across species ranges")
+  ggtitle("PET frequency across species ranges")
 
 pquantile_df <- tibble(itrdb = itrdb_pquantiles, fullrange = fullrange_pquantiles)
 
@@ -554,12 +555,12 @@ pet_qq_plot <- pquantile_df %>%
   geom_point() +
   # xlim(c(-2, 2)) +
   # ylim(c(-2, 2)) +
-  xlim(c(-3.5, 15)) +
-  ylim(c(-3.5, 15)) +
+  xlim(c(-3.5, 5)) +
+  ylim(c(-3.5, 5)) +
   geom_abline(intercept = 0, slope = 1) +
   theme_bw() +
   coord_fixed() +
-  ggtitle("QQ-plot comparing CWD distributions")
+  ggtitle("QQ-plot comparing PET distributions")
 
 (itrdb_pet_hist / fullrange_pet_hist) | pet_qq_plot
 
