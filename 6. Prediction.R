@@ -44,9 +44,10 @@ n_mc <- 10000
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define path
 wdir <- 'remote/'
+
+# Create output directory
 out_dir <- paste0(wdir,"out/predictions/sp_rwi_pred_", as.character(n_mc), "/")
 dir.create(file.path(out_dir), showWarnings = FALSE)
-
 
 # 1. Second stage model
 boot_ss <- readRDS(paste0(wdir, "out/second_stage/ss_bootstrap.gz"))
