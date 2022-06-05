@@ -99,12 +99,22 @@ sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
 # sp_predictions <- readRDS(paste0(wdir, "out/predictions/sp_predictions.rds"))
 
 
-# 6. Second stage model
-mod_df <- trim_df
-cwd_mod <- readRDS(paste0(wdir, "out/second_stage/cwd_mod.rds"))
-cwd_vcov <- readRDS(paste0(wdir, "out/second_stage/cwd_mod_vcov.rds"))
-pet_mod <- readRDS(paste0(wdir, "out/second_stage/pet_mod.rds"))
-int_mod <- readRDS(paste0(wdir, "out/second_stage/int_mod.rds"))
+## 6. Second stage model
+# mod_df <- trim_df
+# cwd_mod <- readRDS(paste0(wdir, "out/second_stage/cwd_mod.rds"))
+# cwd_vcov <- readRDS(paste0(wdir, "out/second_stage/cwd_mod_vcov.rds"))
+# pet_mod <- readRDS(paste0(wdir, "out/second_stage/pet_mod.rds"))
+# int_mod <- readRDS(paste0(wdir, "out/second_stage/int_mod.rds"))
+
+boot_ss <- readRDS(paste0(wdir, "out/second_stage/ss_bootstrap.gz"))
+mod_df <- boot_ss$t
+colnames(mod_df) <- c("int_int", "int_cwd", "int_pet",
+                      "cwd_int", "cwd_cwd", "cwd_pet",
+                      "pet_int", "pet_cwd", "pet_pet")
+mod_df <- mod_df %>% 
+  as_tibble() %>% 
+  mutate(iter_idx = seq(1:10000))
+
 
 # 7. Genus model predictions
 genus_predictions <- readRDS(paste0(wdir, "out/second_stage/genus_mods.rds"))
@@ -625,18 +635,26 @@ cwd_est_plot / pet_est_plot
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Main sensitivity plot --------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Note: PET 1-99% quantiles vary from -1.9 to 3.5; PET from -2.9 to 1.8. -3 to 3.5 seems like a good block for plots
+cwd_min <- flm_df$pet.spstd %>% quantile(0.01)
+cwd_max <- flm_df$pet.spstd %>% quantile(0.99)
+pred_min <- -2.5 
+pred_max <- 2.5
+
+
 ### Binned plot of cwd sensitivity
-seq_min <- -2.625
-seq_max <- 2.625
 seq_inc <- 0.25
+half_inc <- (seq_inc / 2)
+seq_min <- pred_min - half_inc
+seq_max <- pred_max + half_inc
 sequence <- seq(seq_min, seq_max, seq_inc)
 
 convert_bin <- function(n){
-  sequence[n] + 0.125
+  sequence[n] + half_inc
 }
 
 plot_dat <- trim_df %>%
-  filter(((abs(cwd.spstd)<3) & (abs(pet.spstd<3)))) %>%
+  # filter(((abs(cwd.spstd)<3) & (abs(pet.spstd<3)))) %>%
   drop_na()
 
 plot_dat_a <- plot_dat %>%
@@ -651,14 +669,12 @@ plot_dat_b <- plot_dat_a %>%
   summarize(cwd_sens = mean(estimate_cwd.an, na.rm = TRUE),
             pet_sens = mean(estimate_pet.an, na.rm = TRUE),
             n = n()) %>%
-  filter(n>10)
+  filter(n>=5)
 
 
 binned_margins <- plot_dat_b %>%
-  ggplot(aes(x = cwd.q, y = pet.q, fill = cwd_sens)) +
+  ggplot(aes(x = cwd.q, y = pet.q, fill = pet_sens)) +
   geom_tile() +
-  xlim(c(-2, 1.1))+
-  ylim(c(-2,1.1))+
   # scale_fill_viridis_c(direction = -1) +
   scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
   ylab("Deviation from mean PET")+
@@ -674,12 +690,16 @@ binned_margins <- plot_dat_b %>%
   xlab("Historic CWD\n(Deviation from species mean)") +
   coord_fixed() +
   geom_hline(yintercept = 0, size = 1, linetype = 2) +
-  geom_vline(xintercept = 0, size = 1, linetype = 2)+
-  theme(panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
+  geom_vline(xintercept = 0, size = 1, linetype = 2) +
+  xlim(c(pred_min, pred_max)) +
+  ylim(c(pred_min, pred_max))
+# +
+#   theme(panel.grid.major = element_blank(), 
+#         panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
 
 
 binned_margins
+
 # ggsave(paste0(wdir, 'figures\\binned_margins.svg'), plot = binned_margins)
 
 
@@ -768,31 +788,68 @@ binned_margins
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Plot marginal effects from ss model ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-pred_min <- mod_df$cwd.spstd %>% quantile(0.01)
-pred_max <- mod_df$cwd.spstd %>% quantile(0.99)
-sq_predictions <- prediction(cwd_mod, at = list(cwd.spstd = seq(pred_min, pred_max, .1)), 
-                             vcov = cwd_vcov, calculate_se = T, data = mod_df) %>% 
-  summary() %>% 
-  rename(cwd.spstd = "at(cwd.spstd)")
+pull_marg_fx <- function(at_pet, at_cwd){
+  cwd_me_predictions <- mod_df$cwd_int + (at_cwd * mod_df$cwd_cwd) + (at_pet * mod_df$cwd_pet)
+  cwd_ci_min <- cwd_me_predictions %>% quantile(0.025)
+  cwd_ci_max <- cwd_me_predictions %>% quantile(0.975)
+  cwd_mean <- cwd_me_predictions %>% mean()
+  
+  pet_me_predictions <- mod_df$pet_int + (at_cwd * mod_df$pet_cwd) + (at_pet * mod_df$pet_pet)
+  pet_ci_min <- pet_me_predictions %>% quantile(0.025)
+  pet_ci_max <- pet_me_predictions %>% quantile(0.975)
+  pet_mean <- pet_me_predictions %>% mean()
+  return(tibble(cwd_mean = cwd_mean, cwd_ci_min = cwd_ci_min, cwd_ci_max = cwd_ci_max,
+                pet_mean = pet_mean, pet_ci_min = pet_ci_min, pet_ci_max = pet_ci_max))
+}
 
-margins_plot <- ggplot(sq_predictions, aes(x = cwd.spstd)) + 
+
+
+### Binned plot of cwd sensitivity
+cwd_inc <- 0.1
+at_pet <- 0
+cwd_me_df <- tibble(at_cwd = seq(cwd_min, cwd_max, seq_inc))
+cwd_me_df <- cwd_me_df %>%
+  mutate(cwd_me = pmap(list(at_pet = at_pet,
+                            at_cwd = cwd_me_df$at_cwd),
+                       .f = pull_marg_fx)) %>% 
+  unnest(cwd_me)
+
+## Compare to observed sensitivities
+plot_dat_a %>%
+  group_by(cwd.q) %>%
+  summarize(cwd_sens = mean(estimate_cwd.an, na.rm = TRUE),
+            pet_sens = mean(estimate_pet.an, na.rm = TRUE),
+            n = n())
+# %>% 
+#   ggplot(aes(x = cwd.q, y = pet_sens)) +
+#   geom_point()
+
+
+
+# cwd_me_predictions <- prediction(cwd_mod, at = list(cwd.spstd = seq(cwd_min, cwd_max, .1)), 
+#                              vcov = cwd_vcov, calculate_se = T, data = mod_df) %>% 
+#   summary() %>% 
+#   rename(cwd.spstd = "at(cwd.spstd)")
+
+margins_plot <- ggplot(cwd_me_df, aes(x = at_cwd)) + 
   # stat_smooth(data = trim_df, aes(x = cwd.spstd, y = estimate_cwd.an)) +
-  geom_line(aes(y = Prediction), size = 2) +
-  geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
-  geom_line(aes(y = upper), linetype = 3) +
-  geom_line(aes(y = lower), linetype = 3) +
+  geom_line(aes(y = cwd_mean), size = 2) +
+  geom_ribbon(aes(ymin=cwd_ci_min, ymax=cwd_ci_max), alpha=0.2, fill = "darkblue") +
+  geom_line(aes(y = cwd_ci_max), linetype = 3) +
+  geom_line(aes(y = cwd_ci_min), linetype = 3) +
   geom_hline(yintercept = 0, linetype = 2) +
   xlab("Historic CWD\n(Deviation from species mean)") + 
   ylab("Pred. sensitivity to CWD") + 
   xlim(c(pred_min, pred_max)) +
-  theme_bw(base_size = 25)+
-  theme(panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
+  theme_bw(base_size = 25)
+# +
+#   theme(panel.grid.major = element_blank(), 
+#         panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
 
 margins_plot
 
 
-histogram <- ggplot(mod_df, aes(x = cwd.spstd)) + 
+histogram <- ggplot(trim_df, aes(x = cwd.spstd)) + 
   geom_histogram(bins = 40, alpha = 0.8, fill = "#404788FF", color="white") +
   xlim(c(pred_min, pred_max)) +
   theme_bw(base_size = 25) + 
