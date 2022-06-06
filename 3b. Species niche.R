@@ -347,7 +347,7 @@ an_site_clim_df <- an_site_clim_df %>%
 
 an_site_clim_df <- an_site_clim_df %>% 
   unnest(site_clim) %>% 
-  rename(cwd.spstd = cwd.an, pet.spstd = pet.an) %>% 
+  rename(cwd.an.spstd = cwd.an, pet.an.spstd = pet.an) %>% 
   ungroup() %>% 
   select(-aet.an, -pet_mean, -pet_sd, -cwd_mean, -cwd_sd, -data, -sp_code)
  
