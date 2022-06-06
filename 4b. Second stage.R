@@ -12,6 +12,7 @@
 #
 # ToDo:
 # - Mechanisms: Think through this model in more detail
+# - Return to robustness tests (everything below bootstrap)
 #
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -56,39 +57,17 @@ n_mc <- 10000
 ### Define path
 wdir <- 'remote\\'
 
-# 1. Historic species niche data
-niche_csv <- paste0(wdir, 'out/climate/clim_niche.csv')
-niche_df <- read_csv(niche_csv) %>% 
-  select(-X1)
 
-# 2. Site-specific weather history
-cwd_csv <- paste0(wdir, 'out/climate/essentialcwd_data.csv')
-cwd_df <- read.csv(cwd_csv, sep=',')
-cwd_df <- cwd_df %>% 
-  mutate("site_id" = as.character(site)) %>%
-  select(-site)
-
-# 3a. Site-level regressions
+# 1. Site-level regressions
 flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv')) %>%
   select(-X1)
 
-# # 3b. Tree-level regressions
-# tree_df <- read_csv(paste0(wdir, 'out\\first_stage\\tree_log_pet_cwd.csv')) %>%
-#   select(-X1)
+# 2. Historic site-level climate
+ave_site_clim <- read_rds(paste0(wdir, "out\\climate\\site_ave_clim.gz"))
+flm_df <- flm_df %>% 
+  left_join(ave_site_clim, by = c("collection_id")) ## TODO: Track down why some sites don't have cwd.spstd, but do have regression results
 
-# ggplot(flm_df %>% filter(abs(estimate_cwd.an)<0.01, cwd.min>5), aes(x = estimate_cwd.an)) + 
-#   geom_histogram(bins = 100, alpha=0.4)
-# dim(flm_df %>% filter(abs(estimate_cwd.an)<100))[1] / dim(flm_df)[1] 
-# dim(tree_df %>% filter(abs(estimate_cwd.an)<100))[1] / dim(tree_df)[1] 
-
-
-# old_flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\tree_log_pet_cwd_old.csv')) %>%
-#   select(-X1) %>%
-#   select(-c(year, aet.an, cwd.an, pet.an)) %>%
-#   unique()
-# old_sites <- old_flm_df %>% select(collection_id) %>% unique() %>% pull()
-
-# 4. Site information
+# 3. Site information
 site_df <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
 site_df <- site_df %>% 
   select(collection_id, sp_id)
@@ -98,58 +77,12 @@ flm_df <- flm_df %>%
   rename(species_id = sp_id) %>% 
   mutate(species_id = str_to_lower(species_id))
 
-# 5. Species information
+# 4. Species information
 sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
 sp_info <- sp_info %>% 
   select(species_id, genus, gymno_angio, family)
 flm_df <- flm_df %>% 
-  left_join(sp_info, by = "species_id")
-
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Characterize site-level climate in relation to species range -------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Calculate site-level annual climate
-clim_df = cwd_df %>%
-  group_by(site_id, year) %>%
-  summarise(aet.an = sum(aet),
-            cwd.an = sum(cwd),
-            pet.an = sum(aet+cwd)) %>% 
-  drop_na()
-
-# Calculate site-level historic climate
-hist_clim_df <- clim_df %>%
-  group_by(site_id) %>%
-  filter(year<1980) %>%
-  summarise(aet.ave = mean(aet.an),
-            cwd.ave = mean(cwd.an),
-            pet.ave = mean(pet.an),
-            cwd.min = min(cwd.an))
-
-# Merge historic climate to flm data
-flm_df <- flm_df %>% 
-  inner_join(hist_clim_df, by = c("collection_id" = "site_id"))
-
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Summarize species historic climate -------------------------------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-niche_df <- niche_df %>% 
-  select(sp_code, sp_pet_mean = pet_mean, sp_pet_sd = pet_sd, sp_cwd_mean = cwd_mean, sp_cwd_sd = cwd_sd)
-
-# Merge chronology and species climate niche data
-flm_df <- flm_df %>%
-  inner_join(niche_df, by = c("species_id" = "sp_code")) #note: currently losing ~7k trees (10%) because we don't have range maps
-
-# Calculate species-niche standardized climate
-flm_df <- flm_df %>%
-  mutate(pet.spstd = (pet.ave - sp_pet_mean) / sp_pet_sd,
-         cwd.spstd = (cwd.ave - sp_cwd_mean) / sp_cwd_sd)
-
-# # Calculate tree-species-niche standardized climate
-# flm_df <- flm_df %>%
-#   mutate(pet.trstd = (pet.trmean - sp_pet_mean) / sp_pet_sd,
-#          cwd.trstd = (cwd.trmean - sp_cwd_mean) / sp_cwd_sd)
+  left_join(sp_info, by = "species_id") ## TODO: Track down duplicates here
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -332,6 +265,10 @@ boot_ss_coefs <- boot(mc_df, bs_ss, R = n_mc,
                       sim = "parametric",  
                       ran.gen=function(d,p) d[sample(1:n_obs, n_sites), ])
 
+
+
+mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, data = trim_df)
+summary(mod) ## TODO: Is bootstrap se too similar to simple regression result? Revisit... 
 
 # ## Run second stage model for each of the n datasets
 # mc_df <- mc_df %>%
