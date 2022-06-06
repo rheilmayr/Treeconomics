@@ -39,11 +39,11 @@ library(dtplyr)
 # Define path
 wdir <- 'remote\\'
 
-# 2. Site-specific weather history
-cwd_csv <- paste0(wdir, 'out\\climate\\essentialcwd_data.csv')
-cwd_df <- read_csv(cwd_csv)
-cwd_df <- cwd_df %>% 
-  mutate("site_id" = as.character(site))
+# # 2. Site-specific weather history
+# cwd_csv <- paste0(wdir, 'out\\climate\\essentialcwd_data.csv')
+# cwd_df <- read_csv(cwd_csv)
+# cwd_df <- cwd_df %>% 
+#   mutate("site_id" = as.character(site))
 
 # 1. Dendrochronologies
 dendro_dir <- paste0(wdir, "out\\dendro\\")
@@ -61,23 +61,13 @@ dendro_df <- dendro_df %>%
   as_tibble()
 
 
-# old_dendro_df <- read_csv(paste0(dendro_dir, "rwi_long_old.csv"))
-# old_dendro_df <- old_dendro_df %>% 
-#   filter(year>1900) %>% 
-#   select(-core_id)
-# dendro_sites <- read.csv(paste0(dendro_dir, "2_valid_sites.csv")) %>% 
-#   select(-X) %>% 
-#   mutate(file_name = paste0('sid-', site_id, '_spid-', species_id, '.csv'))
+# 2. Historic site-level climate
+an_site_clim <- read_rds(paste0(wdir, "out\\climate\\site_an_clim.gz"))
+dendro_df <- dendro_df %>% 
+  left_join(an_site_clim, by = c("collection_id", "year"))
 
 
-
-# cwd_sites <- cwd_df %>% 
-#   select(site) %>% 
-#   distinct()
-# cwd_dendro_sites <- dendro_sites %>% 
-#   inner_join(cwd_sites, by = c("site_id" = "site"))
-
-# 4. Site information
+# 3. Site information
 site_smry <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
 site_smry <- site_smry %>% 
   select(collection_id, sp_id) %>% 
@@ -87,7 +77,7 @@ site_smry <- site_smry %>%
 dendro_df <- dendro_df %>% 
   left_join(site_smry, by = 'collection_id')
 
-# 5. Species information
+# 4. Species information
 sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
 sp_info <- sp_info %>% 
   select(species_id, genus, gymno_angio, family)
@@ -98,42 +88,9 @@ psme_list <- site_smry %>%
   pull(collection_id)
 
 
-# 6. Historic species niche data
-niche_csv <- paste0(wdir, 'out/climate/clim_niche.csv')
-niche_df <- read_csv(niche_csv) %>% 
-  select(-X1)
-
-
-
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Summarize and merge site historic climate ------------------------------
+# Export example sites for presentations  ------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Calculate site-level annual climate
-clim_df = cwd_df %>%
-  rename(collection_id = site_id) %>% 
-  group_by(collection_id, year) %>%
-  summarise(aet.an = sum(aet),
-            cwd.an = sum(cwd),
-            pet.an = sum((aet+cwd)),
-            .groups = "drop")
-            # temp.an = mean(tmean),
-            # ppt.an = sum(ppt))
-
-dendro_df <- dendro_df %>% 
-  left_join(clim_df, by = c("collection_id", "year"))
-
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Standardize annual weather by species niche  ------------------------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-niche_df <- niche_df %>% 
-  select(species_id = sp_code, sp_pet_mean = pet_mean, sp_pet_sd = pet_sd, sp_cwd_mean = cwd_mean, sp_cwd_sd = cwd_sd)
-
-dendro_df <- dendro_df %>% 
-  left_join(niche_df, by = c("species_id")) %>% 
-  mutate(pet.an.spstd = (pet.an - sp_pet_mean) / sp_pet_sd,
-         cwd.an.spstd = (cwd.an - sp_cwd_mean) / sp_cwd_sd)
-
 ex_sites <- c("CO559", "CA585")
 dendro_df %>% 
   filter(collection_id %in% ex_sites) %>% 
