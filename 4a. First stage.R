@@ -15,6 +15,7 @@
 # - fix joins to prevent duplicate species_id
 # - think through how to deal with CWD outliers
 # - track down lost observations - currently dropping a lot due to NAN or failed RWI generation
+# - Incorporate code from tree-level analysis script to generate DLNM plots? 
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
