@@ -635,10 +635,17 @@ cwd_est_plot / pet_est_plot
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Main sensitivity plot --------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# test_df <- mc_df %>% 
+#   left_join(flm_df %>% select(collection_id, cwd.spstd, pet.spstd), by = "collection_id")
+# 
+# trim_df <- mc_df %>% 
+#   rename(estimate_cwd.an = cwd_coef,
+#          estimate_pet.an = pet_coef)
+
 # Note: PET 1-99% quantiles vary from -1.9 to 3.5; PET from -2.9 to 1.8. -3 to 3.5 seems like a good block for plots
 cwd_min <- flm_df$pet.spstd %>% quantile(0.01)
 cwd_max <- flm_df$pet.spstd %>% quantile(0.99)
-pred_min <- -2.5 
+pred_min <- -2.5
 pred_max <- 2.5
 
 
@@ -669,12 +676,14 @@ plot_dat_b <- plot_dat_a %>%
   summarize(cwd_sens = mean(estimate_cwd.an, na.rm = TRUE),
             pet_sens = mean(estimate_pet.an, na.rm = TRUE),
             n = n()) %>%
-  filter(n>=5)
+  filter(n>=10)
 
 
 binned_margins <- plot_dat_b %>%
-  ggplot(aes(x = cwd.q, y = pet.q, fill = pet_sens)) +
+  ggplot(aes(x = cwd.q, y = pet.q, fill = cwd_sens)) +
   geom_tile() +
+  # xlim(c(pred_min, pred_max)) +
+  # ylim(c(pred_min, pred_max)) +
   # scale_fill_viridis_c(direction = -1) +
   scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
   ylab("Deviation from mean PET")+
@@ -690,9 +699,7 @@ binned_margins <- plot_dat_b %>%
   xlab("Historic CWD\n(Deviation from species mean)") +
   coord_fixed() +
   geom_hline(yintercept = 0, size = 1, linetype = 2) +
-  geom_vline(xintercept = 0, size = 1, linetype = 2) +
-  xlim(c(pred_min, pred_max)) +
-  ylim(c(pred_min, pred_max))
+  geom_vline(xintercept = 0, size = 1, linetype = 2)
 # +
 #   theme(panel.grid.major = element_blank(), 
 #         panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
