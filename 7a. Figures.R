@@ -631,6 +631,27 @@ cwd_est_plot / pet_est_plot
 
 
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Dynamic lag plot --------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+plot_dlnm <- function(cp){
+}
+
+cp <- cwd_cp
+
+plot_df <- data.frame(est = cp$matfit[3,],
+                      ci_low = cp$matlow[3,],
+                      ci_high = cp$mathigh[3,]) %>% 
+  mutate(lag = seq(0,nlags, bylag))
+
+plot_df %>% 
+  ggplot(aes(x = lag)) +
+  geom_ribbon(aes(ymin = ci_low, ymax = ci_high), fill = "blue", alpha = 0.5) +
+  geom_line(aes(y = est)) +
+  geom_hline(yintercept = 0) +
+  theme_bw() +
+  xlim(c(0,10))
+
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Main sensitivity plot --------------------------------------------------
