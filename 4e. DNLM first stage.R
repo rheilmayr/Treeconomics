@@ -115,9 +115,9 @@ dendro_lagged <- dendro_lagged %>%
 
 bylag = 0.1
 gendat = dendro_lagged %>% 
-  filter(outlier == 0)
+  filter(outlier == 0) 
 # %>%
-#   filter(pet.spstd < 0)
+#   filter(cwd.spstd > 1)
 
 
 cwd_lagged = data.frame(gendat[,grep("cwd_L",colnames(gendat))])
@@ -126,11 +126,11 @@ pet_lagged = data.frame(gendat[,grep("pet_L",colnames(gendat))])
 # cwd_cb = crossbasis(cwd_lagged,
 #                     lag=c(0,nlags),
 #                     argvar=list(fun = "lin"),
-#                     arglag=list(knots=logknots(3,10)))
+#                     arglag=list(knots=logknots(9,3)))
 # pet_cb = crossbasis(pet_lagged,
 #                     lag=c(0,nlags),
 #                     argvar=list(fun = "lin"),
-#                     arglag=list(knots=logknots(3,10)))
+#                     arglag=list(knots=logknots(9,3)))
 
 cwd_cb = crossbasis(cwd_lagged,
                     lag=c(0,nlags),
@@ -142,13 +142,6 @@ pet_cb = crossbasis(pet_lagged,
                     argvar=list(fun = "ns"),
                     arglag=list(knots=logknots(9,3),
                                 Boundary.knots=c(0,9)))
-
-
-# cwd_cb = crossbasis(cwd_lagged,
-#                     lag=c(0,nlags),
-#                     argvar=list(fun = "ns"),
-#                     arglag=list(knots=logknots(10,3),
-#                                 Boundary.knots=c(0,10)))
 
 
 cwd_cb_dat <- cwd_cb %>% 
@@ -190,7 +183,7 @@ dynamic_cwd <- plot(cwd_cp,
      var=shock,
      cumul=FALSE,
      xlab=paste0("Lagged Effect of CWD=", as.integer(shock)),
-     ylab="Ring Width Growth",main=paste("Site"),
+     ylab="Ring Width Growth",main=paste(""),
      xlim=c(0,10))
 
 
