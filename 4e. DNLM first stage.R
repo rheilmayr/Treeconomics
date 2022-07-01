@@ -29,6 +29,9 @@ library(tidylog)
 library(dplyr)
 library(data.table)
 library(stringr)
+library(dtplyr)
+library(ggplotify)
+
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -43,185 +46,44 @@ dendro_df <- read.csv(paste0(dendro_dir, "rwi_long.csv"))
 dendro_df <- dendro_df %>% 
   select(-core_id)
 
-# 2. Site-specific weather history
-cwd_csv <- paste0(wdir, 'out\\climate\\essentialcwd_data.csv')
-cwd_df <- read_csv(cwd_csv)
-cwd_df <- cwd_df %>% 
-  mutate("site_id" = as.character(site))
+## Combine multiple cores from the same tree
+dendro_df <- dendro_df %>% 
+  lazy_dt() %>% 
+  group_by(collection_id, tree, year) %>% 
+  summarise(rwi = mean(rwi),
+            rwl = mean(rwl),
+            .groups = "drop") %>% 
+  as_tibble()
 
-# 4. Site information
+
+# 2. Historic site-level climate
+an_site_clim <- read_rds(paste0(wdir, "out\\climate\\site_an_clim.gz"))
+dendro_df <- dendro_df %>% 
+  left_join(an_site_clim, by = c("collection_id", "year"))
+
+
+# 3. Site information
 site_smry <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
 site_smry <- site_smry %>% 
-  select(collection_id, sp_id) %>% 
+  select(collection_id, sp_id, latitude, longitude) %>% 
   mutate(species_id = tolower(sp_id)) %>% 
   select(-sp_id)
 
-dendro_df <- dendro_df %>% 
-  left_join(site_smry, by = 'collection_id')
-
-# 5. Species information
+# 4. Species information
 sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
 sp_info <- sp_info %>% 
   select(species_id, genus, gymno_angio, family)
 site_smry <- site_smry %>% 
   left_join(sp_info, by = c("species_id"))
-psme_list <- site_smry %>% 
-  filter(species_id == "psme") %>% 
-  pull(collection_id)
-
-# 6. Historic species niche data
-niche_csv <- paste0(wdir, 'out/climate/clim_niche.csv')
-niche_df <- read_csv(niche_csv) %>% 
-  select(-X1)
+dendro_df <- dendro_df %>% 
+  left_join(site_smry, by = 'collection_id')
 
 
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Summarize and merge site historic climate ------------------------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Calculate site-level annual climate
-clim_df = cwd_df %>%
-  rename(collection_id = site_id) %>% 
-  group_by(collection_id, year) %>%
-  summarise(aet.an = sum(aet),
-            cwd.an = sum(cwd),
-            pet.an = sum((aet+cwd)))
-# temp.an = mean(tmean),
-# ppt.an = sum(ppt))
+# 2. Historic site-level climate
+ave_site_clim <- read_rds(paste0(wdir, "out\\climate\\site_ave_clim.gz"))
 
 dendro_df <- dendro_df %>% 
-  left_join(clim_df, by = c("collection_id", "year"))
-
-
-# Calculate site-level historic climate
-hist_clim_df <- clim_df %>%
-  group_by(collection_id) %>%
-  filter(year<1980) %>%
-  summarise(aet.ave = mean(aet.an),
-            cwd.ave = mean(cwd.an),
-            pet.ave = mean(pet.an),
-            cwd.min = min(cwd.an))
-
-# Merge historic climate to flm data
-dendro_df <- dendro_df %>% 
-  inner_join(hist_clim_df, by = c("collection_id" = "collection_id"))
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Standardize annual weather by species niche  ------------------------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-niche_df <- niche_df %>% 
-  select(species_id = sp_code, sp_pet_mean = pet_mean, sp_pet_sd = pet_sd, sp_cwd_mean = cwd_mean, sp_cwd_sd = cwd_sd)
-
-dendro_df <- dendro_df %>% 
-  left_join(niche_df, by = c("species_id")) %>% 
-  mutate(pet.an.spstd = (pet.an - sp_pet_mean) / sp_pet_sd,
-         cwd.an.spstd = (cwd.an - sp_cwd_mean) / sp_cwd_sd)
-
-
-# Calculate species-niche standardized climate
-dendro_df <- dendro_df %>%
-  mutate(pet.spstd = (pet.ave - sp_pet_mean) / sp_pet_sd,
-         cwd.spstd = (cwd.ave - sp_cwd_mean) / sp_cwd_sd)
-
-# # 1. Dendrochronologies
-# dendro_dir <- paste0(wdir, "out\\dendro\\")
-# dendro_df <- read.csv(paste0(dendro_dir, "rwi_long.csv"))
-# dendro_df <- dendro_df %>% 
-#   select(-core_id)
-# 
-# # 2. Site-specific weather history
-# cwd_csv <- paste0(wdir, 'out\\climate\\essentialcwd_data.csv')
-# cwd_df <- read_csv(cwd_csv)
-# cwd_df <- cwd_df %>% 
-#   mutate("collection_id" = as.character(site))
-# 
-# # 3. Site information
-# site_smry <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
-# site_smry <- site_smry %>% 
-#   select(collection_id, sp_id) %>% 
-#   mutate(species_id = tolower(sp_id)) %>% 
-#   select(-sp_id)
-# 
-# dendro_df <- dendro_df %>% 
-#   left_join(site_smry, by = 'collection_id')
-# 
-# obs_ids <- dendro_df %>% 
-#   select(collection_id, tree, core) %>% 
-#   distinct() %>% 
-#   mutate(id = paste(collection_id, tree, core, sep = "_"))
-# 
-# dendro_df <- dendro_df %>% 
-#   left_join(obs_ids, by = c("collection_id", "tree", "core"))
-# 
-# # 4. Species information
-# sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
-# sp_info <- sp_info %>% 
-#   select(species_id, genus, gymno_angio, family)
-# site_smry <- site_smry %>% 
-#   left_join(sp_info, by = c("species_id"))
-# # 5. Historic species niche data
-# niche_csv <- paste0(wdir, 'out/climate/clim_niche.csv')
-# niche_df <- read_csv(niche_csv) %>% 
-#   select(-X1) %>% 
-#   rename(species_id = sp_code) %>% 
-#   rename(sp_pet_mean = pet_mean,
-#          sp_pet_sd = pet_sd,
-#          sp_cwd_mean = cwd_mean,
-#          sp_cwd_sd = cwd_sd)
-# 
-# 
-# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# # Summarize and merge site historic climate ------------------------------
-# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# # Calculate site-level annual climate
-# clim_df = cwd_df %>%
-#   group_by(collection_id, year) %>%
-#   summarise(aet.an = sum(aet),
-#             pet.an = sum((aet+cwd)),
-#             cwd.an = sum(cwd))
-# 
-# # Relate climate to species climatic range
-# clim_df = clim_df %>%
-#   left_join(site_smry, by = "collection_id") %>%  
-#   left_join(niche_df, by = "species_id") %>% 
-#   mutate(cwd.an = (cwd.an - sp_cwd_mean) / sp_cwd_sd,
-#          pet.an = (pet.an - sp_pet_mean) / sp_pet_sd) %>% 
-#   select(collection_id, year, cwd.an, pet.an)
-# 
-# clim_df <- clim_df %>% 
-#   drop_na()
-# 
-# # Calculate site-level historic climate
-# hist_clim_df <- clim_df %>%
-#   group_by(collection_id) %>%
-#   filter(year<1980) %>%
-#   summarise(cwd.ave = mean(cwd.an),
-#             pet.ave = mean(pet.an))
-# 
-# 
-# # Note: This is slightly different than in our other analyses
-# # Here we're removing the site-level historic mean to make interpretation
-# # of the DLNM shock a bit easier to compare (1 std above site-level average)
-# clim_df <- clim_df %>%
-#   left_join(hist_clim_df, by = "collection_id")
-# 
-# # %>%
-# #   mutate(cwd.an = cwd.an - cwd.ave,
-# #          pet.an = pet.an - pet.ave)
-# 
-# # nolag_df <- dendro_df %>% 
-# #   left_join(clim_df, by = c("collection_id", "year"))
-# # 
-# # mod_df <- nolag_df %>% 
-# #   filter(cwd.ave > 0)
-# # nolagmod = lm(rwi ~ cwd.an + pet.an, data=mod_df)
-# # summary(nolagmod)
-
-
-
-
-
-
-
+  left_join(ave_site_clim, by = "collection_id")
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Create lagged cwd  ------------------------------
@@ -237,38 +99,57 @@ dendro_lagged <- dendro_df %>%
   do(data.frame(., setNames(shift(.$cwd.an.spstd, 0:nlags), cwd_lag_names))) %>%
   do(data.frame(., setNames(shift(.$pet.an.spstd, 0:nlags), pet_lag_names)))
 
-# dendro_lagged <- dendro_df %>% 
-#   left_join(clim_lags, by = c("collection_id", "year"))
-
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Aggregate lagged model  ------------------------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-mod <- feols(rwi ~ cwd.an.spstd + pet.an.spstd | collection_id, data = dendro_lagged)
-summary(mod)
-
-mod <- feols(rwi ~ cwd_L00 + cwd_L01 + cwd_L02 + cwd_L03 + cwd_L04 + cwd_L05 + cwd_L06 + cwd_L07 + cwd_L08 + 
-               pet_L00 + pet_L01 + pet_L02 + pet_L03 + pet_L04 + pet_L05 | collection_id, data = dendro_lagged)
-summary(mod)
-
-# mod <- feols(rwi ~ cwd.an + cwd_L01 + cwd_L02 + cwd_L03 + cwd_L04 + pet.an + pet_L01 + pet_L02 + pet_L03 + pet_L04 | collection_id, data = dendro_lagged)
-# summary(mod)
-# 
-# test_data <- cbind(cwd_lagged, pet_lagged)
-# mod <- lm(dendro_lagged$rwi ~ ., test_data)
-# summary(mod)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Aggregate DLNM  ------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+cwd_spstd_bounds = quantile(ave_site_clim$cwd.spstd, c(0.01, 0.99), na.rm = T)
+pet_spstd_bounds = quantile(ave_site_clim$pet.spstd, c(0.01, 0.99), na.rm = T)
+
+dendro_lagged <- dendro_lagged %>% 
+  mutate(outlier = 
+           (cwd.spstd<cwd_spstd_bounds[1]) |
+           (cwd.spstd>cwd_spstd_bounds[2]) |
+           (pet.spstd<pet_spstd_bounds[1]) |
+           (pet.spstd>pet_spstd_bounds[2]))
+
 bylag = 0.1
 gendat = dendro_lagged %>% 
-  filter(pet.spstd < 0)
+  filter(outlier == 0)
+# %>%
+#   filter(pet.spstd < 0)
+
+
 cwd_lagged = data.frame(gendat[,grep("cwd_L",colnames(gendat))])
 pet_lagged = data.frame(gendat[,grep("pet_L",colnames(gendat))])
 
-cwd_cb = crossbasis(cwd_lagged,lag=c(0,nlags),argvar=list(fun = "lin"),arglag=list(knots=logknots(nlags, 4)))
-pet_cb = crossbasis(pet_lagged, lag=c(0,nlags), argvar=list(fun = "lin"), arglag=list(knots=logknots(nlags, 4)))
+# cwd_cb = crossbasis(cwd_lagged,
+#                     lag=c(0,nlags),
+#                     argvar=list(fun = "lin"),
+#                     arglag=list(knots=logknots(3,10)))
+# pet_cb = crossbasis(pet_lagged,
+#                     lag=c(0,nlags),
+#                     argvar=list(fun = "lin"),
+#                     arglag=list(knots=logknots(3,10)))
+
+cwd_cb = crossbasis(cwd_lagged,
+                    lag=c(0,nlags),
+                    argvar=list(fun = "ns"),
+                    arglag=list(knots=logknots(9,3),
+                                Boundary.knots=c(0,9)))
+pet_cb = crossbasis(pet_lagged,
+                    lag=c(0,nlags),
+                    argvar=list(fun = "ns"),
+                    arglag=list(knots=logknots(9,3),
+                                Boundary.knots=c(0,9)))
+
+
+# cwd_cb = crossbasis(cwd_lagged,
+#                     lag=c(0,nlags),
+#                     argvar=list(fun = "ns"),
+#                     arglag=list(knots=logknots(10,3),
+#                                 Boundary.knots=c(0,10)))
+
 
 cwd_cb_dat <- cwd_cb %>% 
   as_tibble() %>% 
@@ -284,47 +165,56 @@ pet_cb_dat <- pet_cb %>%
               matches("v1")) 
 
 cb_df <- gendat %>% 
-  select(collection_id, rwi) %>% 
+  select(collection_id, rwi, latitude, longitude) %>% 
   cbind(cwd_cb_dat, pet_cb_dat)
 
+n_vars <- dim(cwd_cb_dat)[2]
 
-petnam <- paste("pet_cbv1.l", 1:5, sep="")
-cwdnam <- paste("cwd_cbv1.l", 1:5, sep="")
-xnam <- append(petnam, cwdnam)
+petnam <- paste("pet_cbv1.l", 1:n_vars, sep="")
+cwdnam <- paste("cwd_cbv1.l", 1:n_vars, sep="")
+xnam <- append(cwdnam, petnam)
 fmla <- as.formula(paste("rwi ~ ", paste(xnam, collapse= "+")) %>% paste0(" | collection_id"))
+# lagmod=feols(fmla, vcov = conley(cutoff = 1000, distance = "spherical"), data=cb_df)
 lagmod=feols(fmla, data=cb_df)
-# TODO: Make sure this is clustering by site
-# lagmod2=felm(rwi ~ cwd_cb + pet_cb | collection_id, data=gendat) # replace with fixest. Note - felm seems to return same results as lm?
-
-
-
 
 cwd_cp = crosspred(cwd_cb, lagmod, cen = 0, at = -1:1, bylag = bylag, cumul = TRUE)
 pet_cp = crosspred(pet_cb, lagmod, cen = 0, at = -1:1, bylag = bylag, cumul = TRUE)
-# cwd_cum <- cwd_cp$cumfit[3,nlags + 1]
-# pet_cum <- pet_cp$cumfit[3,nlags + 1]
+
 lag_effects <- tibble(lag = seq(0,nlags,bylag), 
                       cwd_effect = cwd_cp$matfit[3,], 
                       pet_effect = pet_cp$matfit[3,],
                       cwd_cum =  cwd_cp$cumfit[3,nlags + 1],
                       pet_cum =  pet_cp$cumfit[3,nlags + 1])
 
-
-plot(cwd_cp,
+dynamic_cwd <- plot(cwd_cp,
      var=shock,
      cumul=FALSE,
      xlab=paste0("Lagged Effect of CWD=", as.integer(shock)),
-     ylab="Ring Width Growth",main=paste("Site"))
+     ylab="Ring Width Growth",main=paste("Site"),
+     xlim=c(0,10))
 
-plot(pet_cp,
+
+dynamic_pet <- plot(pet_cp,
      var=shock,
      cumul = FALSE,
      xlab=paste0("Lagged Effect of PET=", as.integer(shock)),
-     ylab="Ring Width Growth",main=paste("Site"))
+     ylab="Ring Width Growth",main=paste(""),
+     xlim=c(0,10))
 
 
+dnlm_predictions <- c(cwd = cwd_cp,
+                      pet = pet_cp)
+dnlm_predictions %>% write_rds(paste0(wdir, "out/first_stage/dnlm."), compress = "gz")
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Aggregate lagged model  ------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+mod <- feols(rwi ~ cwd.an.spstd + pet.an.spstd | collection_id, data = dendro_lagged %>% filter(collection_id %in% sites))
+summary(mod)
 
+mod <- feols(rwi ~ cwd_L00 + cwd_L01 + cwd_L02 + cwd_L03 + cwd_L04 + cwd_L05 + cwd_L06 + cwd_L07 + cwd_L08 + 
+               pet_L00 + pet_L01 + pet_L02 + pet_L03 + pet_L04 + pet_L05 | collection_id, data = dendro_lagged %>% filter(outlier==0))
+summary(mod)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -339,8 +229,8 @@ run_dlnm <- function(gendat){
       cwd_lagged = data.frame(gendat$cwd.an,gendat[,grep("cwd_L",colnames(gendat))])
       pet_lagged = data.frame(gendat$pet.an,gendat[,grep("pet_L",colnames(gendat))])
       
-      cwd_cb = crossbasis(cwd_lagged,lag=c(0,nlags),argvar=list(fun = "lin"),arglag=list(knots=logknots(30, 3)))
-      pet_cb = crossbasis(pet_lagged, lag=c(0,nlags), argvar=list(fun = "lin"), arglag=list(knots=logknots(30, 3)))
+      cwd_cb = crossbasis(cwd_lagged,lag=c(0,nlags),argvar=list(fun = "lin"),arglag=list(knots=logknots(30, 4)))
+      pet_cb = crossbasis(pet_lagged, lag=c(0,nlags), argvar=list(fun = "lin"), arglag=list(knots=logknots(30, 4)))
       
       lagmod=lm(rwi ~ cwd_cb + pet_cb, data=gendat)
       
