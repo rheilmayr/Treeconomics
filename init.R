@@ -7,10 +7,10 @@
 library(R.utils)
 
 # Define the path to your local code directory
-code_dir <- "/Users/treelife/Documents/Treeconomics/Treecon/"
+code_dir <- "D:/dev/Treeconomics/"
 
 # Define the path to your local google drive Treeconomics\\Data directory 
-data_dir <- "/Users/treelife/Google Drive/Treeconomics/Data/"
+data_dir <- "G:/.shortcut-targets-by-id/10TtqG9P3BY70rcYp-WACmO38J5zBeflA/Treeconomics/Data/"
 
   
 createLink(paste0(code_dir, 'remote'), data_dir, overwrite = FALSE)
