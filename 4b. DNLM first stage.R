@@ -116,6 +116,8 @@ dendro_lagged <- dendro_lagged %>%
 bylag = 0.1
 gendat = dendro_lagged %>% 
   filter(outlier == 0) 
+# %>% 
+#   filter(gymno_angio == "angio")
 # %>%
 #   filter(cwd.spstd > 1)
 
@@ -195,8 +197,7 @@ dynamic_pet <- plot(pet_cp,
      xlim=c(0,10))
 
 
-dnlm_predictions <- c(cwd = cwd_cp,
-                      pet = pet_cp)
+dnlm_predictions <- list(cwd = cwd_cp, pet = pet_cp)
 dnlm_predictions %>% write_rds(paste0(wdir, "out/first_stage/dnlm."), compress = "gz")
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -206,7 +207,7 @@ mod <- feols(rwi ~ cwd.an.spstd + pet.an.spstd | collection_id, data = dendro_la
 summary(mod)
 
 mod <- feols(rwi ~ cwd_L00 + cwd_L01 + cwd_L02 + cwd_L03 + cwd_L04 + cwd_L05 + cwd_L06 + cwd_L07 + cwd_L08 + 
-               pet_L00 + pet_L01 + pet_L02 + pet_L03 + pet_L04 + pet_L05 | collection_id, data = dendro_lagged %>% filter(outlier==0))
+               pet_L00 + pet_L01 + pet_L02 + pet_L03 + pet_L04 + pet_L05 | collection_id, data = dendro_lagged %>% filter(gymno_angio=="gymno"))
 summary(mod)
 
 
