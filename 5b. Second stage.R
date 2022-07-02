@@ -210,11 +210,6 @@ run_ss <- function(data, outcome = "cwd_coef"){
   formula <- as.formula(paste(outcome, " ~ cwd.spstd + pet.spstd"))
   mod <- lm(formula, data=data)
   coefs <- mod$coefficients
-  # vcov <- vcovCL(mod, cluster = data$collection_id)
-  # draw <- mvrnorm(1, coefs, vcov) %>% 
-  #   enframe(name = paste("var", outcome, sep = "_"), 
-  #           value = outcome)
-  # return(draw)
   return(coefs)
 }
 
@@ -238,12 +233,12 @@ mc_df <- mc_df %>%
   unnest(coef_draws) %>% 
   select(collection_id, iter_idx, cwd_coef, pet_coef, int_coef, cwd.spstd, 
          pet.spstd, errorweights)
-# %>% 
-#   group_by(iter_idx) %>% 
-#   nest()
 
 
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Run bootstrap estimation of second stage model -------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ## Bootstrap second stage model
 bs_ss <- function(data, i){
   data2 <- data[i,]
@@ -258,30 +253,74 @@ bs_ss <- function(data, i){
            pet_mod[1], pet_mod[2], pet_mod[3]))
 }
 
-n_obs <- dim(mc_df)[1]
-n_sites <- trim_df %>% pull(collection_id) %>% unique() %>% length()
+apply_boot <- function(mc_df){
+  n_obs <- dim(mc_df)[1]
+  n_sites <- trim_df %>% pull(collection_id) %>% unique() %>% length()
+  boot_ss_coefs <- boot(mc_df, bs_ss, R = n_mc,
+                        sim = "parametric",  
+                        ran.gen=function(d,p) d[sample(1:n_obs, n_sites), ])
+  boot_ss_coefs <- boot_ss_coefs$t
+  colnames(boot_ss_coefs) <- c("int_int", "int_cwd", "int_pet",
+                               "cwd_int", "cwd_cwd", "cwd_pet",
+                               "pet_int", "pet_cwd", "pet_pet")
+  boot_ss_coefs <- boot_ss_coefs %>% 
+    as_tibble() %>% 
+    mutate(iter_idx = seq(1:n_mc))%>% 
+    relocate(iter_idx)
+  
+  return(boot_ss_coefs)
+}
 
-boot_ss_coefs <- boot(mc_df, bs_ss, R = n_mc,
-                      sim = "parametric",  
-                      ran.gen=function(d,p) d[sample(1:n_obs, n_sites), ])
-
-
-
-mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, data = trim_df)
-summary(mod) ## TODO: Is bootstrap se too similar to simple regression result? Revisit... 
-
-# ## Run second stage model for each of the n datasets
-# mc_df <- mc_df %>%
-#   mutate(ss_cwd_mod = data %>% map(run_ss, outcome = "cwd_coef"),
-#          ss_pet_mod = data %>% map(run_ss, outcome = "pet_coef"),
-#          ss_int_mod = data %>% map(run_ss, outcome = "int_coef")) %>% 
-#   unnest(c(ss_cwd_mod, ss_pet_mod, ss_int_mod)) %>% 
-#   select(iter_idx, parameter = var_cwd_coef, cwd_coef, pet_coef, int_coef)
-
+boot_ss_coefs <- apply_boot(mc_df)
 
 ## Save out coefficients that reflect uncertainty from both first and second stage models
-write_rds(boot_ss_coefs, paste0(wdir, "out/second_stage/ss_bootstrap."), compress = "gz")
-# saveRDS(mc_df, paste0(wdir, "out/second_stage/ss_mc_mods.rds"))
+write_rds(boot_ss_coefs, paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
+
+
+# mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, data = trim_df)
+# summary(mod) ## TODO: Is bootstrap se too similar to simple regression result? Revisit... 
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Investigate variation by genus  ----------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+genus_lookup <- trim_df %>% select(collection_id, genus)
+genus_freq <- trim_df %>% 
+  group_by(genus) %>% 
+  summarise(n_collections = n_distinct(collection_id),
+            min_cwd = min(cwd.spstd),
+            max_cwd = max(cwd.spstd),
+            range_cwd = max_cwd - min_cwd) %>% 
+  arrange(desc(n_collections))
+
+gymno_key <- sp_info %>% 
+  select(genus, gymno_angio) %>% 
+  unique()
+
+
+mc_df <- mc_df %>% 
+  left_join(genus_lookup, by = "collection_id")
+
+# N = 10: 16 genera; 25: 12 genera; 50: 9 genera
+genus_keep <- genus_freq %>% 
+  filter(n_collections>10) %>%
+  pull(genus)
+
+genus_df <- mc_df %>% 
+  filter(genus %in% genus_keep) %>% 
+  group_by(genus) %>% 
+  nest() %>% 
+  mutate(model_estimates = map(data, apply_boot))
+
+genus_df <- genus_df %>% 
+  left_join(genus_freq, by = "genus") %>% 
+  left_join(genus_key, by = "genus")
+
+genus_df <- genus_df %>% 
+  select(-data) %>% 
+  unnest(model_estimates)
+
+write_rds(genus_df, paste0(wdir, "out/second_stage/ss_bootstrap_genus.rds"))
+
 
 
 
@@ -580,7 +619,7 @@ coeftest(subset_mod, vcov = subset_cluster_vcov)
 # 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Investigate variation by genus  ----------------------------------------
+# Investigate variation by genus - old version  ----------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # predict_cwd_effect <- function(trim_df){
 #   trim_df <- trim_df %>%
@@ -668,6 +707,8 @@ coeftest(subset_mod, vcov = subset_cluster_vcov)
 # margins_plot
 # ggsave(paste0(wdir, 'figures\\gymno_angio.svg'), plot = margins_plot)
 
+old_mod_df <- read_csv(paste0(wdir, "out/first_stage/archive/site_pet_cwd_std_augmented.csv"))
+
 
 predict_cwd_effect <- function(trim_df){
   trim_df <- trim_df %>%
@@ -686,10 +727,12 @@ predict_cwd_effect <- function(trim_df){
   return(out)
 }
 
+old_mod_df <- old_mod_df %>% 
+  filter(outlier==0)
 
 
 ## Plot marginal effects by genus
-genus_freq <- mod_df %>% 
+genus_freq <- old_mod_df %>% 
   group_by(genus) %>% 
   summarise(n_collections = n_distinct(collection_id),
             min_cwd = min(cwd.spstd),
@@ -698,7 +741,7 @@ genus_freq <- mod_df %>%
   arrange(desc(n_collections))
 
 genus_keep <- genus_freq %>% 
-  filter(n_collections>2) %>%
+  filter(n_collections>10) %>%
   pull(genus)
 
 
@@ -706,7 +749,7 @@ genus_key <- sp_info %>%
   select(genus, gymno_angio) %>% 
   unique()
 
-genus_df <- mod_df %>% 
+genus_df <- old_mod_df %>% 
   filter(genus %in% genus_keep) %>% 
   group_by(genus) %>% 
   nest() %>% 
@@ -722,7 +765,8 @@ genus_coefs <- genus_df %>%
 
 genus_coefs <- genus_coefs %>% 
   mutate(lab = paste0("Slope: ", as.character(format(estimate, digits = 3, scientific = F)), 
-                      "\nP value: ", as.character(format(p.value, digits = 3, scientific = T))))
+                      "\nP value: ", as.character(format(p.value, digits = 3, scientific = T)))) %>% 
+  print()
 
 genus_predictions <- genus_df %>% 
   unnest(predictions) %>% 
