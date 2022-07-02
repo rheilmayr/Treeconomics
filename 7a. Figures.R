@@ -101,26 +101,11 @@ rwi_list <- list.files(paste0(wdir, "out/predictions/sp_rwi_pred_10000/"), patte
 sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
 # sp_predictions <- readRDS(paste0(wdir, "out/predictions/sp_predictions.rds"))
 
-
 ## 6. Second stage model
-# mod_df <- trim_df
-# cwd_mod <- readRDS(paste0(wdir, "out/second_stage/cwd_mod.rds"))
-# cwd_vcov <- readRDS(paste0(wdir, "out/second_stage/cwd_mod_vcov.rds"))
-# pet_mod <- readRDS(paste0(wdir, "out/second_stage/pet_mod.rds"))
-# int_mod <- readRDS(paste0(wdir, "out/second_stage/int_mod.rds"))
+mod_df <- read_rds(paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
 
-boot_ss <- readRDS(paste0(wdir, "out/second_stage/ss_bootstrap.gz"))
-mod_df <- boot_ss$t
-colnames(mod_df) <- c("int_int", "int_cwd", "int_pet",
-                      "cwd_int", "cwd_cwd", "cwd_pet",
-                      "pet_int", "pet_cwd", "pet_pet")
-mod_df <- mod_df %>% 
-  as_tibble() %>% 
-  mutate(iter_idx = seq(1:10000))
-
-
-# 7. Genus model predictions
-genus_predictions <- readRDS(paste0(wdir, "out/second_stage/genus_mods.rds"))
+# 7. Genus second stage model
+genus_predictions <- readRDS(paste0(wdir, "out/second_stage/ss_bootstrap_genus.rds"))
 
 # 8. Climate model data
 cwdlist=list();aetlist=list()
@@ -598,39 +583,40 @@ pet_median <- long_trim_df %>% filter(variable == "pet") %>% pull(estimate) %>% 
 cwd_est_plot <- long_trim_df %>%
   filter(variable == "cwd") %>% 
   ggplot(aes(x = estimate, fill = `p<0.05`)) +
-  geom_histogram(bins = 300) +
+  geom_histogram(bins = 200) +
   # scale_x_continuous(trans="log1p") +
   theme_bw() +
   xlim(-1.5, 1.5) +
   scale_fill_manual(values = c("steelblue2", "dodgerblue4")) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "black", size = 1) +
-  geom_vline(xintercept = cwd_median, color = "tomato3", size = 1.5) +
-  xlab("Site-level, marginal effect of CWD on growth") +
+  # geom_vline(xintercept = cwd_median, color = "tomato3", size = 1.5) +
+  xlab("Coefficient estimate") +
   ylab("Frequency") +
   ylim(c(0, 150)) +
   theme(legend.position = c(.9,.85),
         legend.key = element_blank(),
-        legend.background = element_blank())
+        legend.background = element_blank()) +
+  ggtitle("Site-level estimates of marginal effect of CWD")
 
 pet_est_plot <- long_trim_df %>%
   filter(variable == "pet") %>% 
   ggplot(aes(x = estimate, fill = `p<0.05`)) +
-  geom_histogram(bins = 300) +
+  geom_histogram(bins = 200) +
   # scale_x_continuous(trans="log1p") +
   theme_bw() +
   xlim(-1.5, 1.5) +
   scale_fill_manual(values = c("steelblue2", "dodgerblue4")) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "black", size = 1) +
-  geom_vline(xintercept = pet_median, color = "tomato3", size = 1.5) +
-  xlab("Site-level, marginal effect of PET on growth") +
+  # geom_vline(xintercept = pet_median, color = "tomato3", size = 1.5) +
+  xlab("Coefficient estimate") +
   ylab("Frequency") +
   ylim(c(0, 150)) +
   theme(legend.position = c(.9,.85),
         legend.key = element_blank(),
-        legend.background = element_blank())
+        legend.background = element_blank()) +
+  ggtitle("Site-level estimates of marginal effect of PET")
 
 
-cwd_est_plot / pet_est_plot
 
 
 
@@ -641,15 +627,15 @@ plot_dnlm <- function(crosspredictions){
   nlags = 15
   bylag = 0.1
   
-  plot_df <- data.frame(est = cp$matfit[3,],
-                        ci_low = cp$matlow[3,],
-                        ci_high = cp$mathigh[3,]) %>% 
+  plot_df <- data.frame(est = crosspredictions$matfit[3,],
+                        ci_low = crosspredictions$matlow[3,],
+                        ci_high = crosspredictions$mathigh[3,]) %>% 
     mutate(lag = seq(0,nlags, bylag))
   
   plot_df %>% 
     ggplot(aes(x = lag)) +
-    geom_ribbon(aes(ymin = ci_low, ymax = ci_high), fill = "darkblue", alpha = 0.2) +
-    geom_line(aes(y = est), color = "darkblue") +
+    geom_ribbon(aes(ymin = ci_low, ymax = ci_high), fill = "dodgerblue4", alpha = 0.2) +
+    geom_line(aes(y = est), color = "dodgerblue4") +
     geom_hline(yintercept = 0) +
     theme_bw() +
     xlab("Time lag (years)") +
@@ -658,10 +644,12 @@ plot_dnlm <- function(crosspredictions){
   }
 
 cwd_dynamic <- plot_dnlm(dnlm_results$cwd) +
-  ggtitle("Lagged effect of a one standard deviation increase in CWD")
+  ggtitle("Dynamic effect of 1 s.d. increase in CWD")
   
 pet_dynamic <- plot_dnlm(dnlm_results$pet) +
-  ggtitle("Lagged effect of a one standard deviation increase in PET")
+  ggtitle("Dynamic effect of 1 s.d. increase in PET")
+
+(cwd_est_plot / pet_est_plot) | (cwd_dynamic / pet_dynamic)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -674,11 +662,12 @@ pet_dynamic <- plot_dnlm(dnlm_results$pet) +
 #   rename(estimate_cwd.an = cwd_coef,
 #          estimate_pet.an = pet_coef)
 
+
 # Note: PET 1-99% quantiles vary from -1.9 to 3.5; PET from -2.9 to 1.8. -3 to 3.5 seems like a good block for plots
 cwd_min <- flm_df$pet.spstd %>% quantile(0.01)
 cwd_max <- flm_df$pet.spstd %>% quantile(0.99)
-pred_min <- -2.5
-pred_max <- 2.5
+pred_min <- -3
+pred_max <- 3
 
 
 ### Binned plot of cwd sensitivity
@@ -693,6 +682,10 @@ convert_bin <- function(n){
 }
 
 plot_dat <- trim_df %>%
+  filter(cwd.spstd > pred_min, 
+         cwd.spstd < pred_max,
+         pet.spstd > pred_min,
+         cwd.spstd < pred_max) %>% 
   # filter(((abs(cwd.spstd)<3) & (abs(pet.spstd<3)))) %>%
   drop_na()
 
@@ -702,14 +695,12 @@ plot_dat_a <- plot_dat %>%
          pet.q = cut(pet.spstd, breaks = sequence, labels = FALSE),
          pet.q = convert_bin(pet.q))
 
-
 plot_dat_b <- plot_dat_a %>%
   group_by(cwd.q, pet.q) %>%
   summarize(cwd_sens = mean(estimate_cwd.an, na.rm = TRUE),
             pet_sens = mean(estimate_pet.an, na.rm = TRUE),
             n = n()) %>%
   filter(n>=10)
-
 
 binned_margins <- plot_dat_b %>%
   ggplot(aes(x = cwd.q, y = pet.q, fill = cwd_sens)) +
@@ -827,7 +818,7 @@ binned_margins
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Plot marginal effects from ss model ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-pull_marg_fx <- function(at_pet, at_cwd){
+pull_marg_fx <- function(at_pet, at_cwd, mod_df){
   cwd_me_predictions <- mod_df$cwd_int + (at_cwd * mod_df$cwd_cwd) + (at_pet * mod_df$cwd_pet)
   cwd_ci_min <- cwd_me_predictions %>% quantile(0.025)
   cwd_ci_max <- cwd_me_predictions %>% quantile(0.975)
@@ -846,11 +837,13 @@ pull_marg_fx <- function(at_pet, at_cwd){
 ### Binned plot of cwd sensitivity
 cwd_inc <- 0.1
 at_pet <- 0
+
+init_pull_marg_fx = partial(.f = pull_marg_fx, mod_df = mod_df)
 cwd_me_df <- tibble(at_cwd = seq(cwd_min, cwd_max, seq_inc))
 cwd_me_df <- cwd_me_df %>%
   mutate(cwd_me = pmap(list(at_pet = at_pet,
                             at_cwd = cwd_me_df$at_cwd),
-                       .f = pull_marg_fx)) %>% 
+                       .f = init_pull_marg_fx)) %>% 
   unnest(cwd_me)
 
 ## Compare to observed sensitivities
@@ -880,7 +873,7 @@ margins_plot <- ggplot(cwd_me_df, aes(x = at_cwd)) +
   xlab("Historic CWD\n(Deviation from species mean)") + 
   ylab("Pred. sensitivity to CWD") + 
   xlim(c(pred_min, pred_max)) +
-  theme_bw(base_size = 25)
+  theme_bw(base_size = 23)
 # +
 #   theme(panel.grid.major = element_blank(), 
 #         panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
@@ -891,7 +884,7 @@ margins_plot
 histogram <- ggplot(trim_df, aes(x = cwd.spstd)) + 
   geom_histogram(bins = 40, alpha = 0.8, fill = "#404788FF", color="white") +
   xlim(c(pred_min, pred_max)) +
-  theme_bw(base_size = 25) + 
+  theme_bw(base_size = 23) + 
   ylab("# sites") +
   xlab("Historic CWD\n(Deviation from species mean)") + 
   theme(aspect.ratio = 0.3,
@@ -903,7 +896,7 @@ histogram <- ggplot(trim_df, aes(x = cwd.spstd)) +
 histogram
 
 
-out_fig <- binned_margins + (histogram / margins_plot)+ 
+out_fig <- binned_margins / margins_plot + 
   # plot_layout(widths = c(1,1))+
   plot_annotation(tag_levels="A") & theme(plot.tag = element_text(face = 'bold', size=23))
 
@@ -917,26 +910,65 @@ out_fig
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Marginal effects by genera ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+### Binned plot of cwd sensitivity
+gen_marg_fx_df <- function(mod_df, cwd_min, cwd_max){
+  cwd_inc <- 0.1
+  at_pet <- 0
+  
+  init_pull_marg_fx <- partial(.f = pull_marg_fx, 
+                               mod_df = mod_df)
+  cwd_me_df <- tibble(at_cwd = seq(cwd_min, cwd_max, seq_inc))
+  cwd_me_df <- cwd_me_df %>%
+    mutate(cwd_me = pmap(list(at_pet = at_pet,
+                              at_cwd = cwd_me_df$at_cwd),
+                         .f = init_pull_marg_fx)) %>% 
+    unnest(cwd_me)
+  return(cwd_me_df)
+}
+
+genus_lims <- genus_predictions %>% 
+  group_by(genus) %>% 
+  summarise(cwd_min = first(min_cwd),
+            cwd_max = first(max_cwd),
+            gymno_angio = first(gymno_angio))
+genus_df <- genus_predictions %>%
+  select(-min_cwd, -max_cwd, -range_cwd) %>% 
+  group_by(genus) %>% 
+  nest() %>% 
+  left_join(genus_lims, by = "genus")
+
+genus_df <- genus_df %>% 
+  mutate(cwd_me = pmap(list(mod_df = data, cwd_min = cwd_min, cwd_max = cwd_max),
+                       .f = gen_marg_fx_df))
+
+genus_df <- genus_df %>% 
+  select(genus, cwd_me, gymno_angio) %>% 
+  unnest(cwd_me)
+
+
+
+
+
 genus_keep <- genus_predictions %>% 
   # filter(range_cwd>2) %>% 
   filter(n_collections>25) %>%
   pull(genus) %>% 
   unique()
 
-margins_plot <- genus_predictions %>% 
-  filter(genus %in% genus_keep) %>% 
-  ggplot(aes(x = cwd.spstd)) + 
-  geom_line(aes(y = Prediction)) +
-  # geom_ribbon(aes(ymin=lower, ymax=upper, fill = gymno_angio), alpha=0.2) +
-  geom_ribbon(aes(ymin=lower, ymax=upper), alpha=0.2, fill = "darkblue") +
+margins_plot <- genus_df %>% 
+  filter(genus %in% genus_keep) %>%
+  ggplot(aes(x = at_cwd)) + 
+  geom_line(aes(y = cwd_mean)) +
+  geom_ribbon(aes(ymin=cwd_ci_min, ymax=cwd_ci_max, fill = gymno_angio), alpha=0.2) +
+  # geom_ribbon(aes(ymin=cwd_ci_min, ymax=cwd_ci_max), alpha=0.2, fill = "darkblue") +
   theme_bw(base_size = 22) + 
   facet_wrap(~genus, scales = "free") +
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         strip.background = element_blank(),
         panel.border = element_rect(colour = "black", fill = NA)) +
-  geom_line(aes(y = upper), linetype = 3) +
-  geom_line(aes(y = lower), linetype = 3) +
+  geom_line(aes(y = cwd_ci_min), linetype = 3) +
+  geom_line(aes(y = cwd_ci_max), linetype = 3) +
   geom_hline(yintercept = 0, linetype = 2) +
   xlab("Historic CWD\n(Deviation from species mean)") + 
   ylab("Predicted sensitivity to CWD") +
