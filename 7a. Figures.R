@@ -93,6 +93,9 @@ trim_df <- flm_df %>%
   filter(outlier==0) %>% 
   drop_na()
 
+# DNLM results
+dnlm_results <- read_rds(paste0(wdir, "out/first_stage/dnlm."))
+
 # 5. Prediction rasters
 rwi_list <- list.files(paste0(wdir, "out/predictions/sp_rwi_pred_10000/"), pattern = ".gz", full.names = TRUE)
 sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
@@ -496,7 +499,7 @@ fullrange_cwd <- sp_predictions %>%
 fullrange_quantiles <- (fullrange_cwd$cwd_hist) %>% 
   quantile(probs = seq(0, 1, 0.01))
 
-itrdb_cwd <- mod_df %>% 
+itrdb_cwd <- trim_df %>% 
   select(cwd.spstd)
 itrdb_quantiles <- (itrdb_cwd$cwd.spstd) %>% 
   quantile(probs = seq(0, 1, 0.01))
@@ -538,7 +541,7 @@ fullrange_pet <- sp_predictions %>%
 fullrange_pquantiles <- (fullrange_pet$pet_hist) %>% 
   quantile(probs = seq(0, 1, 0.01))
 
-itrdb_pet <- mod_df %>% 
+itrdb_pet <- trim_df %>% 
   select(pet.spstd)
 itrdb_pquantiles <- (itrdb_pet$pet.spstd) %>% 
   quantile(probs = seq(0, 1, 0.01))
@@ -602,9 +605,9 @@ cwd_est_plot <- long_trim_df %>%
   scale_fill_manual(values = c("steelblue2", "dodgerblue4")) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "black", size = 1) +
   geom_vline(xintercept = cwd_median, color = "tomato3", size = 1.5) +
-  xlab("Site-level impact of CWD on growth") +
+  xlab("Site-level, marginal effect of CWD on growth") +
   ylab("Frequency") +
-  ylim(c(0, 200)) +
+  ylim(c(0, 150)) +
   theme(legend.position = c(.9,.85),
         legend.key = element_blank(),
         legend.background = element_blank())
@@ -619,9 +622,9 @@ pet_est_plot <- long_trim_df %>%
   scale_fill_manual(values = c("steelblue2", "dodgerblue4")) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "black", size = 1) +
   geom_vline(xintercept = pet_median, color = "tomato3", size = 1.5) +
-  xlab("Site-level impact of PET on growth") +
+  xlab("Site-level, marginal effect of PET on growth") +
   ylab("Frequency") +
-  ylim(c(0, 200)) +
+  ylim(c(0, 150)) +
   theme(legend.position = c(.9,.85),
         legend.key = element_blank(),
         legend.background = element_blank())
@@ -634,23 +637,31 @@ cwd_est_plot / pet_est_plot
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Dynamic lag plot --------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-plot_dlnm <- function(cp){
-}
+plot_dnlm <- function(crosspredictions){
+  nlags = 15
+  bylag = 0.1
+  
+  plot_df <- data.frame(est = cp$matfit[3,],
+                        ci_low = cp$matlow[3,],
+                        ci_high = cp$mathigh[3,]) %>% 
+    mutate(lag = seq(0,nlags, bylag))
+  
+  plot_df %>% 
+    ggplot(aes(x = lag)) +
+    geom_ribbon(aes(ymin = ci_low, ymax = ci_high), fill = "darkblue", alpha = 0.2) +
+    geom_line(aes(y = est), color = "darkblue") +
+    geom_hline(yintercept = 0) +
+    theme_bw() +
+    xlab("Time lag (years)") +
+    ylab("Effect on ring width index") +
+    scale_x_continuous(breaks = seq(0,10,2), limits = c(0,10))
+  }
 
-cp <- cwd_cp
-
-plot_df <- data.frame(est = cp$matfit[3,],
-                      ci_low = cp$matlow[3,],
-                      ci_high = cp$mathigh[3,]) %>% 
-  mutate(lag = seq(0,nlags, bylag))
-
-plot_df %>% 
-  ggplot(aes(x = lag)) +
-  geom_ribbon(aes(ymin = ci_low, ymax = ci_high), fill = "blue", alpha = 0.5) +
-  geom_line(aes(y = est)) +
-  geom_hline(yintercept = 0) +
-  theme_bw() +
-  xlim(c(0,10))
+cwd_dynamic <- plot_dnlm(dnlm_results$cwd) +
+  ggtitle("Lagged effect of a one standard deviation increase in CWD")
+  
+pet_dynamic <- plot_dnlm(dnlm_results$pet) +
+  ggtitle("Lagged effect of a one standard deviation increase in PET")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
