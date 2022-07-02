@@ -50,17 +50,8 @@ out_dir <- paste0(wdir,"out/predictions/sp_rwi_pred_", as.character(n_mc), "/")
 dir.create(file.path(out_dir), showWarnings = FALSE)
 
 # 1. Second stage model
-boot_ss <- readRDS(paste0(wdir, "out/second_stage/ss_bootstrap.gz"))
- 
-mod_df <- boot_ss$t
-colnames(mod_df) <- c("int_int", "int_cwd", "int_pet",
-                       "cwd_int", "cwd_cwd", "cwd_pet",
-                       "pet_int", "pet_cwd", "pet_pet")
-mod_df <- mod_df %>% 
-  as_tibble() %>% 
-  mutate(iter_idx = seq(1:10000)) %>% 
-  filter(iter_idx <= n_mc)
-  
+mod_df <- read_rds(paste0(wdir, "out/second_stage/ss_bootstrap.gz"))
+
 # 2. Species-standardized historic and future climate
 sp_clim <- read_rds(paste0(wdir, "out/climate/sp_clim_predictions.gz"))
 species_list <- sp_clim %>% select(sp_code)
