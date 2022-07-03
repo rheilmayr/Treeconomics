@@ -70,7 +70,7 @@ flm_df <- flm_df %>%
 # 3. Site information
 site_df <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
 site_df <- site_df %>% 
-  select(collection_id, sp_id)
+  select(collection_id, sp_id, latitude, longitude)
 flm_df <- flm_df %>% 
   left_join(site_df, by = "collection_id")
 flm_df <- flm_df %>% 
@@ -253,20 +253,81 @@ bs_ss <- function(data, i){
            pet_mod[1], pet_mod[2], pet_mod[3]))
 }
 
+bs_ss <- function(data){
+  cwd_mod <- data %>% 
+    run_ss(outcome = "cwd_coef")
+  pet_mod <- data %>% 
+    run_ss(outcome = "pet_coef")
+  int_mod <- data %>% 
+    run_ss(outcome = "int_coef")
+  return(list(int_int = int_mod[1], 
+              int_cwd = int_mod[2], 
+              int_pet = int_mod[3],
+              cwd_int = cwd_mod[1], 
+              cwd_cwd = cwd_mod[2], 
+              cwd_pet = cwd_mod[3],
+              pet_int = pet_mod[1], 
+              pet_cwd = pet_mod[2], 
+              pet_pet = pet_mod[3]))
+}
+
+
+n_mc = 10000
+n_sites <- trim_df %>% pull(collection_id) %>% unique() %>% length()
+n_obs = n_mc * n_sites
+boot_df <- mc_df %>% 
+  sample_n(size = n_obs, replace = TRUE, weight = errorweights) %>% ## Could add weights here...
+  mutate(iter_idx = rep(1:n_mc, each=n_sites)) %>% 
+  relocate(iter_idx) %>% 
+  group_by(iter_idx) %>% 
+  nest()
+
+boot_df <- boot_df %>% 
+  mutate(estimates = map(.x = data, .f = bs_ss)) %>% 
+  unnest_wider(estimates)
+
+boot_df <- boot_df %>% 
+  ungroup() %>% 
+  select(-data, - iter_idx)
+apply(boot_df, 2, mean)
+apply(boot_df, 2, sd)
+
+mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data = trim_df)
+summary(mod) ## TODO: Is bootstrap se too similar to simple regression result? Revisit...
+mod <- feols(estimate_cwd.an ~ cwd.spstd + pet.spstd, 
+             weights = trim_df$errorweights, data = trim_df,
+             vcov = conley(distance = "spherical"))
+summary(mod) ## TODO: Is bootstrap se too similar to simple regression result? Revisit...
+
+
+
+mod <- feols(estimate_cwd.an ~ cwd.spstd + pet.spstd, data = trim_df,
+          vcov = conley(distance = "spherical"))
+summary(mod) ## TODO: Is bootstrap se too similar to simple regression result? Revisit...
+
+
+boot_df <- tibble(idx = seq(1, n_obs, 1), n_samples = n_sites) %>% 
+  mutate(data = pmap(.l = list(tbl = mc_df, 
+                               replace = TRUE, 
+                               size = n_samples), 
+                     .f = sample_n ))
+
 apply_boot <- function(mc_df){
   n_obs <- dim(mc_df)[1]
   n_sites <- trim_df %>% pull(collection_id) %>% unique() %>% length()
+  
+  
   boot_ss_coefs <- boot(mc_df, bs_ss, R = n_mc,
                         sim = "parametric",  
                         ran.gen=function(d,p) d[sample(1:n_obs, n_sites), ])
-  boot_ss_coefs <- boot_ss_coefs$t
-  colnames(boot_ss_coefs) <- c("int_int", "int_cwd", "int_pet",
-                               "cwd_int", "cwd_cwd", "cwd_pet",
-                               "pet_int", "pet_cwd", "pet_pet")
-  boot_ss_coefs <- boot_ss_coefs %>% 
-    as_tibble() %>% 
-    mutate(iter_idx = seq(1:n_mc))%>% 
-    relocate(iter_idx)
+  # boot_ss_coefs <- boot_ss_coefs$t
+  # colnames(boot_ss_coefs) <- c("int_int", "int_cwd", "int_pet",
+  #                              "cwd_int", "cwd_cwd", "cwd_pet",
+  #                              "pet_int", "pet_cwd", "pet_pet")
+  # boot_ss_coefs <- boot_ss_coefs %>% 
+  #   as_tibble() %>% 
+  #   mutate(iter_idx = seq(1:n_mc))%>% 
+  #   relocate(iter_idx)
   
   return(boot_ss_coefs)
 }
@@ -277,8 +338,6 @@ boot_ss_coefs <- apply_boot(mc_df)
 write_rds(boot_ss_coefs, paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
 
 
-# mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, data = trim_df)
-# summary(mod) ## TODO: Is bootstrap se too similar to simple regression result? Revisit... 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Investigate variation by genus  ----------------------------------------
@@ -715,7 +774,7 @@ predict_cwd_effect <- function(trim_df){
     filter(abs(cwd.spstd)<3,
            abs(pet.spstd)<3) %>%
     drop_na()
-  gen_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights=errorweights, data=trim_df)
+  gen_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, data=trim_df)
   cluster_vcov <- vcovCL(gen_mod, cluster = trim_df$collection_id)
   mod_cl <- tidy(coeftest(gen_mod, vcov = vcovCL, cluster = trim_df$collection_id))
   pred_min <- trim_df$cwd.spstd %>% quantile(0.025)
