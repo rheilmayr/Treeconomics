@@ -296,8 +296,8 @@ site_clim_df = site_clim_df %>%
 ave_site_clim_df <- site_clim_df %>% 
   filter(year < 1980) %>% 
   group_by(collection_id) %>% 
-  summarise(cwd.ave = mean(cwd.an),
-            pet.ave = mean(pet.an)) %>% 
+  summarise(cwd.ave = mean(cwd.an, na.rm = TRUE), ## TODO: Shouldn't have to include na.rm here. Why do some sites have incomplete climate data?
+            pet.ave = mean(pet.an, na.rm = TRUE)) %>% 
   drop_na() %>% 
   ungroup()
 
