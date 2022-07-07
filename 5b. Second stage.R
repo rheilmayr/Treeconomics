@@ -11,8 +11,9 @@
 # - essentialcwd_data.csv: File detailing plot-level weather history
 #
 # ToDo:
-# - Mechanisms: Think through this model in more detail
-# - Return to robustness tests (everything below bootstrap)
+# - Transition towards block bootstrap to deal with spatial autocorrelation
+# - Update / finalize genus analyses
+# - Rebuild robustness tests based on final baseline model
 #
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -45,7 +46,6 @@ library(boot)
 
 set.seed(5597)
 
-
 select <- dplyr::select
 
 n_mc <- 10000
@@ -56,7 +56,6 @@ n_mc <- 10000
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ### Define path
 wdir <- 'remote\\'
-
 
 # 1. Site-level regressions
 flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv')) %>%
@@ -71,9 +70,7 @@ flm_df <- flm_df %>%
 site_df <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
 site_df <- site_df %>% 
   select(collection_id, sp_id, latitude, longitude)
-flm_df <- flm_df %>% 
-  left_join(site_df, by = "collection_id")
-flm_df <- flm_df %>% 
+site_df <- site_df %>% 
   rename(species_id = sp_id) %>% 
   mutate(species_id = str_to_lower(species_id))
 
@@ -81,16 +78,21 @@ flm_df <- flm_df %>%
 sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
 sp_info <- sp_info %>% 
   select(species_id, genus, gymno_angio, family)
+site_df <- site_df %>% 
+  left_join(sp_info, by = "species_id")
+
+# Merge back into main flm_df
 flm_df <- flm_df %>% 
-  left_join(sp_info, by = "species_id") ## TODO: Track down duplicates here
+  left_join(site_df, by = "collection_id")
+
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Trim data --------------------------------------------------------
+# Prep and trim data -----------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Add weighting based on inverse of first stage variance
 flm_df <- flm_df %>% 
-  mutate(errorweights = 1 / (std.error_cwd.an),
+  mutate(cwd_errorweights = 1 / (std.error_cwd.an),
          errorweights2 = sqrt(ntrees),
          pet_errorweights = 1 / (std.error_pet.an),
          int_errorweights = 1 / (std.error_intercept))
@@ -99,7 +101,6 @@ flm_df <- flm_df %>%
 cwd_est_bounds = quantile(flm_df$estimate_cwd.an, c(0.01, 0.99),na.rm=T)
 cwd_spstd_bounds = quantile(flm_df$cwd.spstd, c(0.01, 0.99), na.rm = T)
 pet_spstd_bounds = quantile(flm_df$pet.spstd, c(0.01, 0.99), na.rm = T)
-
 
 flm_df <- flm_df %>% 
   mutate(outlier = (estimate_cwd.an<cwd_est_bounds[1]) |
@@ -110,79 +111,19 @@ flm_df <- flm_df %>%
            (pet.spstd>pet_spstd_bounds[2]))
            
 
+# Save out full flm_df to simplify downstream scripts and ensure consistency
 flm_df %>% write.csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv"))
 
-# flm_df <- flm_df %>%
-#   # group_by(species_id) %>%
-#   mutate() %>%
-#   ungroup()
-
+# Trim outliers
 trim_df <- flm_df %>% 
   filter(outlier==0) %>% 
   drop_na()
 
 
-  #        abs(cwd.spstd)<5,
-  #        abs(pet.spstd)<5,
-  #        abs(std.error_cwd.an) < 50 * abs(estimate_cwd.an),
-  #        abs(std.error_cwd.an) < 50 * abs(estimate_cwd.an)) %>% 
-  # drop_na()
-
-
-# increment <- 0.25
-# breaks <- seq(xmin, xmax, increment)
-# 
-# plot_dat <- flm_df %>%
-#   filter(abs(estimate_cwd.an)<10) %>% 
-#   drop_na()
-# 
-# plot_dat <- plot_dat %>%
-#   mutate(cwd.q = as.numeric(cut(cwd.spstd, breaks = breaks)),
-#          pet.q = as.numeric(cut(pet.spstd, breaks = breaks)))
-# cwd.quantiles = breaks
-# pet.quantiles = breaks
-# cwd.breaks = breaks
-# pet.breaks = breaks
-# 
-# 
-# group_dat <- plot_dat %>% 
-#   group_by(cwd.q, pet.q) %>% 
-#   dplyr::summarize(wvar = wtd.var(estimate_cwd.an, errorweights, na.rm = TRUE),
-#                    wsd = sqrt(wvar),
-#                    wmean = weighted.mean(estimate_cwd.an, errorweights, na.rm = TRUE),
-#                    n = n(),
-#                    error = qt(0.975, df = n-1)*wsd/sqrt(n),
-#                    lower = wmean - error,
-#                    upper = wmean + error) %>% 
-#   filter(n>10)
-# 
-# 
-# binned_margins <- group_dat %>% 
-#   ggplot(aes(x = cwd.q, y = pet.q, fill = wmean)) +
-#   geom_tile() +
-#   # xlim(c(-3, 4)) +
-#   #ylim(c(-1.5, 1.5))+
-#   # scale_fill_gradientn (colours = c("darkblue","lightblue")) +
-#   scale_fill_viridis_c(direction = -1) +
-#   theme_bw(base_size = 22)+
-#   ylab("Deviation from mean PET")+
-#   xlab("Deviation from mean CWD")+
-#   theme(legend.position = "left") +
-#   labs(fill = "Marginal effect\nof CWD") +
-#   # scale_x_continuous(labels = cwd.quantiles[label_pattern], breaks = cwd.breaks[label_pattern]) +
-#   # scale_y_continuous(labels = pet.quantiles[label_pattern], breaks = pet.breaks[label_pattern]) +
-#   # scale_x_continuous(labels = cwd.quantiles, breaks = breaks) +
-#   # scale_y_continuous(labels = pet.quantiles, breaks = breaks) +
-#   ylab("Historic PET\n(Deviation from species mean)") +
-#   xlab("Historic CWD\n(Deviation from species mean)") + 
-#   coord_fixed()
-# 
-# binned_margins
-
-
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Random draws of coefs from first stage ---------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+## Function to create random draws of first stage coefficients
 draw_coefs <- function(n, cwd_est, pet_est, int_est, cwd_ste, pet_ste, int_ste, 
                        cwd_pet_cov, pet_int_cov, cwd_int_cov){
   mu <- c("cwd_coef" = cwd_est, 
@@ -206,13 +147,6 @@ draw_coefs <- function(n, cwd_est, pet_est, int_est, cwd_ste, pet_ste, int_ste,
   return(draw)
 }
 
-run_ss <- function(data, outcome = "cwd_coef"){
-  formula <- as.formula(paste(outcome, " ~ cwd.spstd + pet.spstd"))
-  mod <- lm(formula, data=data)
-  coefs <- mod$coefficients
-  return(coefs)
-}
-
 ## Create n random draws of first stage coefficients for each site
 mc_df <- trim_df %>%
   mutate(coef_draws = pmap(list(n = n_mc, 
@@ -228,31 +162,27 @@ mc_df <- trim_df %>%
                            draw_coefs))
 
 
-## Nest draws into n separate datasets
+## Unnest to create dataframe of n_site X 10,000 coefficient estimates
 mc_df <- mc_df %>% 
   unnest(coef_draws) %>% 
   select(collection_id, iter_idx, cwd_coef, pet_coef, int_coef, cwd.spstd, 
-         pet.spstd, errorweights)
+         pet.spstd, latitude, longitude, cwd_errorweights, pet_errorweights, int_errorweights)
 
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Run bootstrap estimation of second stage model -------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-## Bootstrap second stage model
-bs_ss <- function(data, i){
-  data2 <- data[i,]
-  cwd_mod <- data2 %>% 
-    run_ss(outcome = "cwd_coef")
-  pet_mod <- data2 %>% 
-    run_ss(outcome = "pet_coef")
-  int_mod <- data2 %>% 
-    run_ss(outcome = "int_coef")
-  return(c(int_mod[1], int_mod[2], int_mod[3],
-           cwd_mod[1], cwd_mod[2], cwd_mod[3],
-           pet_mod[1], pet_mod[2], pet_mod[3]))
+## Function defining main second stage model
+run_ss <- function(data, outcome = "cwd_coef"){
+  formula <- as.formula(paste(outcome, " ~ cwd.spstd + pet.spstd"))
+  mod <- lm(formula, data=data)
+  coefs <- mod$coefficients
+  return(coefs)
 }
 
+## Function to run second stage model for first stage CWD, 
+## PET and Intercept terms and organize coefficients
 bs_ss <- function(data){
   cwd_mod <- data %>% 
     run_ss(outcome = "cwd_coef")
@@ -271,73 +201,86 @@ bs_ss <- function(data){
               pet_pet = pet_mod[3]))
 }
 
-
-n_mc = 10000
-n_sites <- trim_df %>% pull(collection_id) %>% unique() %>% length()
+## Create dataframe holding bootstrap samples
+boot_df <- mc_df 
+n_sites <- boot_df %>% pull(collection_id) %>% unique() %>% length()
 n_obs = n_mc * n_sites
-boot_df <- mc_df %>% 
-  sample_n(size = n_obs, replace = TRUE, weight = errorweights) %>% ## Could add weights here...
+
+boot_df <- boot_df %>% 
+  ## TODO: Here's where we probably want to introduce block bootstrapping design...
+  sample_n(size = n_obs, replace = TRUE, weight = cwd_errorweights) %>% 
+  ## TODO: Should weighting be done separately for CWD, PET and Intercept terms? 
+  ## Each has a different standard error in first stage...
   mutate(iter_idx = rep(1:n_mc, each=n_sites)) %>% 
   relocate(iter_idx) %>% 
   group_by(iter_idx) %>% 
-  nest()
+  nest() 
+  ## Note: goal at end of bootstrap is to have a dataframe with 10,000 nested datasets 
+  ## that can be used for second stage model...
 
+## Estimate second stage models
 boot_df <- boot_df %>% 
   mutate(estimates = map(.x = data, .f = bs_ss)) %>% 
-  unnest_wider(estimates)
+  unnest_wider(estimates) %>% 
+  select(-data)
 
-boot_df <- boot_df %>% 
-  ungroup() %>% 
-  select(-data, - iter_idx)
-apply(boot_df, 2, mean)
-apply(boot_df, 2, sd)
+## Summarize bootstrap results
+bs_coefs <- apply(boot_df %>% select(-iter_idx), 2, mean) %>% print()
+bs_ste <- apply(boot_df %>% select(-iter_idx), 2, sd) %>% print()
 
-mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data = trim_df)
-summary(mod) ## TODO: Is bootstrap se too similar to simple regression result? Revisit...
+## TODO: Should we be worried that bootstrap se very similar (but smaller?) than simple regression result?
+## Bootstrap is currently returning s.e. of 0.001849, compare to 0.002054 for simple regression:
 mod <- feols(estimate_cwd.an ~ cwd.spstd + pet.spstd, 
-             weights = trim_df$errorweights, data = trim_df,
-             vcov = conley(distance = "spherical"))
-summary(mod) ## TODO: Is bootstrap se too similar to simple regression result? Revisit...
+             weights = trim_df$cwd_errorweights, data = trim_df)
+summary(mod) 
+
+## Save out bootstrapped coefficients that reflect uncertainty from both first and second stage models
+write_rds(boot_df, paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
 
 
-
-mod <- feols(estimate_cwd.an ~ cwd.spstd + pet.spstd, data = trim_df,
-          vcov = conley(distance = "spherical"))
-summary(mod) ## TODO: Is bootstrap se too similar to simple regression result? Revisit...
-
-
-boot_df <- tibble(idx = seq(1, n_obs, 1), n_samples = n_sites) %>% 
-  mutate(data = pmap(.l = list(tbl = mc_df, 
-                               replace = TRUE, 
-                               size = n_samples), 
-                     .f = sample_n ))
-
-apply_boot <- function(mc_df){
-  n_obs <- dim(mc_df)[1]
-  n_sites <- trim_df %>% pull(collection_id) %>% unique() %>% length()
-  
-  
-  boot_ss_coefs <- boot(mc_df, bs_ss, R = n_mc,
-                        sim = "parametric",  
-                        ran.gen=function(d,p) d[sample(1:n_obs, n_sites), ])
-  # boot_ss_coefs <- boot_ss_coefs$t
-  # colnames(boot_ss_coefs) <- c("int_int", "int_cwd", "int_pet",
-  #                              "cwd_int", "cwd_cwd", "cwd_pet",
-  #                              "pet_int", "pet_cwd", "pet_pet")
-  # boot_ss_coefs <- boot_ss_coefs %>% 
-  #   as_tibble() %>% 
-  #   mutate(iter_idx = seq(1:n_mc))%>% 
-  #   relocate(iter_idx)
-  
-  return(boot_ss_coefs)
-}
-
-boot_ss_coefs <- apply_boot(mc_df)
-
-## Save out coefficients that reflect uncertainty from both first and second stage models
-write_rds(boot_ss_coefs, paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
-
-
+## OLD VERSION OF BOOTSTRAPPING USING BOOT PACKAGE
+# mod_df <- trim_df %>% filter(genus == "Araucaria")
+# mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data = mod_df)
+# summary(mod) ## TODO: Is bootstrap se too similar to simple regression result? Revisit...
+# mod <- feols(estimate_cwd.an ~ cwd.spstd + pet.spstd, 
+#              weights = mod_df$errorweights, data = mod_df,
+#              vcov = conley(distance = "spherical"))
+# summary(mod) ## TODO: Is bootstrap se too similar to simple regression result? Revisit...
+# 
+# 
+# 
+# mod <- feols(estimate_cwd.an ~ cwd.spstd + pet.spstd, data = trim_df,
+#           vcov = conley(distance = "spherical"))
+# summary(mod) ## TODO: Is bootstrap se too similar to simple regression result? Revisit...
+# 
+# 
+# boot_df <- tibble(idx = seq(1, n_obs, 1), n_samples = n_sites) %>% 
+#   mutate(data = pmap(.l = list(tbl = mc_df, 
+#                                replace = TRUE, 
+#                                size = n_samples), 
+#                      .f = sample_n ))
+# 
+# apply_boot <- function(mc_df){
+#   n_obs <- dim(mc_df)[1]
+#   n_sites <- trim_df %>% pull(collection_id) %>% unique() %>% length()
+#   
+#   
+#   boot_ss_coefs <- boot(mc_df, bs_ss, R = n_mc,
+#                         sim = "parametric",  
+#                         ran.gen=function(d,p) d[sample(1:n_obs, n_sites), ])
+#   # boot_ss_coefs <- boot_ss_coefs$t
+#   # colnames(boot_ss_coefs) <- c("int_int", "int_cwd", "int_pet",
+#   #                              "cwd_int", "cwd_cwd", "cwd_pet",
+#   #                              "pet_int", "pet_cwd", "pet_pet")
+#   # boot_ss_coefs <- boot_ss_coefs %>% 
+#   #   as_tibble() %>% 
+#   #   mutate(iter_idx = seq(1:n_mc))%>% 
+#   #   relocate(iter_idx)
+#   
+#   return(boot_ss_coefs)
+# }
+# 
+# boot_ss_coefs <- apply_boot(mc_df)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Investigate variation by genus  ----------------------------------------
@@ -391,12 +334,12 @@ write_rds(genus_df, paste0(wdir, "out/second_stage/ss_bootstrap_genus.rds"))
 # trim_df <- trim_df %>%
 #   filter(gymno_angio=="gymno")
 
-mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=flm_df)
+mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = cwd_errorweights, data=flm_df)
 cluster_vcov <- vcovCL(mod, cluster = flm_df$collection_id)
 coeftest(mod, vcov = vcovCL, cluster = flm_df$collection_id)
 
 mod_df = trim_df
-mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data=mod_df)
+mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = cwd_errorweights, data=mod_df)
 cluster_vcov <- vcovCL(mod, cluster = mod_df$species_id)
 coeftest(mod, vcov = vcovCL, cluster = mod_df$species_id)
 saveRDS(mod, paste0(wdir, "out\\second_stage\\cwd_mod.rds"))
@@ -766,17 +709,18 @@ coeftest(subset_mod, vcov = subset_cluster_vcov)
 # margins_plot
 # ggsave(paste0(wdir, 'figures\\gymno_angio.svg'), plot = margins_plot)
 
+
 old_mod_df <- read_csv(paste0(wdir, "out/first_stage/archive/site_pet_cwd_std_augmented.csv"))
+old_mod_df <- old_mod_df %>% 
+  filter(outlier==0)
 
 
-predict_cwd_effect <- function(trim_df){
-  trim_df <- trim_df %>%
-    filter(abs(cwd.spstd)<3,
-           abs(pet.spstd)<3) %>%
+predict_cwd_effect <- function(mod_df){
+  mod_df <- mod_df %>%
     drop_na()
-  gen_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, data=trim_df)
-  cluster_vcov <- vcovCL(gen_mod, cluster = trim_df$collection_id)
-  mod_cl <- tidy(coeftest(gen_mod, vcov = vcovCL, cluster = trim_df$collection_id))
+  gen_mod <- feols(estimate_cwd.an ~ cwd.spstd + pet.spstd, data=mod_df,
+                   weights = mod_df$errorweights, vcov = "conley")
+  mod_cl <- tidy(coeftest(gen_mod))
   pred_min <- trim_df$cwd.spstd %>% quantile(0.025)
   pred_max <- trim_df$cwd.spstd %>% quantile(0.975)
   predictions <- prediction(gen_mod, at = list(cwd.spstd = seq(pred_min, pred_max, 0.1)), vcov = cluster_vcov, calculate_se = T) %>% 
@@ -786,12 +730,11 @@ predict_cwd_effect <- function(trim_df){
   return(out)
 }
 
-old_mod_df <- old_mod_df %>% 
-  filter(outlier==0)
+
 
 
 ## Plot marginal effects by genus
-genus_freq <- old_mod_df %>% 
+genus_freq <- trim_df %>% 
   group_by(genus) %>% 
   summarise(n_collections = n_distinct(collection_id),
             min_cwd = min(cwd.spstd),
@@ -808,14 +751,13 @@ genus_key <- sp_info %>%
   select(genus, gymno_angio) %>% 
   unique()
 
-genus_df <- old_mod_df %>% 
+genus_df <- trim_df %>% 
   filter(genus %in% genus_keep) %>% 
   group_by(genus) %>% 
   nest() %>% 
   mutate(prediction = map(data, predict_cwd_effect)) %>% 
   unnest(prediction) %>% 
   left_join(genus_key, by = "genus")
-
 
 genus_coefs <- genus_df %>%
   unnest(model) %>% 
@@ -825,6 +767,8 @@ genus_coefs <- genus_df %>%
 genus_coefs <- genus_coefs %>% 
   mutate(lab = paste0("Slope: ", as.character(format(estimate, digits = 3, scientific = F)), 
                       "\nP value: ", as.character(format(p.value, digits = 3, scientific = T)))) %>% 
+  left_join(genus_freq, by = "genus") %>% 
+  arrange(desc(n_collections)) %>%
   print()
 
 genus_predictions <- genus_df %>% 
