@@ -37,10 +37,10 @@ blockbootstrap_func=function(data,n_samps=n_mc,blockdist=50000,weights="cwd_erro
       iter_temp=sample(1:n_samps,size=1) #randomly sample from the firt stage draws
       temp=rbind(temp,data[which(data$collection_id%in%block&data$iter_idx==iter_temp),]) 
       j=j+1
-      print(j)
     }
     if(i==1)   bootstrapsamp=tibble(iter_idx=i,data=temp)
     if(i>1) bootstrapsamp=rbind(bootstrapsamp,tibble(iter_idx=i,data=temp))
+    print(i)
   }
   bootstrapsamp=bootstrapsamp%>%
     group_by(iter_idx)%>%
