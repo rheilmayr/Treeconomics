@@ -1,13 +1,16 @@
 library(tidyverse)
 library(sf)
+library(parallel)
+library(foreach)
+library(doParallel)
 
-wdir<- 'remote\\'
-
+#wdir<- 'remote\\'
+# 
 # site_df <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
-# site_df <- site_df %>% 
+# site_df <- site_df %>%
 #   select(collection_id, sp_id, latitude, longitude)
-# site_df <- site_df %>% 
-#   rename(species_id = sp_id) %>% 
+# site_df <- site_df %>%
+#   rename(species_id = sp_id) %>%
 #   mutate(species_id = str_to_lower(species_id))
 # 
 # site_points=st_as_sf(site_df,coords=c("longitude","latitude"),crs="+init=epsg:4326 +proj=longlat +ellps=WGS84
@@ -15,7 +18,7 @@ wdir<- 'remote\\'
 # 
 # site_dist=st_distance(site_points)
 # rownames(site_dist)=site_points$collection_id;colnames(site_dist)=site_points$collection_id
-#save(site_dist,file=paste0(wdir,"out/site_distances.Rdat"))
+# save(site_dist,file=paste0(wdir,"out/site_distances.Rdat"))
 load(paste0(wdir,"out/site_distances.Rdat"))
 
 blockbootstrap_func=function(data,n_samps=n_mc,blockdist=50000,weights="cwd_errorweights",n_obs=n_sites,distmat=site_dist){
@@ -26,7 +29,7 @@ blockbootstrap_func=function(data,n_samps=n_mc,blockdist=50000,weights="cwd_erro
     dplyr::summarise(weights=unique(!!as.name(weights)))
   
   #bootstrap samples
-  for(i in 1:n_samps){
+  bootstrapsamp=foreach(i=1:n_samps,.combine="rbind",.packages = c("tibble"))%dopar%{
     samp=sample(1:n_obs,size=n_obs,prob=site_list$weights,replace=TRUE)
     temp=data.frame()
     j=1
@@ -38,9 +41,7 @@ blockbootstrap_func=function(data,n_samps=n_mc,blockdist=50000,weights="cwd_erro
       temp=rbind(temp,data[which(data$collection_id%in%block&data$iter_idx==iter_temp),]) 
       j=j+1
     }
-    if(i==1)   bootstrapsamp=tibble(iter_idx=i,data=temp)
-    if(i>1) bootstrapsamp=rbind(bootstrapsamp,tibble(iter_idx=i,data=temp))
-    print(i)
+    tibble(iter_idx=i,data=temp)
   }
   bootstrapsamp=bootstrapsamp%>%
     group_by(iter_idx)%>%

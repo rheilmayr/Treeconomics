@@ -219,7 +219,10 @@ n_obs = n_mc * n_sites
   ## that can be used for second stage model...
 
 source("block_bootstrapping.R")
+ncores=detectCores()-2
+my.cluster=makeCluster(ncores);registerDoParallel(cl=my.cluster)
 boot_df=blockbootstrap_func(boot_df)
+saveRDS(boot_df,file=paste0(wdir,"out/blockbootstrap_samples.rds"))
 
 ## Estimate second stage models
 boot_df <- boot_df %>% 
