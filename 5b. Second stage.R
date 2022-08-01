@@ -209,8 +209,8 @@ n_obs = n_mc * n_sites
 boot_df <- boot_df %>% 
   ## TODO: Here's where we probably want to introduce block bootstrapping design...
   sample_n(size = n_obs, replace = TRUE, weight = cwd_errorweights) %>% 
-  ## TODO: Should weighting be done separately for CWD, PET and Intercept terms? 
-  ## Each has a different standard error in first stage...
+  ## TODO: Maybe transition towards inverse of standard error of residuals to have 
+  ## an errorweight for full first stage model, rather than just CWD standard error
   mutate(iter_idx = rep(1:n_mc, each=n_sites)) %>% 
   relocate(iter_idx) %>% 
   group_by(iter_idx) %>% 
