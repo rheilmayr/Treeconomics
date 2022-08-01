@@ -58,7 +58,7 @@ n_mc <- 10000
 wdir <- 'remote\\'
 
 # 1. Site-level regressions
-flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv')) %>%
+flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv')) #%>%
   select(-X1)
 
 # 2. Historic site-level climate
@@ -206,17 +206,23 @@ boot_df <- mc_df
 n_sites <- boot_df %>% pull(collection_id) %>% unique() %>% length()
 n_obs = n_mc * n_sites
 
-boot_df <- boot_df %>% 
-  ## TODO: Here's where we probably want to introduce block bootstrapping design...
-  sample_n(size = n_obs, replace = TRUE, weight = cwd_errorweights) %>% 
-  ## TODO: Maybe transition towards inverse of standard error of residuals to have 
-  ## an errorweight for full first stage model, rather than just CWD standard error
-  mutate(iter_idx = rep(1:n_mc, each=n_sites)) %>% 
-  relocate(iter_idx) %>% 
-  group_by(iter_idx) %>% 
-  nest() 
+# boot_df <- boot_df %>% 
+#   ## TODO: Here's where we probably want to introduce block bootstrapping design...
+#   sample_n(size = n_obs, replace = TRUE, weight = cwd_errorweights) %>% 
+#   ## TODO: Should weighting be done separately for CWD, PET and Intercept terms? 
+#   ## Each has a different standard error in first stage...
+#   mutate(iter_idx = rep(1:n_mc, each=n_sites)) %>% 
+#   relocate(iter_idx) %>% 
+#   group_by(iter_idx) %>% 
+#   nest() 
   ## Note: goal at end of bootstrap is to have a dataframe with 10,000 nested datasets 
   ## that can be used for second stage model...
+
+source("block_bootstrapping.R")
+ncores=detectCores()-2
+my.cluster=makeCluster(ncores);registerDoParallel(cl=my.cluster)
+boot_df=blockbootstrap_func(boot_df)
+saveRDS(boot_df,file=paste0(wdir,"out/blockbootstrap_samples.rds"))
 
 ## Estimate second stage models
 boot_df <- boot_df %>% 
