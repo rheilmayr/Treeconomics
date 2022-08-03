@@ -1,10 +1,11 @@
-library(tidyverse)
-library(sf)
-library(parallel)
-library(foreach)
-library(doParallel)
+# library(tidyverse)
+# library(sf)
+# library(parallel)
+# library(foreach)
+# library(doParallel)
 
-#wdir<- 'remote\\'
+# 
+# wdir<- 'remote\\'
 # 
 # site_df <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
 # site_df <- site_df %>%
@@ -21,7 +22,7 @@ library(doParallel)
 # save(site_dist,file=paste0(wdir,"out/site_distances.Rdat"))
 load(paste0(wdir,"out/site_distances.Rdat"))
 
-blockbootstrap_func=function(data,n_samps=n_mc,blockdist=50000,weights="cwd_errorweights",n_obs=n_sites,distmat=site_dist){
+blockbootstrap_func=function(data,n_samps=n_mc,blockdist=363000,weights="cwd_errorweights",n_obs=n_sites,distmat=site_dist){
   #blockdist is a threshold distance (in m) so that for each site sampled all other sites within that radius are also included in the sample
   #default value is 50km
   site_list=data%>%
