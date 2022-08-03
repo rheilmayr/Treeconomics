@@ -42,7 +42,10 @@ library(margins)
 library(tidylog)
 library(fixest)
 library(biglm)
-library(boot)
+library(gstat)
+library(sf)
+library(units)
+library(dtplyr)
 
 set.seed(5597)
 
@@ -119,6 +122,88 @@ trim_df <- flm_df %>%
   filter(outlier==0) %>% 
   drop_na()
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Spatial autocorrelation of trim_df ---------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+site_points=st_as_sf(trim_df,coords=c("longitude","latitude"),crs="+init=epsg:4326 +proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0")
+
+vg <-variogram(estimate_cwd.an~1, site_points, cutoff = 1500, width = 10)
+vg.fit <- fit.variogram(vg, model = vgm(1, "Sph", 900, 1))
+plot(vg, vg.fit)
+
+vg.range = vg.fit[2,3] * 1000
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Identify spatially proximate blocks of sites ---------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+site_list <- trim_df %>%
+  pull(collection_id) %>%
+  unique()
+n_sites <- length(site_list)
+
+site_dist=st_distance(site_points)
+rownames(site_dist)=site_points$collection_id
+colnames(site_dist)=site_points$collection_id
+# save(site_dist,file=paste0(wdir,"out/site_distances.Rdat"))
+# load(paste0(wdir,"out/site_distances.Rdat"))
+
+dist_df <- as_tibble(site_dist) %>% 
+  drop_units() 
+
+dist_df <- dist_df %>%
+  lazy_dt() %>% 
+  mutate(collection_id = names(dist_df)) %>% 
+  # select(collection_id, site_list) %>% 
+  # filter(collection_id %in% site_list) %>% 
+  mutate(across(.cols = !collection_id, ~(.x < vg.range))) %>% 
+  # mutate(across(.cols = !collection_id, ~ifelse((.x < range), collection_id, "DROP"))) %>% 
+  as_tibble()
+
+block_list <- c()
+for (site in site_list){
+  block_sites <- dist_df %>% 
+    filter(get(site) == TRUE) %>% 
+    pull(collection_id)
+  block_list[site] <- list(block_sites)
+}
+# save(block_list,file=paste0(wdir,"out/spatial_blocks.Rdat"))
+# load(file=paste0(wdir,"out/spatial_blocks.Rdat"))
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Create block bootstrap draws  ---------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+draw_blocks <- function(site_sample){
+  samp <- site_sample %>% pull(samp)
+  blocked_draw <- (block_list[samp] %>% unlist() %>% unname())[1:n_sites]
+  return(blocked_draw)  
+}
+
+n_obs = n_mc * n_sites
+block_draw_df <- tibble(boot_id = rep(1:n_mc, each = n_sites)) %>% 
+  lazy_dt() %>% 
+  mutate(samp = sample(site_list,size=n_obs,replace=TRUE)) %>%
+  group_by(boot_id) %>% 
+  nest()
+
+block_draw_df <- block_draw_df %>% 
+  mutate(sites = map(.x = data, .f = draw_blocks)) %>% # COULD PARALLELIZE HERE?
+  select(boot_id, sites) %>% 
+  as_tibble() %>% 
+  unnest(sites) 
+
+block_draw_df <- block_draw_df %>% 
+  rename(collection_id = sites)
+
+## Identify number of draws needed for each site
+n_draws <- block_draw_df %>% 
+  group_by(collection_id) %>% 
+  tally() %>% 
+  rename(n_draw = n)
+
+trim_df <- trim_df %>% 
+  left_join(n_draws, by = "collection_id")
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Random draws of coefs from first stage ---------------------------------
@@ -147,9 +232,12 @@ draw_coefs <- function(n, cwd_est, pet_est, int_est, cwd_ste, pet_ste, int_ste,
   return(draw)
 }
 
-## Create n random draws of first stage coefficients for each site
+## Create needed number (n_draw) of random draws of first stage coefficients for each site
+trim_df <- trim_df %>% 
+  drop_na()
+
 mc_df <- trim_df %>%
-  mutate(coef_draws = pmap(list(n = n_mc, 
+  mutate(coef_draws = pmap(list(n = trim_df$n_draw + 1, 
                                 cwd_est = trim_df$estimate_cwd.an, 
                                 pet_est = trim_df$estimate_pet.an,
                                 int_est = trim_df$estimate_intercept, 
@@ -162,12 +250,22 @@ mc_df <- trim_df %>%
                            draw_coefs))
 
 
-## Unnest to create dataframe of n_site X 10,000 coefficient estimates
+## Unnest to create dataframe of n_site X n_draw coefficient estimates
 mc_df <- mc_df %>% 
   unnest(coef_draws) %>% 
   select(collection_id, iter_idx, cwd_coef, pet_coef, int_coef, cwd.spstd, 
          pet.spstd, latitude, longitude, cwd_errorweights, pet_errorweights, int_errorweights)
 
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Merge first stage draws back to bootstrap dataframe -------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+block_draw_df <- block_draw_df %>% 
+  group_by(collection_id) %>% 
+  mutate(iter_idx = 1:n())
+
+block_draw_df <- block_draw_df %>% 
+  left_join(mc_df, by = c("collection_id", "iter_idx"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -175,8 +273,8 @@ mc_df <- mc_df %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ## Function defining main second stage model
 run_ss <- function(data, outcome = "cwd_coef"){
-  formula <- as.formula(paste(outcome, " ~ cwd.spstd + pet.spstd"))
-  mod <- lm(formula, data=data)
+  formula <- as.formula(paste(outcome, " ~ cwd.spstd + pet.spstd")) ## ADD BACK WEIGHTING HERE?
+  mod <- lm(formula, data=data, weights = cwd_errorweights)
   coefs <- mod$coefficients
   return(coefs)
 }
@@ -184,6 +282,8 @@ run_ss <- function(data, outcome = "cwd_coef"){
 ## Function to run second stage model for first stage CWD, 
 ## PET and Intercept terms and organize coefficients
 bs_ss <- function(data){
+  # data <- data %>% # Needed to add this since block bootstrap is returning nested tibble
+  #   unnest(cols = c(data))
   cwd_mod <- data %>% 
     run_ss(outcome = "cwd_coef")
   pet_mod <- data %>% 
@@ -202,43 +302,57 @@ bs_ss <- function(data){
 }
 
 ## Create dataframe holding bootstrap samples
-boot_df <- mc_df 
-n_sites <- boot_df %>% pull(collection_id) %>% unique() %>% length()
-n_obs = n_mc * n_sites
+boot_df <- block_draw_df %>%
+  select(-iter_idx) %>% 
+  group_by(boot_id) %>% 
+  nest()
 
-# boot_df <- boot_df %>% 
-#   ## TODO: Here's where we probably want to introduce block bootstrapping design...
-#   sample_n(size = n_obs, replace = TRUE, weight = cwd_errorweights) %>% 
-#   ## TODO: Should weighting be done separately for CWD, PET and Intercept terms? 
-#   ## Each has a different standard error in first stage...
-#   mutate(iter_idx = rep(1:n_mc, each=n_sites)) %>% 
-#   relocate(iter_idx) %>% 
-#   group_by(iter_idx) %>% 
-#   nest() 
-  ## Note: goal at end of bootstrap is to have a dataframe with 10,000 nested datasets 
-  ## that can be used for second stage model...
+# # n_sites <- boot_df %>% pull(collection_id) %>% unique() %>% length()
+# # n_obs = n_mc * n_sites
+# 
+# 
+# 
+# # boot_df <- boot_df %>% 
+# #   ## TODO: Here's where we probably want to introduce block bootstrapping design...
+# #   sample_n(size = n_obs, replace = TRUE, weight = cwd_errorweights) %>% 
+# #   ## TODO: Should weighting be done separately for CWD, PET and Intercept terms? 
+# #   ## Each has a different standard error in first stage...
+# #   mutate(iter_idx = rep(1:n_mc, each=n_sites)) %>% 
+# #   relocate(iter_idx) %>% 
+# #   group_by(iter_idx) %>% 
+# #   nest() 
+#   ## Note: goal at end of bootstrap is to have a dataframe with 10,000 nested datasets 
+#   ## that can be used for second stage model...
+# 
+# source("block_bootstrapping.R")
+# ncores=detectCores()-2
+# my.cluster=makeCluster(ncores);registerDoParallel(cl=my.cluster)
+# boot_df=blockbootstrap_func(boot_df)
+# saveRDS(boot_df,file=paste0(wdir,"out/blockbootstrap_samples.rds"))
+# 
+# boot_df <- readRDS(paste0(wdir,"out/blockbootstrap_samples.rds"))
 
-source("block_bootstrapping.R")
-ncores=detectCores()-2
-my.cluster=makeCluster(ncores);registerDoParallel(cl=my.cluster)
-boot_df=blockbootstrap_func(boot_df)
-saveRDS(boot_df,file=paste0(wdir,"out/blockbootstrap_samples.rds"))
 
 ## Estimate second stage models
 boot_df <- boot_df %>% 
   mutate(estimates = map(.x = data, .f = bs_ss)) %>% 
   unnest_wider(estimates) %>% 
-  select(-data)
+  select(-data) %>% 
+  ungroup()
 
 ## Summarize bootstrap results
-bs_coefs <- apply(boot_df %>% select(-iter_idx), 2, mean) %>% print()
-bs_ste <- apply(boot_df %>% select(-iter_idx), 2, sd) %>% print()
+bs_coefs <- apply(boot_df %>% select(-boot_id), 2, mean) %>% print()
+bs_ste <- apply(boot_df %>% select(-boot_id), 2, sd) %>% print()
+
+
 
 ## TODO: Should we be worried that bootstrap se very similar (but smaller?) than simple regression result?
 ## Bootstrap is currently returning s.e. of 0.001849, compare to 0.002054 for simple regression:
 mod <- feols(estimate_cwd.an ~ cwd.spstd + pet.spstd, 
              weights = trim_df$cwd_errorweights, data = trim_df)
 summary(mod) 
+
+
 
 ## Save out bootstrapped coefficients that reflect uncertainty from both first and second stage models
 write_rds(boot_df, paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
@@ -248,10 +362,10 @@ write_rds(boot_df, paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
 # mod_df <- trim_df %>% filter(genus == "Araucaria")
 # mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data = mod_df)
 # summary(mod) ## TODO: Is bootstrap se too similar to simple regression result? Revisit...
-# mod <- feols(estimate_cwd.an ~ cwd.spstd + pet.spstd, 
-#              weights = mod_df$errorweights, data = mod_df,
-#              vcov = conley(distance = "spherical"))
-# summary(mod) ## TODO: Is bootstrap se too similar to simple regression result? Revisit...
+mod <- feols(estimate_cwd.an ~ cwd.spstd + pet.spstd,
+             weights = trim_df$cwd_errorweights, data = trim_df,
+             vcov = conley(distance = "spherical"))
+summary(mod) ## TODO: Is bootstrap se too similar to simple regression result? Revisit...
 # 
 # 
 # 
