@@ -364,7 +364,7 @@ write_rds(boot_df, paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
 # summary(mod) ## TODO: Is bootstrap se too similar to simple regression result? Revisit...
 mod <- feols(estimate_cwd.an ~ cwd.spstd + pet.spstd,
              weights = trim_df$cwd_errorweights, data = trim_df,
-             vcov = conley(distance = "spherical"))
+             vcov = conley(cutoff = 363, distance = "spherical"))
 summary(mod) ## TODO: Is bootstrap se too similar to simple regression result? Revisit...
 # 
 # 
@@ -405,6 +405,13 @@ summary(mod) ## TODO: Is bootstrap se too similar to simple regression result? R
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Investigate variation by genus  ----------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+run_ss_conley <- function(data, outcome = "estimate_cwd.an"){
+  formula <- as.formula(paste(outcome, " ~ cwd.spstd + pet.spstd")) ## ADD BACK WEIGHTING HERE?
+  mod <- feols(formula, data = data, weights = data$cwd_errorweights, 
+        vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
+  return(mod)
+}
+
 genus_lookup <- trim_df %>% select(collection_id, genus)
 genus_freq <- trim_df %>% 
   group_by(genus) %>% 
@@ -419,13 +426,23 @@ gymno_key <- sp_info %>%
   unique()
 
 
-mc_df <- mc_df %>% 
-  left_join(genus_lookup, by = "collection_id")
 
 # N = 10: 16 genera; 25: 12 genera; 50: 9 genera
 genus_keep <- genus_freq %>% 
-  filter(n_collections>10) %>%
+  filter(n_collections>25) %>%
   pull(genus)
+
+genus_df <- trim_df %>% 
+  filter(genus %in% genus_keep) %>% 
+  group_by(genus) %>% 
+  nest() %>% 
+  mutate(model_estimates = map(data, run_ss_conley))
+
+genus_df$model_estimates
+
+
+mc_df <- mc_df %>% 
+  left_join(genus_lookup, by = "collection_id")
 
 genus_df <- mc_df %>% 
   filter(genus %in% genus_keep) %>% 
