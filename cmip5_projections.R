@@ -1,4 +1,16 @@
-#load in site lat longs
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Authors: Robert Heilmayr, Frances Moore, Joan Dudney
+# Project: Treeconomics
+# Date: 
+# Purpose: Calculate CWD / PET based on CMIP5 data
+#
+# Input files:
+#
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Package imports --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 library(plyr)
 library(raster)
 library(sp)
@@ -12,17 +24,21 @@ library(data.table)
 library(tidyverse)
 source("cwd_function.R")
 
-franspath="C:/Users/fmoore/Box/Davis Stuff/Treeconomics"
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Create CWD projections --------------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Define path
+wdir <- 'remote\\'
 
-tasfiles=list.files(paste0(franspath,"/Data/CMIP5 Data/tas"))
-prfiles=list.files(paste0(franspath,"/Data/CMIP5 Data/pr"))
+tasfiles=list.files(paste0(wdir,"in/CMIP5 Data/tas"))
+prfiles=list.files(paste0(wdir,"in/CMIP5 Data/pr"))
 
 years=list(1970:2000,2045:2055,2090:2100)
 yearmonths=rep(1861:2100,each=12)
 
 for(i in 1:length(tasfiles)){
-  tasfile=brick(paste0(franspath,"/Data/CMIP5 Data/tas/",tasfiles[i]))
-  prfile=brick(paste0(franspath,"/Data/CMIP5 Data/pr/",prfiles[i]))
+  tasfile=brick(paste0(wdir,"in/CMIP5 Data/tas/",tasfiles[i]))
+  prfile=brick(paste0(wdir,"in/CMIP5 Data/pr/",prfiles[i]))
   for(k in 1:length(years)){
     tas_period=tasfile[[which(yearmonths%in%years[[k]])]]
     pr_period=prfile[[which(yearmonths%in%years[[k]])]]
@@ -32,16 +48,16 @@ for(i in 1:length(tasfiles)){
       pr_months=stack(pr_months,calc(pr_period[[which(1:dim(pr_period)[3]%%12==ifelse(j==12,0,j))]],function(x) mean(x, na.rm=T)))
     }
     if(k==1){
-      save(tas_months,file=paste0(franspath,"/Data/CMIP5 Data/monthly tas rasters/start/tas_",i,"_1970_2000.Rdat"))
-      save(pr_months,file=paste0(franspath,"/Data/CMIP5 Data/monthly pr rasters/start/pr_",i,"_1970_2000.Rdat"))
+      save(tas_months,file=paste0(wdir,"in/CMIP5 Data/monthly tas rasters/start/tas_",i,"_1970_2000.Rdat"))
+      save(pr_months,file=paste0(wdir,"in/CMIP5 Data/monthly pr rasters/start/pr_",i,"_1970_2000.Rdat"))
     }
     if(k==2){
-      save(tas_months,file=paste0(franspath,"/Data/CMIP5 Data/monthly tas rasters/mid/tas_",i,"_2045_2055.Rdat"))
-      save(pr_months,file=paste0(franspath,"/Data/CMIP5 Data/monthly pr rasters/mid/pr_",i,"_2045_2055.Rdat"))
+      save(tas_months,file=paste0(wdir,"in/CMIP5 Data/monthly tas rasters/mid/tas_",i,"_2045_2055.Rdat"))
+      save(pr_months,file=paste0(wdir,"in/CMIP5 Data/monthly pr rasters/mid/pr_",i,"_2045_2055.Rdat"))
     }
     if(k==3){
-      save(tas_months,file=paste0(franspath,"/Data/CMIP5 Data/monthly tas rasters/end/tas_",i,"_2090_2100.Rdat"))
-      save(pr_months,file=paste0(franspath,"/Data/CMIP5 Data/monthly pr rasters/end/pr_",i,"_2090_2100.Rdat"))
+      save(tas_months,file=paste0(wdir,"in/CMIP5 Data/monthly tas rasters/end/tas_",i,"_2090_2100.Rdat"))
+      save(pr_months,file=paste0(wdir,"in/CMIP5 Data/monthly pr rasters/end/pr_",i,"_2090_2100.Rdat"))
     }
   }
   print(i)
@@ -50,11 +66,11 @@ for(i in 1:length(tasfiles)){
 
 #get soil, slope, latitude, elevation for cwd calculation
 
-swc=raster(paste0(franspath,"/Data/CMIP5 Data/other data for cwd/sr_cru_max.asc"))
+swc=raster(paste0(wdir,"in/CMIP5 Data/other data for cwd/sr_cru_max.asc"))
 #convert swc from mm to cm
 swc=swc/10
 
-load(paste0(franspath,"/Data/CMIP5 Data/other data for cwd/slopeaspectraster.Rdat"))
+load(paste0(wdir,"in/CMIP5 Data/other data for cwd/slopeaspectraster.Rdat"))
 
 terrainraster=crop(terrainraster,extent(swc))
 #convert slope and aspect to degrees
@@ -68,12 +84,12 @@ sitedata$site=1:dim(sitedata)[1]
 
 
 #need to get correction of CMIP data using WorldClim 1970-2000 climatology
-precipfiles=list.files("Data/WorldClim Data for Downscaling/Lower Resolution/precip")
-tmeanfiles=list.files("Data/WorldClim Data for Downscaling/Lower Resolution/tmean")
+precipfiles=list.files(paste0(wdir,"in/WorldClim Data for Downscaling/Lower Resolution/precip"))
+tmeanfiles=list.files(paste0(wdir,"in/WorldClim Data for Downscaling/Lower Resolution/tmean"))
 
 for(i in 1:12){
-  p=raster(paste0("Data/WorldClim Data for Downscaling/Lower Resolution/precip/",precipfiles[i]))
-  tmean=raster(paste0("Data/WorldClim Data for Downscaling/Lower Resolution/tmean/",tmeanfiles[i]))
+  p=raster(paste0(wdir,"in/WorldClim Data for Downscaling/Lower Resolution/precip/",precipfiles[i]))
+  tmean=raster(paste0(wdir,"in/WorldClim Data for Downscaling/Lower Resolution/tmean/",tmeanfiles[i]))
 
   if(i==1){precipclim=p;tempclim=tmean}
   if(i>1) {precipclim=stack(precipclim,p);tempclim=stack(tempclim,tmean)}
@@ -84,13 +100,13 @@ precipclim=aggregate(precipclim,fact=3);tempclim=aggregate(tempclim,fact=3)
 
 
 #get model-specific correction factors based on 1970-2000 climatology
-tempmodelfiles=list.files(paste0("Data/CMIP5 Data/monthly tas rasters/",period[i]))
-precipmodelfiles=list.files(paste0("Data/CMIP5 Data/monthly pr rasters/",period[i]))
+tempmodelfiles=list.files(paste0(wdir,"in/CMIP5 Data/monthly tas rasters/",period[i]))
+precipmodelfiles=list.files(paste0(wdir,"in/CMIP5 Data/monthly pr rasters/",period[i]))
 
 pr_correction=list();tas_correction=list()
 for(i in 1:length(tempmodelfiles)){
-  load(paste0("Data/CMIP5 Data/monthly tas rasters/start/",tempmodelfiles[i]))
-  load(paste0("Data/CMIP5 Data/monthly pr rasters/start/",precipmodelfiles[i]))
+  load(paste0(wdir,"in/CMIP5 Data/monthly tas rasters/start/",tempmodelfiles[i]))
+  load(paste0(wdir,"in/CMIP5 Data/monthly pr rasters/start/",precipmodelfiles[i]))
   tas_months=rotate(tas_months);pr_months=rotate(pr_months)
   tas_months=resample(tas_months,swc);pr_months=resample(pr_months,swc)
   
@@ -103,14 +119,14 @@ for(i in 1:length(tempmodelfiles)){
   print(i)
 }
 
-save(sitedata,pr_correction,tas_correction,file="Data/CMIP5 Data/other data for cwd/sitedata_climatologycorrection.Rdat")
+save(sitedata,pr_correction,tas_correction,file=paste0(wdir,"in/CMIP5 Data/other data for cwd/sitedata_climatologycorrection.Rdat"))
 
-datfolder="C:/Users/fmoore/Desktop/treeconomics_cwd/"
+datfolder=paste0(wdir, "in/CMIP5 CWD/")
 
 period=c("start","mid","end")
 
 swc=raster(paste0(datfolder,"sr_cru_max.asc"))
-load(paste0(datfolder,"sitedata_climatologycorrection.Rdat"))
+load(paste0(datfolder,"other data for cwd/sitedata_climatologycorrection.Rdat"))
 sitedata$slope[which(sitedata$slope<0)]=0 # fix a few suprious slope values
 
 cl=makeCluster(20)
@@ -153,10 +169,10 @@ for(i in 1:length(period)){
 
 ### --------Put CWD / AET Data into grids ----------------
 
-cwddir="C:/Users/fmoore/Desktop/treeconomics_cwd/cwd calcs/"
+cwddir=datfolder
 cwdfiles=list.files(cwddir)
 
-load(file="C:/Users/fmoore/Desktop/sitedata_climatologycorrection.Rdat")
+load(file=paste0(datfolder, "other data for cwd/sitedata_climatologycorrection.Rdat"))
 
 climdat=as.data.frame(tas_correction[[1]][[1]])
 climdat$site=1:dim(climdat)[1]
@@ -191,7 +207,7 @@ for(i in 1:length(period)){
     }
   }
   print(period[i])
-  save(aet_raster,cwd_raster,file=paste0("C:/Users/fmoore/Desktop/treeconomics_cwd/cmip5_cwdaet_",period[i],".Rdat"))
+  save(aet_raster,cwd_raster,file=paste0(cwddir, "cmip5_cwdaet_",period[i],".Rdat"))
 }
 
 
