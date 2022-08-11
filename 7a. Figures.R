@@ -321,18 +321,20 @@ map/range_map + plot_layout(heights=c(1.3,2))
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Observation frequency plot --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-xmin <- -2.5
-xmax <- 2.5
+xmin <- -3
+xmax <- 4
+ymin <- -4
+ymax = 3
 
 ### Summary plot of sample distribution
-hex <- flm_df %>% ggplot(aes(x = cwd.spstd, y = pet.spstd, weight = nobs)) +
+hex <- flm_df %>% ggplot(aes(x = cwd.spstd, y = pet.spstd, weight = nobs / 1000)) +
   geom_hline(yintercept = 0, size = 1, linetype = 2) +
   geom_vline(xintercept = 0, size = 1, linetype = 2) +
   geom_point(alpha=.0)+
   geom_hex() +
   xlim(xmin, xmax) +
-  ylim(xmin, xmax) +
-  labs(fill = "Number of tree-year\nobservations") +
+  ylim(ymin, ymax) +
+  labs(fill = "Number of tree-year\nobservations (thousand)") +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") + 
   coord_fixed() +
@@ -617,8 +619,8 @@ pet_est_plot <- long_trim_df %>%
         legend.background = element_blank()) +
   ggtitle("Site-level estimates of marginal effect of PET")
 
-
-
+cwd_est_plot
+pet_est_plot
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -650,7 +652,7 @@ cwd_dynamic <- plot_dnlm(dnlm_results$cwd) +
 pet_dynamic <- plot_dnlm(dnlm_results$pet) +
   ggtitle("Dynamic effect of 1 s.d. increase in PET")
 
-(cwd_est_plot / pet_est_plot) | (cwd_dynamic / pet_dynamic)
+(cwd_dynamic / pet_dynamic) | (cwd_est_plot / pet_est_plot)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -663,12 +665,18 @@ pet_dynamic <- plot_dnlm(dnlm_results$pet) +
 #   rename(estimate_cwd.an = cwd_coef,
 #          estimate_pet.an = pet_coef)
 
-
 # Note: PET 1-99% quantiles vary from -1.9 to 3.5; PET from -2.9 to 1.8. -3 to 3.5 seems like a good block for plots
-cwd_min <- flm_df$pet.spstd %>% quantile(0.01)
-cwd_max <- flm_df$pet.spstd %>% quantile(0.99)
-pred_min <- -3
-pred_max <- 3
+cwd_min <- flm_df$cwd.spstd %>% quantile(0.01) %>% print()
+cwd_max <- flm_df$cwd.spstd %>% quantile(0.99) %>% print()
+pet_min <- flm_df$pet.spstd %>% quantile(0.01) %>% print()
+pet_max <- flm_df$pet.spstd %>% quantile(0.99) %>% print()
+cwd_min_man <- -2
+cwd_max_man <- 4
+pet_min_man <- -4
+pet_max_man <- 2
+
+pred_min <- -2.5
+pred_max <- 2.5
 
 
 ### Binned plot of cwd sensitivity
@@ -682,13 +690,14 @@ convert_bin <- function(n){
   sequence[n] + half_inc
 }
 
-plot_dat <- trim_df %>%
-  filter(cwd.spstd > pred_min, 
-         cwd.spstd < pred_max,
-         pet.spstd > pred_min,
-         cwd.spstd < pred_max) %>% 
-  # filter(((abs(cwd.spstd)<3) & (abs(pet.spstd<3)))) %>%
-  drop_na()
+plot_dat <- trim_df
+# plot_dat <- trim_df %>%
+#   filter(cwd.spstd > pred_min, 
+#          cwd.spstd < pred_max,
+#          pet.spstd > pred_min,
+#          cwd.spstd < pred_max) %>% 
+#   # filter(((abs(cwd.spstd)<3) & (abs(pet.spstd<3)))) %>%
+#   drop_na()
 
 plot_dat_a <- plot_dat %>%
   mutate(cwd.q = cut(cwd.spstd, breaks = sequence, labels = FALSE),
@@ -699,9 +708,16 @@ plot_dat_a <- plot_dat %>%
 plot_dat_b <- plot_dat_a %>%
   group_by(cwd.q, pet.q) %>%
   summarize(cwd_sens = mean(estimate_cwd.an, na.rm = TRUE),
+            # cwd_sens = weighted.mean(estimate_cwd.an, w = cwd_errorweights, na.rm = TRUE),
             pet_sens = mean(estimate_pet.an, na.rm = TRUE),
             n = n()) %>%
-  filter(n>=10)
+  filter(n>=5)
+
+# sym_log <- function(x){
+#   y = sign(x) * log10(1 + abs(x))
+#   return(y)
+# }
+# plot_dat_b <- plot_dat_b %>% mutate(cwd_sens = sym_log(cwd_sens))
 
 binned_margins <- plot_dat_b %>%
   ggplot(aes(x = cwd.q, y = pet.q, fill = cwd_sens)) +
@@ -712,7 +728,7 @@ binned_margins <- plot_dat_b %>%
   scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
   ylab("Deviation from mean PET")+
   xlab("Deviation from mean CWD")+
-  theme_bw(base_size = 22)+
+  theme_bw(base_size = 18)+
   theme(legend.position = c(.18,.83),
         legend.key = element_blank(),
         legend.background = element_blank())+
@@ -723,7 +739,9 @@ binned_margins <- plot_dat_b %>%
   xlab("Historic CWD\n(Deviation from species mean)") +
   coord_fixed() +
   geom_hline(yintercept = 0, size = 1, linetype = 2) +
-  geom_vline(xintercept = 0, size = 1, linetype = 2)
+  geom_vline(xintercept = 0, size = 1, linetype = 2) +
+  xlim(c(pred_min, pred_max)) +
+  ylim(c(pred_min, pred_max))
 # +
 #   theme(panel.grid.major = element_blank(), 
 #         panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
@@ -870,11 +888,11 @@ margins_plot <- ggplot(cwd_me_df, aes(x = at_cwd)) +
   geom_ribbon(aes(ymin=cwd_ci_min, ymax=cwd_ci_max), alpha=0.2, fill = "darkblue") +
   geom_line(aes(y = cwd_ci_max), linetype = 3) +
   geom_line(aes(y = cwd_ci_min), linetype = 3) +
-  geom_hline(yintercept = 0, linetype = 2) +
+  geom_hline(yintercept = 0, size = 1, linetype = 2) +
   xlab("Historic CWD\n(Deviation from species mean)") + 
   ylab("Pred. sensitivity to CWD") + 
   xlim(c(pred_min, pred_max)) +
-  theme_bw(base_size = 23)
+  theme_bw(base_size = 18)
 # +
 #   theme(panel.grid.major = element_blank(), 
 #         panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
@@ -903,8 +921,7 @@ out_fig <- binned_margins / margins_plot +
 
 
 out_fig
-#ggsave(paste0(wdir, 'figures\\2_cwd_margins.svg'), plot = out_fig, width = 20, height = 12, units = "in")
-#ggsave(paste0(wdir, 'figures\\2_cwd_margins.png'), plot = out_fig, width = 20, height = 12, units = "in")
+ggsave(paste0(wdir, 'figures\\2_cwd_margins.svg'), plot = out_fig, width = 5, height = 9, units = "in")
 #ggsave(paste0(wdir, 'figures\\2_cwd_margins_only.svg'), plot = margins_plot, width = 15, height = 9, units = "in")
 
 
@@ -1223,7 +1240,7 @@ transect_1 <- transect_dat %>%
               alpha = 0.2) +
   geom_line(size = 2) +
   theme_bw(base_size = 20)+
-  ylim(c(-2, 0.4)) +
+  ylim(c(-1.5, 0.4)) +
   xlim(c(-2, 2)) +
   scale_linetype_manual(values=c("solid", "dotted", "dotted")) +
   scale_fill_manual(name = "Scenario",
@@ -1254,7 +1271,7 @@ transect_2 <- transect_dat %>%
               alpha = 0.2) +
   geom_line(size = 2) +
   theme_bw(base_size = 20)+
-  ylim(c(-2, 0.2)) +
+  ylim(c(-1.5, 0.2)) +
   xlim(c(-2, 2)) +
   scale_linetype_manual(values=c("solid", "dotted", "dotted"))+
   scale_fill_manual(name = "Scenario",
