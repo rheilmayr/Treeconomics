@@ -50,7 +50,9 @@ out_dir <- paste0(wdir,"out/predictions/sp_rwi_pred_", as.character(n_mc), "/")
 dir.create(file.path(out_dir), showWarnings = FALSE)
 
 # 1. Second stage model
-mod_df <- read_rds(paste0(wdir, "out/second_stage/ss_bootstrap.gz"))
+mod_df <- read_rds(paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
+mod_df <- mod_df %>% 
+  rename(iter_idx = boot_id)
 
 # 2. Species-standardized historic and future climate
 sp_clim <- read_rds(paste0(wdir, "out/climate/sp_clim_predictions.gz"))
