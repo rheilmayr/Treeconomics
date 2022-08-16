@@ -84,12 +84,12 @@ sitedata$site=1:dim(sitedata)[1]
 
 
 #need to get correction of CMIP data using WorldClim 1970-2000 climatology
-precipfiles=list.files(paste0(wdir,"in/WorldClim Data for Downscaling/Lower Resolution/precip"))
-tmeanfiles=list.files(paste0(wdir,"in/WorldClim Data for Downscaling/Lower Resolution/tmean"))
+precipfiles=list.files(paste0(wdir,"in/WorldClim/Lower Resolution/precip"),pattern=".tif")
+tmeanfiles=list.files(paste0(wdir,"in/WorldClim/Lower Resolution/tmean"),pattern=".tif")
 
 for(i in 1:12){
-  p=raster(paste0(wdir,"in/WorldClim Data for Downscaling/Lower Resolution/precip/",precipfiles[i]))
-  tmean=raster(paste0(wdir,"in/WorldClim Data for Downscaling/Lower Resolution/tmean/",tmeanfiles[i]))
+  p=raster(paste0(wdir,"in/WorldClim/Lower Resolution/precip/",precipfiles[i]))
+  tmean=raster(paste0(wdir,"in/WorldClim/Lower Resolution/tmean/",tmeanfiles[i]))
 
   if(i==1){precipclim=p;tempclim=tmean}
   if(i>1) {precipclim=stack(precipclim,p);tempclim=stack(tempclim,tmean)}
@@ -100,8 +100,8 @@ precipclim=aggregate(precipclim,fact=3);tempclim=aggregate(tempclim,fact=3)
 
 
 #get model-specific correction factors based on 1970-2000 climatology
-tempmodelfiles=list.files(paste0(wdir,"in/CMIP5 Data/monthly tas rasters/",period[i]))
-precipmodelfiles=list.files(paste0(wdir,"in/CMIP5 Data/monthly pr rasters/",period[i]))
+tempmodelfiles=list.files(paste0(wdir,"in/CMIP5 Data/monthly tas rasters/start"),pattern=".Rdat")
+precipmodelfiles=list.files(paste0(wdir,"in/CMIP5 Data/monthly pr rasters/start"),pattern=".Rdat")
 
 pr_correction=list();tas_correction=list()
 for(i in 1:length(tempmodelfiles)){
@@ -121,12 +121,12 @@ for(i in 1:length(tempmodelfiles)){
 
 save(sitedata,pr_correction,tas_correction,file=paste0(wdir,"in/CMIP5 Data/other data for cwd/sitedata_climatologycorrection.Rdat"))
 
-datfolder=paste0(wdir, "in/CMIP5 CWD/")
+datfolder=paste0(wdir, "in/CMIP5 Data/")
 
 period=c("start","mid","end")
 
-swc=raster(paste0(datfolder,"sr_cru_max.asc"))
-load(paste0(datfolder,"other data for cwd/sitedata_climatologycorrection.Rdat"))
+swc=raster(paste0(wdir,"in/CMIP5 Data/other data for cwd/sr_cru_max.asc"))
+load(paste0(wdir,"in/CMIP5 Data/other data for cwd/sitedata_climatologycorrection.Rdat"))
 sitedata$slope[which(sitedata$slope<0)]=0 # fix a few suprious slope values
 
 cl=makeCluster(20)
@@ -135,8 +135,8 @@ registerDoParallel(cl)
 
 for(i in 1:length(period)){
   print(period[i])
-  tempmodelfiles=list.files(paste0(datfolder,"monthly tas rasters/",period[i]))
-  precipmodelfiles=list.files(paste0(datfolder,"monthly pr rasters/",period[i]))
+  tempmodelfiles=list.files(paste0(datfolder,"monthly tas rasters/",period[i]),pattern=".Rdat")
+  precipmodelfiles=list.files(paste0(datfolder,"monthly pr rasters/",period[i]),pattern=".Rdat")
   for(j in 1:length(tempmodelfiles)){
     load(paste0(datfolder,"monthly tas rasters/",period[i],"/",tempmodelfiles[j]))
     load(paste0(datfolder,"monthly pr rasters/",period[i],"/",precipmodelfiles[j]))
