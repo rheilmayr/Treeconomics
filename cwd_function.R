@@ -136,7 +136,7 @@ cwd_function <- function(site,slope,latitude,foldedaspect,ppt,tmean,month,soilaw
   data[,soilm1:=data.table::shift(soilm,1L,type="lag",fill=0)]
 
   data[,deltsoil:=(soilm1*(1-(exp(-1*(petm-wm)/soilawc))))]
-  data[,deltsoil:=ifelse(is_na(deltsoil), -Inf, deltsoil)]
+  data[,deltsoil:=ifelse(is.na(deltsoil), -Inf, deltsoil)]
   data[,deltsoilwm:=ifelse(deltsoil>0,wm+deltsoil,wm)]
   data[,aet:=ifelse(deltsoilwm<petm,deltsoilwm,petm)]
   data[,cwd:=petm-aet]

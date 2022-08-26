@@ -30,8 +30,8 @@ source("cwd_function.R")
 # Define path
 wdir <- 'remote\\'
 
-tasfiles=list.files(paste0(wdir,"in/CMIP5 Data/tas"))
-prfiles=list.files(paste0(wdir,"in/CMIP5 Data/pr"))
+tasfiles=list.files(paste0(wdir,"in/CMIP5 Data/tas"),pattern=".nc")
+prfiles=list.files(paste0(wdir,"in/CMIP5 Data/pr"),pattern=".nc")
 
 years=list(1970:2000,2045:2055,2090:2100)
 yearmonths=rep(1861:2100,each=12)
@@ -152,7 +152,7 @@ for(i in 1:length(period)){
     tasdata=as.data.frame(tas_months);prdata=as.data.frame(pr_months)
     colnames(tasdata)=1:12;colnames(prdata)=1:12
     tasdata$site=1:dim(tasdata)[1];prdata$site=1:dim(tasdata)[1]
-    tasdata=melt(tasdata,id.vars="site");prdata=melt(prdata,id.vars="site")
+    tasdata=reshape2::melt(tasdata,id.vars="site");prdata=reshape2::melt(prdata,id.vars="site")
     climatedata=cbind(tasdata,prdata[,3])
     colnames(climatedata)=c("site","month","temp","precip")
     
@@ -170,7 +170,7 @@ for(i in 1:length(period)){
 ### --------Put CWD / AET Data into grids ----------------
 
 cwddir=datfolder
-cwdfiles=list.files(cwddir)
+cwdfiles=list.files(paste0(cwddir,"/cwd calcs/"),full.names=TRUE)
 
 load(file=paste0(datfolder, "other data for cwd/sitedata_climatologycorrection.Rdat"))
 
@@ -181,7 +181,7 @@ sitedata=sitedata[complete.cases(sitedata),]
 
 sitecrosswalk=data.frame(site_grid=unique(sitedata$site),site=1:length(unique(sitedata$site)))
 
-period=c("start","mid","end")
+period=c("start","end")
 
 for(i in 1:length(period)){
   periodfiles=cwdfiles[grep(period[i],cwdfiles)]
@@ -189,7 +189,7 @@ for(i in 1:length(period)){
     cwd_raster_temp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
     aet_raster_temp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
     
-    cwddat=fread(paste0(cwddir,period[i],"_",j,".csv"))
+    cwddat=fread(periodfiles[j])
     cwddat=cwddat%>%
       select(site,month,aet,cwd)%>%
       group_by(site)%>%
@@ -207,7 +207,7 @@ for(i in 1:length(period)){
     }
   }
   print(period[i])
-  save(aet_raster,cwd_raster,file=paste0(cwddir, "cmip5_cwdaet_",period[i],".Rdat"))
+  save(aet_raster,cwd_raster,file=paste0(wdir,"/in/CMIP5 CWD/cmip5_cwdaet_",period[i],".Rdat"))
 }
 
 
