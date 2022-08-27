@@ -53,6 +53,7 @@ dendro_df <- dendro_df %>%
   summarise(rwi = mean(rwi),
             rwl = mean(rwl),
             .groups = "drop") %>% 
+  mutate(tree_id = paste0(collection_id, "_", tree)) %>% 
   as_tibble()
 
 
@@ -108,40 +109,44 @@ clim_lagged <- clim_lagged %>%
   filter(complete.cases(clim_lagged[,grep("cwd_L", colnames(clim_lagged))]),
          complete.cases(clim_lagged[,grep("pet_L", colnames(clim_lagged))]))
 
-
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Create cross-basis matrices  ------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-bylag = 0.1
-gendat = dendro_lagged
-# %>% 
-#   filter(gymno_angio == "angio")
-# %>%
-#   filter(cwd.spstd > 1)
+cwd_lagged = data.frame(clim_lagged[,grep("cwd_L",colnames(clim_lagged))])
+pet_lagged = data.frame(clim_lagged[,grep("pet_L",colnames(clim_lagged))])
 
 
-cwd_lagged = data.frame(gendat[,grep("cwd_L",colnames(gendat))])
-pet_lagged = data.frame(gendat[,grep("pet_L",colnames(gendat))])
+cb_knots=logknots(nlags,3)
+cwd_cb = crossbasis(an_site_clim$cwd.an.spstd,
+                    lag=c(0,nlags),
+                    group = an_site_clim$collection_id,
+                    argvar=list(fun = "lin"),
+                    arglag=list(fun = "ns",
+                                knots=cb_knots,
+                                Boundary.knots=c(0,nlags)))
+pet_cb = crossbasis(an_site_clim$pet.an.spstd,
+                    lag=c(0,nlags),
+                    group = an_site_clim$collection_id,
+                    argvar=list(fun = "lin"),
+                    arglag=list(fun = "ns",
+                                knots=cb_knots,
+                                Boundary.knots=c(0,nlags)))
+
 
 # cwd_cb = crossbasis(cwd_lagged,
 #                     lag=c(0,nlags),
-#                     argvar=list(fun = "lin"),
-#                     arglag=list(knots=logknots(9,3)))
+#                     argvar=list(fun = "ns",
+#                                 Boundary.knots=c(-3,3)),
+#                     arglag=list(fun = "ns",
+#                                 knots=cb_knots,
+#                                 Boundary.knots=c(0,10)))
 # pet_cb = crossbasis(pet_lagged,
 #                     lag=c(0,nlags),
-#                     argvar=list(fun = "lin"),
-#                     arglag=list(knots=logknots(9,3)))
-
-cwd_cb = crossbasis(cwd_lagged,
-                    lag=c(0,nlags),
-                    argvar=list(fun = "ns"),
-                    arglag=list(knots=logknots(9,3),
-                                Boundary.knots=c(0,9)))
-pet_cb = crossbasis(pet_lagged,
-                    lag=c(0,nlags),
-                    argvar=list(fun = "ns"),
-                    arglag=list(knots=logknots(9,3),
-                                Boundary.knots=c(0,9)))
+#                     argvar=list(fun = "ns",
+#                                 Boundary.knots=c(-3,3)),
+#                     arglag=list(fun = "ns",
+#                                 knots=cb_knots,
+#                                 Boundary.knots=c(0,10)))
 
 
 cwd_cb_dat <- cwd_cb %>% 
@@ -157,9 +162,15 @@ pet_cb_dat <- pet_cb %>%
                                      replacement = "pet_cbv1"), 
               matches("v1")) 
 
-cb_df <- gendat %>% 
-  select(collection_id, rwi, latitude, longitude) %>% 
+cb_df <- an_site_clim %>% 
   cbind(cwd_cb_dat, pet_cb_dat)
+
+
+# cb_df <- clim_lagged %>% 
+#   cbind(cwd_cb_dat, pet_cb_dat)
+cb_df <- dendro_df %>% 
+  inner_join(cb_df, by = c("collection_id", "year")) %>% 
+  left_join(ave_site_clim, by = "collection_id") 
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -167,8 +178,9 @@ cb_df <- gendat %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 cwd_spstd_bounds = quantile(ave_site_clim$cwd.spstd, c(0.01, 0.99), na.rm = T)
 pet_spstd_bounds = quantile(ave_site_clim$pet.spstd, c(0.01, 0.99), na.rm = T)
+rwi_bounds = quantile(dendro_df$rwi, c(0.01, 0.99), na.rm = T)
 
-site_sample <- ave_site_clim %>% 
+clim_sample <- ave_site_clim %>% 
   mutate(outlier = 
            (cwd.spstd<cwd_spstd_bounds[1]) |
            (cwd.spstd>cwd_spstd_bounds[2]) |
@@ -177,24 +189,45 @@ site_sample <- ave_site_clim %>%
   filter(outlier==0) %>% 
   pull(collection_id)
 
-dendro_lagged <- dendro_df %>% 
-  filter(collection_id %in% site_sample) %>% 
-  filter(!(collection_id %in% old_incompletes))
+dendro_sample <- dendro_df %>% 
+  mutate(outlier =
+           (rwi<rwi_bounds[1]) |
+           (rwi>rwi_bounds[2])) %>% 
+  filter(outlier==0) %>% 
+  pull(collection_id)
 
+mod_df <- cb_df %>%
+  filter()
+  # filter(collection_id %in% clim_sample) %>%
+  # filter(collection_id %in% dendro_sample) %>% 
+  # filter(pet.spstd > 0.5 & cwd.spstd > 0.5)
+  # filter(pet.spstd < -0 & cwd.spstd < -0)
+  # filter((collection_id %in% old_incompletes))
+
+
+# flm_df %>% arrange(desc(estimate_pet.an))
+# 
+# mod_df <- cb_df %>%
+# # #   filter(cwd.spstd < 0)
+# #   # filter(collection_id %in% site_sample) %>%
+# #   # filter(collection_id == "CO559")
+#   filter(collection_id == "RUSS094")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Run dnlm regression ------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 n_vars <- dim(cwd_cb_dat)[2]
+bylag = 0.1
 
 petnam <- paste("pet_cbv1.l", 1:n_vars, sep="")
 cwdnam <- paste("cwd_cbv1.l", 1:n_vars, sep="")
 xnam <- append(cwdnam, petnam)
-fmla <- as.formula(paste("rwi ~ ", paste(xnam, collapse= "+")) %>% paste0(" | collection_id"))
-# vg.range <- 363. # km, calculated in 5b. Second stage
-# lagmod=feols(fmla, vcov = conley(cutoff = vg.range, distance = "spherical"), data=cb_df)
-lagmod=feols(fmla, data=cb_df)
+fmla <- as.formula(paste("rwi ~ ", paste(xnam, collapse= "+")) %>% paste0(" | tree_id"))
+vg.range <- 363. # km, calculated in 5b. Second stage
+lagmod=feols(fmla, vcov = conley(cutoff = vg.range, distance = "spherical"), data=mod_df)
+# fmla <- as.formula(paste("rwi ~ ", paste(xnam, collapse= "+")))
+# lagmod=feols(fmla, data=mod_df)
 
 cwd_cp = crosspred(cwd_cb, lagmod, cen = 0, at = -1:1, bylag = bylag, cumul = TRUE)
 pet_cp = crosspred(pet_cb, lagmod, cen = 0, at = -1:1, bylag = bylag, cumul = TRUE)
@@ -210,7 +243,7 @@ dynamic_cwd <- plot(cwd_cp,
      cumul=FALSE,
      xlab=paste0("Lagged Effect of CWD=", as.integer(shock)),
      ylab="Ring Width Growth",main=paste(""),
-     xlim=c(0,10))
+     xlim=c(0,15))
 
 
 dynamic_pet <- plot(pet_cp,
@@ -218,130 +251,133 @@ dynamic_pet <- plot(pet_cp,
      cumul = FALSE,
      xlab=paste0("Lagged Effect of PET=", as.integer(shock)),
      ylab="Ring Width Growth",main=paste(""),
-     xlim=c(0,10))
-
-
-dnlm_predictions <- list(cwd = cwd_cp, pet = pet_cp)
-dnlm_predictions %>% write_rds(paste0(wdir, "out/first_stage/dnlm."), compress = "gz")
+     xlim=c(0,15))
 
 
 
 
-# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# # Aggregate lagged model  ------------------------------
-# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# mod <- feols(rwi ~ cwd.an.spstd + pet.an.spstd | collection_id, data = dendro_lagged)
-# summary(mod)
-# 
-# mod <- feols(rwi ~ cwd_L00 + cwd_L01 + cwd_L02 + cwd_L03 + cwd_L04 + cwd_L05 + cwd_L06 + cwd_L07 + cwd_L08 + 
-#                pet_L00 + pet_L01 + pet_L02 + pet_L03 + pet_L04 + pet_L05 | collection_id, vcov = conley(cutoff = 363), data = dendro_lagged)
-# summary(mod)
-# 
-# mod <- feols(rwi ~ cwd_L00 + cwd_L01 + cwd_L02 + cwd_L03 + cwd_L04 + cwd_L05 + cwd_L06 + cwd_L07 + cwd_L08 + 
-#                pet_L00 + pet_L01 + pet_L02 + pet_L03 + pet_L04 + pet_L05 | collection_id, data = dendro_lagged %>% filter(gymno_angio=="gymno"))
-# summary(mod)
-# 
-# 
-# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# # Site-level DLNM  ------------------------------
-# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# run_dlnm <- function(gendat){
-#   failed <- F
-#   tryCatch(
-#     expr = {
-#       bylag = 0.1
-#       
-#       cwd_lagged = data.frame(gendat$cwd.an,gendat[,grep("cwd_L",colnames(gendat))])
-#       pet_lagged = data.frame(gendat$pet.an,gendat[,grep("pet_L",colnames(gendat))])
-#       
-#       cwd_cb = crossbasis(cwd_lagged,lag=c(0,nlags),argvar=list(fun = "lin"),arglag=list(knots=logknots(30, 4)))
-#       pet_cb = crossbasis(pet_lagged, lag=c(0,nlags), argvar=list(fun = "lin"), arglag=list(knots=logknots(30, 4)))
-#       
-#       lagmod=lm(rwi ~ cwd_cb + pet_cb, data=gendat)
-#       
-#       cwd_cp = crosspred(cwd_cb, lagmod, cen = 0, at = -1:1, bylag = bylag, cumul = TRUE)
-#       pet_cp = crosspred(pet_cb, lagmod, cen = 0, at = -1:1, bylag = bylag, cumul = TRUE)
-#       # cwd_cum <- cwd_cp$cumfit[3,nlags + 1]
-#       # pet_cum <- pet_cp$cumfit[3,nlags + 1]
-#       lag_effects <- tibble(lag = seq(0,nlags,bylag), 
-#                             cwd_effect = cwd_cp$matfit[3,], 
-#                             pet_effect = pet_cp$matfit[3,],
-#                             cwd_cum =  cwd_cp$cumfit[3,nlags + 1],
-#                             pet_cum =  pet_cp$cumfit[3,nlags + 1])
-#     },
-#     error = function(e) {
-#       message("Returned dlnm error")
-#       reg_error <<- e[1]
-#       failed <<- T
-#     }
-#   )
-#   if (failed){
-#     return(NA)
-#   }
-#   return(lag_effects)
-# }
-# 
-# gendat <- dendro_lagged %>% 
-#   group_by(collection_id) %>% 
-#   nest()
-# 
-# gendat <- gendat %>% 
-#   mutate(cum_cwd_effect = map(data, run_dlnm))
-# 
-# lagged_effects <- gendat %>% 
-#   select(collection_id, cum_cwd_effect) %>% 
-#   unnest(cum_cwd_effect) %>% 
-#   left_join(hist_clim_df, by = "collection_id")
-# 
-# cum_effects <- lagged_effects %>% 
-#   select(collection_id, lag, cwd_cum, pet_cum, cwd.ave, pet.ave) %>% 
-#   distinct()
-# 
-# lagged_effects <- lagged_effects %>% 
-#   select(-cwd_cum, -pet_cum, -cum_cwd_effect) %>% 
-#   drop_na()
-# 
-# lagged_effects$cwd_tercile <- ntile(lagged_effects$cwd.ave, 3) %>% as.factor()
-# lagged_effects$pet_tercile = ntile(lagged_effects$pet.ave, 3) %>% as.factor()
-# 
-# 
-# cwd_median_effect <- lagged_effects %>%
-#   group_by(lag) %>% 
-#   summarise(med_effect = median(cwd_effect),
-#             upper = quantile(cwd_effect, 0.66, na.rm = T),
-#             lower = quantile(cwd_effect, 0.33, na.rm = T))
-# cwd_plot <- cwd_median_effect %>% 
-#   ggplot(aes(x = lag, y = med_effect, ymax = upper, ymin = lower)) +
-#   geom_line() +
-#   geom_ribbon(alpha = 0.2) +
-#   theme_bw()
-# cwd_plot +
-#   xlab("Lag (years)") +
-#   ylab("Median effect of CWD=1 shock on RWI")
-# 
-# pet_median_effect <- lagged_effects %>%
-#   group_by(lag) %>% 
-#   summarise(med_effect = median(pet_effect),
-#             upper = quantile(pet_effect, 0.66, na.rm = T),
-#             lower = quantile(pet_effect, 0.33, na.rm = T))
-# pet_plot <- pet_median_effect %>% 
-#   ggplot(aes(x = lag, y = med_effect, ymax = upper, ymin = lower)) +
-#   geom_line() +
-#   geom_ribbon(alpha = 0.2) +
-#   theme_bw()
-# 
-# pet_plot +
-#   xlab("Lag (years)") +
-#   ylab("Median effect of PET=1 shock on RWI")
-# 
-# 
-# cum_share <- cum_effects %>% 
-#   group_by(lag) %>% 
-#   summarise(med_effect = median(cwd_cum))
-# 
-# 
-# 
-# 
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Aggregate lagged model  ------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+cb_df <- cb_df %>% 
+  mutate(tree_id = paste0(collection_id, "_", tree))
+simple_mod_df <- cb_df %>% 
+  # filter()
+  filter(cwd.spstd > 0, pet.spstd > 0)
+  # filter(cwd.spstd > 0.5, pet.spstd > 0.5)
+mod <- feols(rwi ~ cwd.an.spstd + pet.an.spstd | tree_id, vcov = conley(cutoff = vg.range, distance = "spherical"), data = simple_mod_df)
+summary(mod)
+
+mod <- feols(rwi ~ cwd_L00 + cwd_L01 + cwd_L02 + cwd_L03 + cwd_L04 + cwd_L05 + cwd_L06 + cwd_L07 + cwd_L08 +
+               pet_L00 + pet_L01 + pet_L02 + pet_L03 + pet_L04 + pet_L05 | tree_id, vcov = conley(cutoff = 363), data = simple_mod_df)
+summary(mod)
+
+mod <- feols(rwi ~ cwd_L00 + cwd_L01 + cwd_L02 + cwd_L03 + cwd_L04 + cwd_L05 + cwd_L06 + cwd_L07 + cwd_L08 +
+               pet_L00 + pet_L01 + pet_L02 + pet_L03 + pet_L04 + pet_L05 | collection_id, data = cb_df %>% filter(gymno_angio=="gymno"))
+summary(mod)
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Site-level DNLM  ------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+run_dnlm <- function(mod_df){
+  failed <- F
+  tryCatch(
+    expr = {
+      fmla <- as.formula(paste("rwi ~ ", paste(xnam, collapse= "+")))
+      lagmod=feols(fmla, data=mod_df)
+      
+      cwd_cp = crosspred(cwd_cb, lagmod, cen = 0, at = -1:1, bylag = bylag, cumul = TRUE)
+      pet_cp = crosspred(pet_cb, lagmod, cen = 0, at = -1:1, bylag = bylag, cumul = TRUE)
+      
+      lag_effects <- tibble(lag = seq(0,nlags,bylag),
+                            cwd_effect = cwd_cp$matfit[3,],
+                            pet_effect = pet_cp$matfit[3,],
+                            cwd_cum =  cwd_cp$cumfit[3,nlags + 1],
+                            pet_cum =  pet_cp$cumfit[3,nlags + 1])
+    },
+    error = function(e) {
+      message("Returned dlnm error")
+      reg_error <<- e[1]
+      failed <<- T
+    }
+  )
+  if (failed){
+    return(NA)
+  }
+  return(lag_effects)
+}
+
+mod_df <- cb_df %>% 
+  group_by(collection_id) %>% 
+  nest()
+
+mod_df <- mod_df %>% 
+  mutate(dnlm = map(data, run_dnlm))
+
+temp <- mod_df
+
+lagged_effects <- mod_df %>%
+  select(collection_id, dnlm) %>%
+  unnest(dnlm) %>%
+  left_join(ave_site_clim, by = "collection_id")
+
+cum_effects <- lagged_effects %>%
+  select(collection_id, lag, cwd_cum, pet_cum, cwd.spstd, pet.spstd) %>%
+  distinct()
+
+lagged_effects <- lagged_effects %>%
+  select(-cwd_cum, -pet_cum) %>%
+  drop_na()
+
+lagged_effects$cwd_quantile <- ntile(lagged_effects$cwd.spstd, 4) %>% as.factor()
+lagged_effects$pet_quantile = ntile(lagged_effects$pet.spstd, 4) %>% as.factor()
+
+
+cwd_median_effect <- lagged_effects %>%
+  filter(cwd_quantile==4) %>%
+  group_by(lag) %>%
+  summarise(med_effect = mean(cwd_effect),
+            upper = quantile(cwd_effect, 0.66, na.rm = T),
+            lower = quantile(cwd_effect, 0.33, na.rm = T))
+cwd_plot <- cwd_median_effect %>%
+  ggplot(aes(x = lag, y = med_effect, ymax = upper, ymin = lower)) +
+  geom_line() +
+  geom_hline(yintercept = 0, linetype = 2) +
+  geom_ribbon(alpha = 0.2) +
+  theme_bw() +
+  xlim(0, 10) +
+  ylim(-0.3, 0.1)
+cwd_plot +
+  xlab("Lag (years)") +
+  ylab("Median effect of CWD=1 shock on RWI")
+
+
+pet_median_effect <- lagged_effects %>%
+  filter(pet_quantile==4) %>%
+  group_by(lag) %>%
+  summarise(med_effect = median(pet_effect),
+            upper = quantile(pet_effect, 0.66, na.rm = T),
+            lower = quantile(pet_effect, 0.33, na.rm = T))
+pet_plot <- pet_median_effect %>%
+  ggplot(aes(x = lag, y = med_effect, ymax = upper, ymin = lower)) +
+  geom_line() +
+  geom_hline(yintercept = 0, linetype = 2) +
+  geom_ribbon(alpha = 0.2) +
+  theme_bw() +
+  xlim(0, 10) +
+  ylim(-0.15, 0.3)
+
+pet_plot +
+  xlab("Lag (years)") +
+  ylab("Median effect of PET=1 shock on RWI")
+
+
+
+
+
 # median_effect <- lagged_effects %>%
 #   group_by(lag) %>%
 #   summarise(med_effect = median(cwd_effect),
@@ -350,7 +386,7 @@ dnlm_predictions %>% write_rds(paste0(wdir, "out/first_stage/dnlm."), compress =
 #             upper2 = med_effect + sd(cwd_effect),
 #             lower2 = med_effect - sd(cwd_effect))
 # 
-# median_effect %>% 
+# median_effect %>%
 #   ggplot(aes(x = lag, y = med_effect, ymax = upper, ymin = lower)) +
 #   geom_line() +
 #   geom_ribbon(alpha = 0.2) +
@@ -359,17 +395,17 @@ dnlm_predictions %>% write_rds(paste0(wdir, "out/first_stage/dnlm."), compress =
 # 
 # cwd_p <- ggplot() +
 #   geom_line(aes(x = lag, y = med_effect), data = median_effect, color = "cornflowerblue") +
-#   geom_ribbon(aes(x = lag, ymax = upper, ymin = lower), data = median_effect, 
+#   geom_ribbon(aes(x = lag, ymax = upper, ymin = lower), data = median_effect,
 #               fill = "cornflowerblue", alpha = 0.3) +
 #   theme_bw()
 # cwd_p
 # 
 # 
 # p <- ggplot() +
-#   geom_line(aes(x = lag, y = cwd_effect, group = collection_id), data = lagged_effects, 
+#   geom_line(aes(x = lag, y = cwd_effect, group = collection_id), data = lagged_effects,
 #             alpha = 0.05) +
 #   geom_line(aes(x = lag, y = med_effect), data = median_effect, color = "cornflowerblue") +
-#   geom_ribbon(aes(x = lag, ymax = upper, ymin = lower), data = median_effect, 
+#   geom_ribbon(aes(x = lag, ymax = upper, ymin = lower), data = median_effect,
 #               fill = "cornflowerblue", alpha = 0.3) +
 #   ylim(c(-0.6, 0.25)) +
 #   theme_bw()
@@ -378,34 +414,36 @@ dnlm_predictions %>% write_rds(paste0(wdir, "out/first_stage/dnlm."), compress =
 # 
 # 
 # 
-# # Look at variation across terciles. Particularly interesting for pet
-# median_effect <- lagged_effects %>%
-#   group_by(cwd_tercile, lag) %>%
-#   summarise(med_effect = median(cwd_effect),
-#             upper = quantile(cwd_effect, 0.66, na.rm = T),
-#             lower = quantile(cwd_effect, 0.33, na.rm = T),
-#             upper2 = med_effect + sd(cwd_effect),
-#             lower2 = med_effect - sd(cwd_effect))
-# median_effect %>% 
-#   ggplot(aes(x = lag, y = med_effect, ymax = upper, ymin = lower)) +
-#   facet_grid(rows = median_effect$cwd_tercile) +
-#   geom_line() +
-#   geom_ribbon(alpha = 0.2) +
-#   theme_bw()
-# 
-# 
-# 
-# median_effect <- lagged_effects %>%
-#   group_by(lag, pet_tercile) %>% 
-#   summarise(med_effect = median(pet_effect),
-#             upper = quantile(pet_effect, 0.66, na.rm = T),
-#             lower = quantile(pet_effect, 0.33, na.rm = T))
-# median_effect %>% 
-#   ggplot(aes(x = lag, y = med_effect, ymax = upper, ymin = lower)) +
-#   geom_line() +
-#   geom_ribbon(alpha = 0.2) +
-#   facet_grid(rows = median_effect$pet_tercile) +
-#   theme_bw()
+# Look at variation across terciles. Particularly interesting for pet
+median_effect <- lagged_effects %>%
+  group_by(cwd_tercile, lag) %>%
+  summarise(med_effect = median(cwd_effect),
+            upper = quantile(cwd_effect, 0.66, na.rm = T),
+            lower = quantile(cwd_effect, 0.33, na.rm = T),
+            upper2 = med_effect + sd(cwd_effect),
+            lower2 = med_effect - sd(cwd_effect))
+median_effect %>%
+  ggplot(aes(x = lag, y = med_effect, ymax = upper, ymin = lower)) +
+  facet_grid(rows = median_effect$cwd_tercile) +
+  geom_line() +
+  geom_ribbon(alpha = 0.2) +
+  # geom_hline(yintercept = 0) +
+  theme_bw()
+
+
+
+median_effect <- lagged_effects %>%
+  group_by(lag, pet_tercile) %>%
+  summarise(med_effect = median(pet_effect),
+            upper = quantile(pet_effect, 0.66, na.rm = T),
+            lower = quantile(pet_effect, 0.33, na.rm = T))
+median_effect %>%
+  ggplot(aes(x = lag, y = med_effect, ymax = upper, ymin = lower)) +
+  geom_line() +
+  # geom_hline(yintercept = 0) +
+  geom_ribbon(alpha = 0.2) +
+  facet_grid(rows = median_effect$pet_tercile) +
+  theme_bw()
 # 
 # 
 # thresh_low <- cum_effects$cwd_cum %>% quantile(0.02, na.rm = T)
