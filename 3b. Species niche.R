@@ -68,20 +68,26 @@ range_file <- paste0(wdir, 'in//species_ranges//merged_ranges.shp')
 range_sf <- st_read(range_file)
 
 # 5. Climate projections from CMIP5
-cmip <- load(paste0(wdir, 'in\\CMIP5 CWD\\cmip5_cwdaet_end.Rdat'))
-pet_raster <- aet_raster + cwd_raster
-pet_future <- pet_raster
-cwd_future <- cwd_raster
-names(cwd_future) <- NULL # Resetting this due to strange names in file from CMIP processing
-rm(pet_raster)
+cmip_end <- load(paste0(wdir, 'in\\CMIP5 CWD\\cmip5_cwdaet_end.Rdat'))
+pet_cmip_end <- aet_raster + cwd_raster
+cwd_cmip_end <- cwd_raster
+names(cwd_cmip_end) <- NULL # Resetting this due to strange names in file from CMIP processing
 rm(cwd_raster)
 rm(aet_raster)
+
+cmip_start <- load(paste0(wdir, 'in\\CMIP5 CWD\\cmip5_cwdaet_start.Rdat'))
+pet_cmip_start <- aet_raster + cwd_raster
+cwd_cmip_start <- cwd_raster
+names(cwd_cmip_start) <- NULL # Resetting this due to strange names in file from CMIP processing
+rm(cwd_raster)
+rm(aet_raster)
+
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Visually inspect data -----------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 tmap_mode("view")
-tm_shape(cwd_future) +
+tm_shape(cwd_cmip_end) +
   tm_raster() +
   tm_facets(as.layers = TRUE)
 
@@ -197,18 +203,33 @@ clim_df <- clim_df %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Pull CMIP projections -----------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-pet_df <- pet_future %>% 
+pet_end_df <- pet_cmip_end %>% 
   as.data.frame(xy = TRUE) %>%
   drop_na() %>% 
   as_tibble() %>%
-  rename_with(~stringr::str_replace(., "layer.", "pet_cmip"), 
+  rename_with(~stringr::str_replace(., "layer.", "pet_cmip_end"), 
               starts_with('layer.'))
 
-cwd_df <- cwd_future %>% 
+cwd_end_df <- cwd_cmip_end %>% 
   as.data.frame(xy = TRUE) %>%
   drop_na() %>% 
   as_tibble() %>%
-  rename_with(~stringr::str_replace(., "layer.", "cwd_cmip"), 
+  rename_with(~stringr::str_replace(., "layer.", "cwd_cmip_end"), 
+              starts_with('layer.'))
+
+
+pet_start_df <- pet_cmip_start %>% 
+  as.data.frame(xy = TRUE) %>%
+  drop_na() %>% 
+  as_tibble() %>%
+  rename_with(~stringr::str_replace(., "layer.", "pet_cmip_start"), 
+              starts_with('layer.'))
+
+cwd_start_df <- cwd_cmip_start %>% 
+  as.data.frame(xy = TRUE) %>%
+  drop_na() %>% 
+  as_tibble() %>%
+  rename_with(~stringr::str_replace(., "layer.", "cwd_cmip_start"), 
               starts_with('layer.'))
 
 
@@ -222,9 +243,11 @@ cwd_df <- cwd_future %>%
 # cwd_rast2 <- rasterFromXYZ(cwd_df2, crs = crs_template)
 
 ## Combine PET and CWD projections
-cmip_df <- cwd_df %>% 
-  full_join(pet_df, by = c("x", "y"))
-
+cmip_df <- cwd_end_df %>% 
+  full_join(pet_end_df, by = c("x", "y")) %>% 
+  full_join(cwd_start_df, by = c("x", "y")) %>% 
+  full_join(pet_start_df, by = c("x", "y"))
+  
 ## Nest CMIP data
 cmip_df <- cmip_df %>%
   mutate(idx = 1) %>% 
@@ -235,16 +258,16 @@ cmip_df <- cmip_df %>%
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Summarize future climate for each species ------------------------------
+# Summarize cmip climate for each species ------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ## Cross species list with nested cmip data
-sp_fut_clim <- clim_df %>% 
+sp_cmip_clim <- clim_df %>% 
   mutate(cmip_df = cmip_df$data)
 
 
 
-sp_fut_clim <- sp_fut_clim %>% 
-  mutate(clim_future_sp = future_pmap(list(cmip_df = cmip_df,
+sp_cmip_clim <- sp_cmip_clim %>% 
+  mutate(clim_cmip_sp = future_pmap(list(cmip_df = cmip_df,
                                     hist_clim_vals = clim_vals,
                                     pet_mean = pet_mean,
                                     pet_sd = pet_sd,
@@ -257,23 +280,33 @@ sp_fut_clim <- sp_fut_clim %>%
 
 ## Check final result as raster
 species = "acsh"
-test_clim <- (sp_fut_clim %>% filter(sp_code == species) %>% pull(clim_future_sp))[[1]]
-crs_template <- crs(cwd_future)
-raster_template <- cwd_future %>% as.data.frame(xy = TRUE) %>% select(x,y)
+test_clim <- (sp_cmip_clim %>% filter(sp_code == species) %>% pull(clim_cmip_sp))[[1]]
+crs_template <- crs(cwd_cmip_end)
+raster_template <- cwd_cmip_end %>% as.data.frame(xy = TRUE) %>% select(x,y)
 test_clim <- raster_template %>%
   left_join(test_clim, by = c("x", "y"))
 test_clim <- rasterFromXYZ(test_clim, crs = crs_template)
 range <- range_sf %>% filter(sp_code == species)
 tmap_mode("view")
 
-tm_shape(test_clim$cwd_cmip1) +
+tm_shape(test_clim$cwd_cmip_end1) +
   tm_raster(palette = "-RdYlGn") +
   tm_facets(as.layers = TRUE) +
-tm_shape(range) + 
+  tm_shape(range) + 
   tm_fill(col = "lightblue")
 
+tm_shape(test_clim$cwd_cmip_end1) +
+  tm_raster(palette = "-RdYlGn") +
+  tm_facets(as.layers = TRUE) +
+  tm_shape(test_clim$cwd_cmip_start1) +
+  tm_raster(palette = "-RdYlGn") +
+  tm_facets(as.layers = TRUE) +
+  tm_shape(range) + 
+  tm_fill(col = "lightblue")
+
+
 ## Export predictions
-write_rds(sp_fut_clim, paste0(wdir, "out/climate/sp_clim_predictions.", compress = "gz"))
+write_rds(sp_cmip_clim, paste0(wdir, "out/climate/sp_clim_predictions.", compress = "gz"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
