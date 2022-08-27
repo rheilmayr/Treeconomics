@@ -32,7 +32,7 @@ library(snow)
 library(profvis)
 library(tmap)
 
-n_cores <- availableCores() - 4
+n_cores <- availableCores() - 6
 future::plan(multisession, workers = n_cores)
 
 my_seed <- 5597
@@ -187,7 +187,7 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
     unnest(rwi_predictions)
 
   ## Drop occasional observations with missing CMIP data - should no longer be dropping observations
-  sp_predictions <- sp_predictions[complete.cases(sp_predictions %>% select(cwd_cmip, pet_cmip)),] %>% 
+  sp_predictions <- sp_predictions[complete.cases(sp_predictions %>% select(cwd_cmip_end, pet_cmip_end)),] %>% 
     lazy_dt()
   
   ## Store historic climate to re-join later
@@ -197,18 +197,28 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
     
   ## For each species, calculate cell-wise quantiles of variables from n_mc runs
   sp_predictions <- sp_predictions %>% 
+    mutate(rwi_pred_change = rwi_pred_end - rwi_pred_start,
+           rwi_pclim_change = rwi_pclim_end - rwi_pclim_start) %>% 
     group_by(x, y) %>% 
-    summarise(rwi_pred_mean = mean(rwi_pred),
-              rwi_pred_025 = quantile(rwi_pred, 0.025),
-              rwi_pred_975 = quantile(rwi_pred, 0.975),
-              rwi_pclim_mean = mean(rwi_pclim),
-              rwi_pclim_025 = quantile(rwi_pclim, 0.025),
-              rwi_pclim_975 = quantile(rwi_pclim, 0.975),
+    summarise(rwi_pred_mean = mean(rwi_pred_end),
+              rwi_pred_025 = quantile(rwi_pred_end, 0.025),
+              rwi_pred_975 = quantile(rwi_pred_end, 0.975),
+              rwi_pclim_mean = mean(rwi_pclim_end),
+              rwi_pclim_025 = quantile(rwi_pclim_end, 0.025),
+              rwi_pclim_975 = quantile(rwi_pclim_end, 0.975),
+              rwi_pred_change_mean = mean(rwi_pred_change),
+              rwi_pred_change_025 = quantile(rwi_pred_change, 0.025),
+              rwi_pred_change_975 = quantile(rwi_pred_change, 0.975),
+              rwi_pclim_change_mean = mean(rwi_pclim_change),
+              rwi_pclim_change_025 = quantile(rwi_pclim_change, 0.025),
+              rwi_pclim_change_975 = quantile(rwi_pclim_change, 0.975),
               cwd_sens = mean(cwd_sens),
               pet_sens = mean(pet_sens),
               int_sens = mean(intercept),
-              cwd_fut = mean(cwd_cmip_end),
-              pet_fut = mean(pet_cmip_end),
+              cwd_cmip_start = mean(cwd_cmip_start),
+              pet_cmip_start = mean(pet_cmip_start),
+              cwd_cmip_end = mean(cwd_cmip_end),
+              pet_cmip_end = mean(pet_cmip_end),
               sp_code = spp_code,
               .groups = "drop") %>%
     left_join(hist_df, by = c("x", "y")) %>% 
