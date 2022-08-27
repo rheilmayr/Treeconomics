@@ -1575,7 +1575,7 @@ a/e
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Species-level changes in CWD  ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-sp_predictions <- do.call('rbind', lapply(rwi_list[1:30], readRDS))
+sp_predictions <- do.call('rbind', lapply(rwi_list[1:30], readRDS)) ## TO BE REMOVED - DATA IS ALREADY BEING LOADED AT TOP, JUST LOADING SMALLER SET TO PLAY WITH
 
 
 sp_predictions <- sp_predictions %>% 
