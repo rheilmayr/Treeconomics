@@ -122,6 +122,21 @@ trim_df <- flm_df %>%
   filter(outlier==0) %>% 
   drop_na()
 
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Describe average sensitivities ---------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+intercept_median <- median(trim_df$estimate_intercept)
+cwd_median <- median(trim_df$estimate_cwd.an)
+pet_median <- median(trim_df$estimate_pet.an)
+constant_sensitivities <- list("int" = intercept_median,
+                               "cwd" = cwd_median,
+                               "pet" = pet_median)
+
+constant_sensitivities %>% 
+  write_rds(paste0(wdir, "out/first_stage/constant_sensitivities.rds"))
+
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Spatial autocorrelation of trim_df ---------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -361,11 +376,18 @@ write_rds(boot_df, paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
 ## OLD VERSION OF BOOTSTRAPPING USING BOOT PACKAGE
 # mod_df <- trim_df %>% filter(genus == "Araucaria")
 # mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data = mod_df)
-# summary(mod) ## TODO: Is bootstrap se too similar to simple regression result? Revisit...
+# summary(mod) 
 mod <- feols(estimate_cwd.an ~ cwd.spstd + pet.spstd,
              weights = trim_df$cwd_errorweights, data = trim_df,
              vcov = conley(cutoff = 363, distance = "spherical"))
-summary(mod) ## TODO: Is bootstrap se too similar to simple regression result? Revisit...
+summary(mod)
+
+mod <- feols(estimate_pet.an ~ cwd.spstd + pet.spstd,
+             weights = trim_df$cwd_errorweights, data = trim_df,
+             vcov = conley(cutoff = 363, distance = "spherical"))
+summary(mod)
+
+
 # 
 # 
 # 
@@ -427,9 +449,9 @@ gymno_key <- sp_info %>%
 
 
 
-# N = 10: 16 genera; 25: 12 genera; 50: 9 genera
+# N = 10: 16 genera; 26: 12 genera; 50: 9 genera
 genus_keep <- genus_freq %>% 
-  filter(n_collections>25) %>%
+  filter(n_collections>26) %>%
   pull(genus)
 
 genus_df <- trim_df %>% 
@@ -440,25 +462,26 @@ genus_df <- trim_df %>%
 
 genus_df$model_estimates
 
+write_rds(genus_df, paste0(wdir, "out/second_stage/ss_conley_genus.rds"))
 
-mc_df <- mc_df %>% 
-  left_join(genus_lookup, by = "collection_id")
 
-genus_df <- mc_df %>% 
-  filter(genus %in% genus_keep) %>% 
-  group_by(genus) %>% 
-  nest() %>% 
-  mutate(model_estimates = map(data, apply_boot))
-
-genus_df <- genus_df %>% 
-  left_join(genus_freq, by = "genus") %>% 
-  left_join(genus_key, by = "genus")
-
-genus_df <- genus_df %>% 
-  select(-data) %>% 
-  unnest(model_estimates)
-
-write_rds(genus_df, paste0(wdir, "out/second_stage/ss_bootstrap_genus.rds"))
+# mc_df <- mc_df %>% 
+#   left_join(genus_lookup, by = "collection_id")
+# 
+# genus_df <- mc_df %>% 
+#   filter(genus %in% genus_keep) %>% 
+#   group_by(genus) %>% 
+#   nest() %>% 
+#   mutate(model_estimates = map(data, apply_boot))
+# 
+# genus_df <- genus_df %>% 
+#   left_join(genus_freq, by = "genus") %>% 
+#   left_join(genus_key, by = "genus")
+# 
+# genus_df <- genus_df %>% 
+#   select(-data) %>% 
+#   unnest(model_estimates)
+# 
 
 
 
