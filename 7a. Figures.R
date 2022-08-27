@@ -1572,6 +1572,54 @@ e=e+annotate("text",x=0.7,y=1400,size=10,label="b)")
 x11()
 a/e
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Species-level changes in CWD  ------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+sp_predictions <- do.call('rbind', lapply(rwi_list[1:30], readRDS))
+
+
+sp_predictions <- sp_predictions %>% 
+  group_by(sp_code) %>% 
+  mutate(beyond_max_cwd = cwd_cmip_end > max(cwd_hist)) %>% 
+  mutate(cwd_end_bin = case_when(
+    (beyond_max_cwd == TRUE) ~ "1. Beyond prior range max",
+    (cwd_cmip_end > 3) ~ "2. >2 s.d. above past mean",
+    (cwd_cmip_end > 1.5) ~ "3. >1 s.d. above past mean",
+    (cwd_cmip_end > 0) ~ "4. >0 s.d. above past mean",
+    (cwd_cmip_end < 0) ~ "5. below past mean",
+  ))
+
+bin_shares <- sp_predictions %>% # Add grouping by genera? 
+  group_by(sp_code, cwd_end_bin) %>% 
+  summarise(n = n()) %>% 
+  group_by(sp_code) %>% 
+  mutate(prop_cwd_bin = prop.table(n))
+
+sp_order <- bin_shares %>% 
+  filter(cwd_end_bin == "1. Beyond prior max") %>% 
+  arrange(prop_cwd_bin) %>% 
+  pull(sp_code)
+
+sp_predictions %>%
+  ggplot(aes(x= sp_code, fill=cwd_end_bin)) + # Arrange columns by sp_order?
+  geom_bar(position = "fill") # Use diverging color scheme? 
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Species-level changes in CWD  ------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+sp_predictions <- sp_predictions %>% 
+  mutate(rwi_change_bin = case_when(
+    (rwi_pred_change_mean < -.5) ~ "1. RWI decline > 0.5",
+    (rwi_pred_change_mean < -0.25) ~ "2. RWI decline between 0.25 and .5",
+    (rwi_pred_change_mean < 0) ~ "3. RWI decline between 0 and 0.25",
+    (rwi_pred_change_mean >= 0) ~ "4. RWI increase",
+  ))
+sp_predictions %>% 
+  ggplot(aes(x = sp_code, fill = rwi_change_bin)) +
+  geom_bar(position = "fill")
+
+
 # transect_dat <- plot_dat %>% 
 #   select(cwd.q, pet.q, rwi_change, rwi_change_psens, rwi_change_pclim) %>% 
 #   pivot_longer(c(rwi_change, rwi_change_psens, rwi_change_pclim), names_to = 'scenario', values_to = "rwi_change") %>% 
