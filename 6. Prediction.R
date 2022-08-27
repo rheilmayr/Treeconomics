@@ -58,6 +58,9 @@ mod_df <- mod_df %>%
 sp_clim <- read_rds(paste0(wdir, "out/climate/sp_clim_predictions.gz"))
 species_list <- sp_clim %>% select(sp_code)
 
+# 3. Constant sensitivites (median of first stage, rather than running 2nd stage)
+constant_sensitivities <- read_rds(paste0(wdir, "out/first_stage/constant_sensitivities.rds"))
+
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Assign MC coefs and CMIP models  ---------------
@@ -113,23 +116,22 @@ calc_rwi_partials <- function(sppp_code, cmip_id, sensitivity){
   ## sensitivity raster and assigned CMIP model of future climate. Also
   ## integrates calculations of partialling our climate / sensitivity variations
   
-  ## Calculate mean sensitivity paramaters for partialled prediction
-  mean_cwd_sens <- sensitivity$cwd_sens %>% mean()
-  mean_pet_sens <- sensitivity$pet_sens %>% mean()
-  mean_intercept <- sensitivity$intercept %>% mean() 
-  
   ## Predict future RWI
   sp_fut_clim <- sp_clim %>% 
     filter(sp_code == sppp_code) %>% 
-    pull(clim_future_sp)
+    pull(clim_cmip_sp)
   sp_fut_clim <- sp_fut_clim[[1]] %>% 
     lazy_dt() %>% 
     select(x,y,
-           cwd_cmip = paste0("cwd_cmip", as.character(cmip_id)),
-           pet_cmip = paste0("pet_cmip", as.character(cmip_id))) %>% 
+           cwd_cmip_end = paste0("cwd_cmip_end", as.character(cmip_id)),
+           pet_cmip_end = paste0("pet_cmip_end", as.character(cmip_id)),
+           cwd_cmip_start = paste0("cwd_cmip_start", as.character(cmip_id)),
+           pet_cmip_start = paste0("pet_cmip_start", as.character(cmip_id))) %>% 
     left_join(sensitivity, by = c("x", "y")) %>% 
-    mutate(rwi_pred = intercept + pet_cmip * pet_sens + cwd_cmip * cwd_sens,
-           rwi_pclim = mean_intercept + (pet_cmip * mean_pet_sens) + (cwd_cmip * mean_cwd_sens)) %>% 
+    mutate(rwi_pred_end = intercept + (pet_cmip_end * pet_sens) + (cwd_cmip_end * cwd_sens),
+           rwi_pred_start = intercept + (pet_cmip_start * pet_sens) + (cwd_cmip_start * cwd_sens),
+           rwi_pclim_end = constant_sensitivities$int + (pet_cmip_end * constant_sensitivities$pet) + (cwd_cmip_end * constant_sensitivities$cwd),
+           rwi_pclim_start = constant_sensitivities$int + (pet_cmip_start * constant_sensitivities$pet) + (cwd_cmip_start * constant_sensitivities$cwd)) %>% 
     as_tibble()
   
   return(sp_fut_clim)
@@ -184,8 +186,7 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
     select(iter_idx, rwi_predictions) %>% 
     unnest(rwi_predictions)
 
-  ## Drop occasional observations with missing CMIP data
-  ## TODO: Trace back to see why this is necessary
+  ## Drop occasional observations with missing CMIP data - should no longer be dropping observations
   sp_predictions <- sp_predictions[complete.cases(sp_predictions %>% select(cwd_cmip, pet_cmip)),] %>% 
     lazy_dt()
   
@@ -206,12 +207,23 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
               cwd_sens = mean(cwd_sens),
               pet_sens = mean(pet_sens),
               int_sens = mean(intercept),
-              cwd_fut = mean(cwd_cmip),
-              pet_fut = mean(pet_cmip),
+              cwd_fut = mean(cwd_cmip_end),
+              pet_fut = mean(pet_cmip_end),
               sp_code = spp_code,
               .groups = "drop") %>%
     left_join(hist_df, by = c("x", "y")) %>% 
     as_tibble()
+  
+  # Should add these variables, based on CMIP start/end comparison
+  # mutate(rwi_null = cwd_hist * cwd_sens + pet_hist * pet_sens + int_sens,
+  #        rwi_change_mean = rwi_pred_mean - rwi_null,
+  #        rwi_change_975 = rwi_pred_975 - rwi_null,
+  #        rwi_change_025 = rwi_pred_025 - rwi_null,
+  #        rwi_change_pclim_mean = rwi_pclim_mean - rwi_null,
+  #        rwi_change_pclim_975 = rwi_pclim_975 - rwi_null,
+  #        rwi_change_pclim_025 = rwi_pclim_025 - rwi_null,
+  #        cwd_change = cwd_fut - cwd_hist,
+  #        pet_change = pet_fut - pet_hist)
   
   ## Write out
   sp_predictions %>% 
