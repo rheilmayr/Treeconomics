@@ -43,7 +43,10 @@ library(ggsn)
 library(maptools)
 library(broom)
 library(ggExtra)
-
+library(extrafont)
+library(marginaleffects)
+loadfonts(device = "win")
+theme(family="Serif")
 
 select <- dplyr::select
 summarize <- dplyr::summarize
@@ -91,6 +94,7 @@ trim_df <- flm_df %>%
 
 # DNLM results
 dnlm_results <- read_rds(paste0(wdir, "out/first_stage/dnlm."))
+dnlm_results <- read_rds(paste0(wdir, "out/first_stage/dnlm_orig.")) # Something has changed - old version creates positive pet effect, but gone after july tweaks to data...
 
 # 5. Prediction rasters
 rwi_list <- list.files(paste0(wdir, "out/predictions/sp_rwi_pred_10000/"), pattern = ".gz", full.names = TRUE)
@@ -101,7 +105,7 @@ sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
 mod_df <- read_rds(paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
 
 # 7. Genus second stage model
-genus_predictions <- readRDS(paste0(wdir, "out/second_stage/ss_bootstrap_genus.rds"))
+genus_models <- readRDS(paste0(wdir, "out/second_stage/ss_conley_genus.rds"))
 
 
 # 2. Species range maps
@@ -111,7 +115,7 @@ range_sf <- st_read(range_file)
 # 8. Climate model data
 cwdlist=list();aetlist=list()
 j=1
-for(i in c("start","mid","end")){
+for(i in c("start","end")){
   load(paste0(wdir,"in/CMIP5 CWD/cmip5_cwdaet_",i,".Rdat"))
   cwdlist[[j]]=cwd_raster;aetlist[[j]]=aet_raster
   j=j+1
@@ -236,28 +240,28 @@ map
 
 
 #ggsave(paste0(wdir, 'figures\\1a_itrdb_map.svg'), plot = map, width = 9, height = 6, units = "in")
-
-mean(flm_df$cwd.ave)
-range(flm_df$cwd.ave)
-mean(flm_df$pet.ave)
-range(flm_df$pet.ave)
-
-ggplot(flm_df)
-
-histogram_conceptual <- ggplot(flm_df, aes(x = cwd.spstd)) + 
-  geom_histogram(bins = 40, alpha=0.5, fill = "#404788FF") +
-  xlim(c(-2.5, 2.5)) +
-  theme_bw(base_size = 22) + 
-  ylab("Number of sites")+
-  theme(legend.position = c(.1,.5),legend.title = element_blank(),
-        panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"),
-        panel.border = element_blank())+
-  xlab("")+
-  ylab("")+
-  scale_y_continuous(position = "right")
-
-histogram_conceptual
+# 
+# mean(flm_df$cwd.ave)
+# range(flm_df$cwd.ave)
+# mean(flm_df$pet.ave)
+# range(flm_df$pet.ave)
+# 
+# ggplot(flm_df)
+# 
+# histogram_conceptual <- ggplot(flm_df, aes(x = cwd.spstd)) + 
+#   geom_histogram(bins = 40, alpha=0.5, fill = "#404788FF") +
+#   xlim(c(-2.5, 2.5)) +
+#   theme_bw(base_size = 22) + 
+#   ylab("Number of sites")+
+#   theme(legend.position = c(.1,.5),legend.title = element_blank(),
+#         panel.grid.major = element_blank(), 
+#         panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"),
+#         panel.border = element_blank())+
+#   xlab("")+
+#   ylab("")+
+#   scale_y_continuous(position = "right")
+# 
+# histogram_conceptual
 #ggsave(paste0(wdir, 'figures\\1c_hist_conceptual.svg'), plot = histogram_conceptual, width = 9, height = 6, units = "in")
 
 
@@ -273,7 +277,6 @@ histogram_conceptual
 
 
 ### Generate plot illustrating range maps against historic CWD
-sp_codes <- list("pipo", "tsca", "tadi", "pisy", "qust", "qual")
 sp_codes <- list("pipo", "tsca", "tadi", "qust", "qual")
 sp_range <- range_sf %>% 
   filter(sp_code %in% sp_codes)
@@ -321,34 +324,47 @@ map/range_map + plot_layout(heights=c(1.3,2))
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Observation frequency plot --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+cwd_min <- flm_df$cwd.spstd %>% quantile(0.01) %>% print()
+cwd_max <- flm_df$cwd.spstd %>% quantile(0.99) %>% print()
+pet_min <- flm_df$pet.spstd %>% quantile(0.01) %>% print()
+pet_max <- flm_df$pet.spstd %>% quantile(0.99) %>% print()
+cwd_min_man <- -2
+cwd_max_man <- 4
+pet_min_man <- -4
+pet_max_man <- 2
+
 xmin <- -3
 xmax <- 4
 ymin <- -4
 ymax = 3
 
+base_text_size = 18
 ### Summary plot of sample distribution
-hex <- flm_df %>% ggplot(aes(x = cwd.spstd, y = pet.spstd, weight = nobs / 1000)) +
+# hex <- flm_df %>% ggplot(aes(x = cwd.spstd, y = pet.spstd, weight = nobs / 1000)) +
+hex <- flm_df %>% ggplot(aes(x = cwd.spstd, y = pet.spstd)) +
   geom_hline(yintercept = 0, size = 1, linetype = 2) +
   geom_vline(xintercept = 0, size = 1, linetype = 2) +
   geom_point(alpha=.0)+
   geom_hex() +
   xlim(xmin, xmax) +
   ylim(ymin, ymax) +
-  labs(fill = "Number of tree-year\nobservations (thousand)") +
+  labs(fill = "Number of sites") +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") + 
   coord_fixed() +
   scale_fill_viridis_c() +
   # scale_color_viridis_c(name = bquote('Species')) +
-  theme_bw(base_size = 31)+
-  theme(legend.position = c(.15,.83),
-        legend.text = element_text(size=15),
-        legend.title = element_text(size=17),
+  theme_bw(base_size = base_text_size)+
+  theme(legend.position = c(.2,.83),
+        legend.text = element_text(size=base_text_size - 6),
+        legend.title = element_text(size=base_text_size - 4),
         legend.background = element_blank(),
         panel.grid.major = element_blank(), panel.grid.minor = element_blank())
 hex
-# hex2 <- ggMarginal(hex, type="histogram", fill ="#404788FF", alpha=.5)
-# hex2
+
+  
+hex2 <- ggMarginal(hex, type="histogram", fill ="#404788FF", alpha=.5)
+hex2
 
 figs1 <- map/range_map
 figs1+
@@ -397,17 +413,16 @@ hypfig <- ggplot(newdat, aes(x=cwd,y=value, color=hyp))+
 
 hypfig
 
-
 map/range_map|hex2+hypfig
 
 
-figs1
-
-figs1+plot_layout(widths = c(1,1,.5))+
-  plot_annotation(tag_levels = 'A') & theme(
-    plot.tag = element_text(face = 'bold', size=12, family ="Helvetica"),
-    text=element_text(family ="Helvetica"))
-figs1
+# figs1
+# 
+# figs1+plot_layout(widths = c(1,1,.5))+
+#   plot_annotation(tag_levels = 'A') & theme(
+#     plot.tag = element_text(face = 'bold', size=12, family ="Helvetica"),
+#     text=element_text(family ="Helvetica"))
+# figs1
 
 #ggsave(paste0(wdir, 'figures\\1b_obs_density.svg'), plot = hex, width = 12, height = 12)
 
@@ -497,14 +512,16 @@ itrdb_hist <- itrdb_cwd %>%
   geom_histogram(bins = 50) +
   xlim(-2.5, 5) +
   theme_bw() +
-  ggtitle("CWD frequency among ITRDB sites")
+  ggtitle("CWD frequency among ITRDB sites") +
+  xlab("Historic CWD (Deviation from species mean)")
 
 fullrange_hist <- fullrange_cwd %>% 
   ggplot(aes(x = cwd_hist)) +
   geom_histogram(bins = 50) +
   xlim(-2.5, 5) +
   theme_bw() +
-  ggtitle("CWD frequency across species ranges")
+  ggtitle("CWD frequency across species ranges") +
+  xlab("Historic CWD (Deviation from species mean)")
 
 quantile_df <- tibble(itrdb = itrdb_quantiles, fullrange = fullrange_quantiles)
 
@@ -518,9 +535,11 @@ qq_plot <- quantile_df %>%
   geom_abline(intercept = 0, slope = 1) +
   theme_bw() +
   coord_fixed() +
-  ggtitle("QQ-plot comparing CWD distributions")
+  ggtitle("QQ-plot comparing CWD distributions") +
+  xlab("Species ranges") +
+  ylab("ITRDB sites")
 
-(itrdb_hist / fullrange_hist) | qq_plot
+cwd_qqplot <- (itrdb_hist / fullrange_hist) | qq_plot
 
 
 # PET
@@ -539,15 +558,16 @@ itrdb_pet_hist <- itrdb_pet %>%
   geom_histogram(bins = 50) +
   xlim(-2.5, 5) +
   theme_bw() +
-  ggtitle("PET frequency among ITRDB sites")
-
+  ggtitle("PET frequency among ITRDB sites") +
+  xlab("Historic PET (Deviation from species mean)")
 
 fullrange_pet_hist <- fullrange_pet %>% 
   ggplot(aes(x = pet_hist)) +
   geom_histogram(bins = 50) +
   xlim(-2.5, 5) +
   theme_bw() +
-  ggtitle("PET frequency across species ranges")
+  ggtitle("PET frequency across species ranges") +
+  xlab("Historic PET (Deviation from species mean)")
 
 pquantile_df <- tibble(itrdb = itrdb_pquantiles, fullrange = fullrange_pquantiles)
 
@@ -561,9 +581,16 @@ pet_qq_plot <- pquantile_df %>%
   geom_abline(intercept = 0, slope = 1) +
   theme_bw() +
   coord_fixed() +
-  ggtitle("QQ-plot comparing PET distributions")
+  ggtitle("QQ-plot comparing PET distributions") +
+  xlab("Species ranges") +
+  ylab("ITRDB sites")
 
-(itrdb_pet_hist / fullrange_pet_hist) | pet_qq_plot
+pet_qqplot <- (itrdb_pet_hist / fullrange_pet_hist) | pet_qq_plot
+
+qqplot <- cwd_qqplot / pet_qqplot
+qqplot
+
+ggsave(paste0(wdir, 'figures\\a1_qqplots.svg'), plot = qqplot, width = 11, height = 7, units = "in")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -585,6 +612,7 @@ pet_median <- long_trim_df %>% filter(variable == "pet") %>% pull(estimate) %>% 
 
 cwd_est_plot <- long_trim_df %>%
   filter(variable == "cwd") %>% 
+  # filter(estimate > -0.01 & estimate<0.0001) %>% 
   ggplot(aes(x = estimate, fill = `p<0.05`)) +
   geom_histogram(bins = 200) +
   # scale_x_continuous(trans="log1p") +
@@ -595,7 +623,7 @@ cwd_est_plot <- long_trim_df %>%
   # geom_vline(xintercept = cwd_median, color = "tomato3", size = 1.5) +
   xlab("Coefficient estimate") +
   ylab("Frequency") +
-  ylim(c(0, 150)) +
+  # ylim(c(0, 150)) +
   theme(legend.position = c(.9,.85),
         legend.key = element_blank(),
         legend.background = element_blank()) +
@@ -613,7 +641,7 @@ pet_est_plot <- long_trim_df %>%
   # geom_vline(xintercept = pet_median, color = "tomato3", size = 1.5) +
   xlab("Coefficient estimate") +
   ylab("Frequency") +
-  ylim(c(0, 150)) +
+  # ylim(c(0, 150)) +
   theme(legend.position = c(.9,.85),
         legend.key = element_blank(),
         legend.background = element_blank()) +
@@ -652,7 +680,10 @@ cwd_dynamic <- plot_dnlm(dnlm_results$cwd) +
 pet_dynamic <- plot_dnlm(dnlm_results$pet) +
   ggtitle("Dynamic effect of 1 s.d. increase in PET")
 
-(cwd_dynamic / pet_dynamic) | (cwd_est_plot / pet_est_plot)
+first_stage_effects <- (cwd_dynamic / pet_dynamic) | (cwd_est_plot / pet_est_plot)
+first_stage_effects
+
+ggsave(paste0(wdir, 'figures\\a2_first_stage_effects.svg'), plot = first_stage_effects)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -666,15 +697,6 @@ pet_dynamic <- plot_dnlm(dnlm_results$pet) +
 #          estimate_pet.an = pet_coef)
 
 # Note: PET 1-99% quantiles vary from -1.9 to 3.5; PET from -2.9 to 1.8. -3 to 3.5 seems like a good block for plots
-cwd_min <- flm_df$cwd.spstd %>% quantile(0.01) %>% print()
-cwd_max <- flm_df$cwd.spstd %>% quantile(0.99) %>% print()
-pet_min <- flm_df$pet.spstd %>% quantile(0.01) %>% print()
-pet_max <- flm_df$pet.spstd %>% quantile(0.99) %>% print()
-cwd_min_man <- -2
-cwd_max_man <- 4
-pet_min_man <- -4
-pet_max_man <- 2
-
 pred_min <- -2.5
 pred_max <- 2.5
 
@@ -719,6 +741,7 @@ plot_dat_b <- plot_dat_a %>%
 # }
 # plot_dat_b <- plot_dat_b %>% mutate(cwd_sens = sym_log(cwd_sens))
 
+base_text_size = 18
 binned_margins <- plot_dat_b %>%
   ggplot(aes(x = cwd.q, y = pet.q, fill = cwd_sens)) +
   geom_tile() +
@@ -728,15 +751,17 @@ binned_margins <- plot_dat_b %>%
   scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
   ylab("Deviation from mean PET")+
   xlab("Deviation from mean CWD")+
-  theme_bw(base_size = 18)+
-  theme(legend.position = c(.18,.83),
-        legend.key = element_blank(),
-        legend.background = element_blank())+
-  #panel.grid.major = element_blank(), 
-  #panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))+
+  theme_bw(base_size = base_text_size)+
   labs(fill = "Marginal effect\nof CWD") +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") +
+  theme(legend.position = c(.18,.83),
+        legend.key = element_blank(),
+        legend.background = element_blank(), 
+        legend.title=element_text(size=base_text_size - 4),
+        legend.text = element_text(size = base_text_size - 6))+
+  #panel.grid.major = element_blank(), 
+  #panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))+
   coord_fixed() +
   geom_hline(yintercept = 0, size = 1, linetype = 2) +
   geom_vline(xintercept = 0, size = 1, linetype = 2) +
@@ -900,19 +925,19 @@ margins_plot <- ggplot(cwd_me_df, aes(x = at_cwd)) +
 margins_plot
 
 
-histogram <- ggplot(trim_df, aes(x = cwd.spstd)) + 
-  geom_histogram(bins = 40, alpha = 0.8, fill = "#404788FF", color="white") +
-  xlim(c(pred_min, pred_max)) +
-  theme_bw(base_size = 23) + 
-  ylab("# sites") +
-  xlab("Historic CWD\n(Deviation from species mean)") + 
-  theme(aspect.ratio = 0.3,
-        #axis.title.x = element_blank(),
-        #axis.text.x = element_blank(),
-        #axis.ticks.x = element_blank(),
-        panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
-histogram
+# histogram <- ggplot(trim_df, aes(x = cwd.spstd)) + 
+#   geom_histogram(bins = 40, alpha = 0.8, fill = "#404788FF", color="white") +
+#   xlim(c(pred_min, pred_max)) +
+#   theme_bw(base_size = 23) + 
+#   ylab("# sites") +
+#   xlab("Historic CWD\n(Deviation from species mean)") + 
+#   theme(aspect.ratio = 0.3,
+#         #axis.title.x = element_blank(),
+#         #axis.text.x = element_blank(),
+#         #axis.ticks.x = element_blank(),
+#         panel.grid.major = element_blank(), 
+#         panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
+# histogram
 
 
 out_fig <- binned_margins / margins_plot + 
@@ -921,7 +946,7 @@ out_fig <- binned_margins / margins_plot +
 
 
 out_fig
-ggsave(paste0(wdir, 'figures\\2_cwd_margins.svg'), plot = out_fig, width = 5, height = 9, units = "in")
+ggsave(paste0(wdir, 'figures\\2_cwd_margins.svg'), plot = out_fig, width = 9, height = 14, units = "in")
 #ggsave(paste0(wdir, 'figures\\2_cwd_margins_only.svg'), plot = margins_plot, width = 15, height = 9, units = "in")
 
 
@@ -944,6 +969,84 @@ gen_marg_fx_df <- function(mod_df, cwd_min, cwd_max){
   return(cwd_me_df)
 }
 
+
+gen_marg_fx_df <- function(gen_mod, gen_data){
+  cwd_min = 
+  cwd_inc <- 0.1
+  at_pet <- 0
+  cwd_min <- gen_data %>% pull(cwd.spstd) %>% min()
+  cwd_max <- gen_data %>% pull(cwd.spstd) %>% max()
+  gen_pred <- predictions(gen_mod, newdata = datagrid(pet.spstd = 0, cwd.spstd = seq(cwd_min,cwd_max,cwd_inc)))
+  return(gen_pred)
+}
+
+pull_coefs <- function(gen_mod){
+  coef_table <- gen_mod %>% coeftable()
+  coef <- coef_table[2,1]  %>% round(digits = 3)
+  p <- coef_table[2, 4] %>% round(digits = 3)
+  n <- gen_mod$nobs
+  
+  label <-  paste0("n sites: ", n, ";\nslope: ", coef, ";\np value: ", p)
+  return(label)
+}
+
+
+genus_info <- sp_info %>% 
+  group_by(genus) %>% 
+  summarise(gymno_angio = first(gymno_angio))
+
+coef_labels <- genus_models %>% 
+  mutate(labels = map(model_estimates, pull_coefs)) %>% 
+  select(genus, labels) %>% 
+  unnest(labels) %>% 
+  arrange(genus)
+
+
+genus_predictions <- genus_models %>% 
+  mutate(predictions = map2(model_estimates, data, gen_marg_fx_df))
+
+genus_predictions <- genus_predictions %>% 
+  unnest(predictions) %>% 
+  select(-data, -model_estimates) %>% 
+  left_join(genus_info, by = "genus") %>% 
+  arrange(genus)
+
+gen_plot <- genus_predictions %>% 
+  # filter(genus %in% genus_keep) %>%
+  ggplot(aes(x = cwd.spstd)) + 
+  geom_line(aes(y = predicted)) +
+  geom_ribbon(aes(ymin=conf.low, ymax=conf.high, fill = gymno_angio), alpha=0.2) +
+  # geom_ribbon(aes(ymin=cwd_ci_min, ymax=cwd_ci_max), alpha=0.2, fill = "darkblue") +
+  theme_bw(base_size = 22) + 
+  facet_wrap(~genus, scales = "free") +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        strip.background = element_blank(),
+        panel.border = element_rect(colour = "black", fill = NA)) +
+  geom_line(aes(y = conf.low), linetype = 3) +
+  geom_line(aes(y = conf.high), linetype = 3) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  xlab("Historic CWD\n(Deviation from species mean)") + 
+  ylab("Predicted sensitivity to CWD") +
+  xlim(c(-3, 3))
+
+gen_plot <- gen_plot +
+  geom_text(data = coef_labels, aes(label = labels, x = -Inf, y = Inf),
+            hjust = 0, vjust = 1)
+  
+gen_plot
+
+
+# margins_plot <- margins_plot +
+#   geom_text(data = genus_coefs, aes(x = -1.8, y = 0, label = lab))
+
+margins_plot
+
+
+
+gen_pred %>% ggplot(aes(x = cwd.spstd, y = predicted))
+gen_pred %>% plot()
+plot_cme(gen_mod, effect = "cwd.spstd", condition = "cwd.spstd")
 genus_lims <- genus_predictions %>% 
   group_by(genus) %>% 
   summarise(cwd_min = first(min_cwd),
