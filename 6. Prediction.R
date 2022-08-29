@@ -31,6 +31,7 @@ library(furrr)
 library(snow)
 library(profvis)
 library(tmap)
+library(tidylog)
 
 n_cores <- availableCores() - 6
 future::plan(multisession, workers = n_cores)
@@ -38,6 +39,7 @@ future::plan(multisession, workers = n_cores)
 my_seed <- 5597
 
 n_mc <- 10000
+
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data --------------------------------------------------------
@@ -99,10 +101,11 @@ predict_sens <- function(sppp_code, int_int, int_cwd, int_pet, cwd_int,
   
   sp_df <- sp_df %>% 
     rename(cwd_hist = cwd,
-           pet_hist = pet) %>% 
+           pet_hist = pet) %>%
     mutate(cwd_sens = cwd_int + cwd_cwd * cwd_hist + cwd_pet * pet_hist,
            pet_sens = pet_int + pet_cwd * cwd_hist + pet_pet * pet_hist,
            intercept = int_int + int_cwd * cwd_hist + int_pet * pet_hist) %>% 
+    select(-cwd_hist, -pet_hist) %>% 
     as_tibble()
   
   return(sp_df)
@@ -116,7 +119,7 @@ calc_rwi_partials <- function(sppp_code, cmip_id, sensitivity){
   ## sensitivity raster and assigned CMIP model of future climate. Also
   ## integrates calculations of partialling our climate / sensitivity variations
   
-  ## Predict future RWI
+  ## Predict RWI under CMIP scenario
   sp_fut_clim <- sp_clim %>% 
     filter(sp_code == sppp_code) %>% 
     pull(clim_cmip_sp)
@@ -132,6 +135,14 @@ calc_rwi_partials <- function(sppp_code, cmip_id, sensitivity){
            rwi_pred_start = intercept + (pet_cmip_start * pet_sens) + (cwd_cmip_start * cwd_sens),
            rwi_pclim_end = constant_sensitivities$int + (pet_cmip_end * constant_sensitivities$pet) + (cwd_cmip_end * constant_sensitivities$cwd),
            rwi_pclim_start = constant_sensitivities$int + (pet_cmip_start * constant_sensitivities$pet) + (cwd_cmip_start * constant_sensitivities$cwd)) %>% 
+    select(x,y,
+           cwd_sens,
+           pet_sens,
+           intercept,
+           rwi_pred_end,
+           rwi_pred_start,
+           rwi_pclim_end,
+           rwi_pclim_start) %>% 
     as_tibble()
   
   return(sp_fut_clim)
@@ -142,13 +153,12 @@ calc_rwi_partials <- function(sppp_code, cmip_id, sensitivity){
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Compute sensitivity, RWI for each species by MC combination ---------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
 pull_layer <- function(brick, layer_name){
   pulled_layer <- brick %>% subset(layer_name)
 }
 
 
-calc_rwi_quantiles <- function(spp_code, mc_data){
+calc_rwi_quantiles <- function(spp_code, mc_data, parallel = TRUE){
   set.seed(my_seed) # Re-setting seed at start of each iteration to ensure interrupted jobs still produce replicable results
   tic()
 
@@ -156,44 +166,67 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
   print(spp_code)
   
   ## Calculate n_mc versions of species' sensitivity raster
-  sp_sensitivity <- mc_data %>% 
-    mutate(sensitivity = future_pmap(list(sppp_code = spp_code,
-                                          int_int = int_int,
-                                          int_cwd = int_cwd,
-                                          int_pet = int_pet,
-                                          cwd_int = cwd_int,
-                                          cwd_cwd = cwd_cwd,
-                                          cwd_pet = cwd_pet,
-                                          pet_int = pet_int,
-                                          pet_cwd = pet_cwd,
-                                          pet_pet = pet_pet),
-                                     .f = predict_sens,
-                                     .options = furrr_options(seed = my_seed, 
-                                                              packages = c( "dplyr", "raster", "dtplyr"))))
+  if (parallel == TRUE) {
+    sp_predictions <- mc_data %>% 
+      mutate(sensitivity = future_pmap(list(sppp_code = spp_code,
+                                            int_int = int_int,
+                                            int_cwd = int_cwd,
+                                            int_pet = int_pet,
+                                            cwd_int = cwd_int,
+                                            cwd_cwd = cwd_cwd,
+                                            cwd_pet = cwd_pet,
+                                            pet_int = pet_int,
+                                            pet_cwd = pet_cwd,
+                                            pet_pet = pet_pet),
+                                       .f = predict_sens,
+                                       .options = furrr_options(seed = my_seed, 
+                                                                packages = c( "dplyr", "raster", "dtplyr"))))
+  } else {
+    sp_predictions <- mc_data %>% 
+      mutate(sensitivity = pmap(list(sppp_code = spp_code,
+                                            int_int = int_int,
+                                            int_cwd = int_cwd,
+                                            int_pet = int_pet,
+                                            cwd_int = cwd_int,
+                                            cwd_cwd = cwd_cwd,
+                                            cwd_pet = cwd_pet,
+                                            pet_int = pet_int,
+                                            pet_cwd = pet_cwd,
+                                            pet_pet = pet_pet),
+                                       .f = predict_sens))
+  }
+  sp_predictions <- sp_predictions %>% 
+    select(iter_idx, cmip_idx, sensitivity)
+  gc(verbose = TRUE)
 
-  
-  
   ## Predict future RWI for each of n_mc run
-  sp_predictions <- sp_sensitivity %>% 
-    mutate(rwi_predictions = future_pmap(list(sppp_code = spp_code,
-                                              cmip_id = cmip_idx,
-                                              sensitivity = sensitivity),
-                                         .f = calc_rwi_partials,
-                                         .options = furrr_options(seed = my_seed,
-                                                                  packages = c("raster", "dplyr", "dtplyr")))) 
-
+  if (parallel == TRUE){
+    sp_predictions <- sp_predictions %>% 
+      mutate(rwi_predictions = future_pmap(list(sppp_code = spp_code,
+                                                cmip_id = cmip_idx,
+                                                sensitivity = sensitivity),
+                                           .f = calc_rwi_partials,
+                                           .options = furrr_options(seed = my_seed,
+                                                                    packages = c("raster", "dplyr", "dtplyr"))))     
+  } else {
+    sp_predictions <- sp_predictions %>% 
+      mutate(rwi_predictions = pmap(list(sppp_code = spp_code,
+                                                cmip_id = cmip_idx,
+                                                sensitivity = sensitivity),
+                                           .f = calc_rwi_partials)) 
+  }
   sp_predictions <- sp_predictions %>% 
     select(iter_idx, rwi_predictions) %>% 
     unnest(rwi_predictions)
-
-  ## Drop occasional observations with missing CMIP data - should no longer be dropping observations
-  sp_predictions <- sp_predictions[complete.cases(sp_predictions %>% select(cwd_cmip_end, pet_cmip_end)),] %>% 
+  gc(verbose = TRUE)
+  
+  sp_predictions <- sp_predictions %>% 
     lazy_dt()
   
-  ## Store historic climate to re-join later
-  hist_df <- sp_predictions %>% 
-    filter(iter_idx == 1) %>% 
-    select(x, y, cwd_hist, pet_hist)
+  # ## Store historic climate to re-join later
+  # hist_df <- sp_predictions %>% 
+  #   filter(iter_idx == 1) %>% 
+  #   select(x, y, cwd_hist, pet_hist)
     
   ## For each species, calculate cell-wise quantiles of variables from n_mc runs
   sp_predictions <- sp_predictions %>% 
@@ -215,25 +248,40 @@ calc_rwi_quantiles <- function(spp_code, mc_data){
               cwd_sens = mean(cwd_sens),
               pet_sens = mean(pet_sens),
               int_sens = mean(intercept),
-              cwd_cmip_start = mean(cwd_cmip_start),
-              pet_cmip_start = mean(pet_cmip_start),
-              cwd_cmip_end = mean(cwd_cmip_end),
-              pet_cmip_end = mean(pet_cmip_end),
+              # cwd_cmip_start = mean(cwd_cmip_start),
+              # pet_cmip_start = mean(pet_cmip_start),
+              # cwd_cmip_end = mean(cwd_cmip_end),
+              # pet_cmip_end = mean(pet_cmip_end),
               sp_code = spp_code,
-              .groups = "drop") %>%
-    left_join(hist_df, by = c("x", "y")) %>% 
-    as_tibble()
+              .groups = "drop")
+
+  ## Add back observed climate data
+  sp_hist <- (sp_clim %>% 
+              filter(sp_code == spp_code) %>% 
+              pull(clim_historic_sp))[[1]] %>% 
+    lazy_dt() %>% 
+    rename(cwd_hist = cwd,
+           pet_hist = pet)
   
-  # Should add these variables, based on CMIP start/end comparison
-  # mutate(rwi_null = cwd_hist * cwd_sens + pet_hist * pet_sens + int_sens,
-  #        rwi_change_mean = rwi_pred_mean - rwi_null,
-  #        rwi_change_975 = rwi_pred_975 - rwi_null,
-  #        rwi_change_025 = rwi_pred_025 - rwi_null,
-  #        rwi_change_pclim_mean = rwi_pclim_mean - rwi_null,
-  #        rwi_change_pclim_975 = rwi_pclim_975 - rwi_null,
-  #        rwi_change_pclim_025 = rwi_pclim_025 - rwi_null,
-  #        cwd_change = cwd_fut - cwd_hist,
-  #        pet_change = pet_fut - pet_hist)
+  sp_predictions <- sp_predictions %>% 
+    left_join(sp_hist, by = c("x", "y"))
+  
+  ## Add observed and predicted climate data
+  sp_cmip <- (sp_clim %>% 
+    filter(sp_code == spp_code) %>% 
+    pull(clim_cmip_sp))[[1]]
+  
+  sp_cmip <- sp_cmip %>%
+    rowwise() %>% 
+    mutate(pet_cmip_end_mean = mean(c_across(starts_with("pet_cmip_end"))),
+           cwd_cmip_end_mean = mean(c_across(starts_with("cwd_cmip_end"))),
+           pet_cmip_start_mean = mean(c_across(starts_with("pet_cmip_start"))),
+           cwd_cmip_start_mean = mean(c_across(starts_with("cwd_cmip_start")))) %>% 
+    select(x, y, cwd_cmip_start_mean, cwd_cmip_end_mean, pet_cmip_start_mean, pet_cmip_end_mean)
+
+  sp_predictions <- sp_predictions %>% 
+    left_join(sp_cmip, by = c("x", "y")) %>% 
+    as_tibble()
   
   ## Write out
   sp_predictions %>% 
@@ -249,11 +297,28 @@ mc_nests <- sp_mc %>%
   nest() %>% 
   drop_na()
 
+# Generally have memory issues with 38 (LAGM), and 93 (PISY) - need to run these with two cores
+# large_range_sp <- c("lagm", "pisy")
+# spp_code = "abal"
+# mc_data = mc_nests %>% filter(sp_code == spp_code) %>% pull(data)
+# mc_data = mc_data[[1]]
+# parallel = FALSE
 
-mc_nests <- mc_nests %>% 
+# mc_nests_large <- mc_nests %>% 
+#   filter((sp_code %in% large_range_sp)) %>% 
+#   mutate(predictions = pmap(list(spp_code = sp_code,
+#                                  mc_data = data,
+#                                  parallel = TRUE),
+#                             .f = calc_rwi_quantiles))
+
+mc_nests_small <- mc_nests %>% 
+  # filter(!(sp_code %in% large_range_sp)) %>% 
   mutate(predictions = pmap(list(spp_code = sp_code,
-                                 mc_data = data),
+                                 mc_data = data,
+                                 parallel = TRUE),
                               .f = calc_rwi_quantiles)) 
+
+ 
 
 
 
