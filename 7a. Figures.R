@@ -74,10 +74,10 @@ site_smry <- site_smry %>%
   select(collection_id, sp_id, latitude, longitude) %>% 
   mutate(species_id = tolower(sp_id)) %>% 
   select(-sp_id)
-site_loc <- site_smry %>% 
-  select(collection_id, latitude, longitude)
+# site_loc <- site_smry %>% 
+#   select(collection_id, latitude, longitude)
 flm_df <- flm_df %>% 
-  left_join(site_loc, by = "collection_id") %>% 
+  # left_join(site_loc, by = "collection_id") %>% 
   st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
 
 
@@ -1107,15 +1107,8 @@ margins_plot
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ## ToDo - rwi_null should probably be calculated as part of the MC analysis in prediction script?
 sp_predictions <- sp_predictions %>% 
-  mutate(rwi_null = cwd_hist * cwd_sens + pet_hist * pet_sens + int_sens,
-         rwi_change_mean = rwi_pred_mean - rwi_null,
-         rwi_change_975 = rwi_pred_975 - rwi_null,
-         rwi_change_025 = rwi_pred_025 - rwi_null,
-         rwi_change_pclim_mean = rwi_pclim_mean - rwi_null,
-         rwi_change_pclim_975 = rwi_pclim_975 - rwi_null,
-         rwi_change_pclim_025 = rwi_pclim_025 - rwi_null,
-         cwd_change = cwd_fut - cwd_hist,
-         pet_change = pet_fut - pet_hist)
+  mutate(cwd_change = cwd_cmip_end_mean - cwd_cmip_start_mean,
+         pet_change = pet_cmip_end_mean - pet_cmip_start_mean)
 
 plot_dat <- sp_predictions %>%
   filter(((abs(cwd_hist)<2.5) & (abs(pet_hist<2.5)))) %>%
@@ -1138,12 +1131,18 @@ plot_dat <- plot_dat %>%
 plot_dat <- plot_dat %>% 
   group_by(cwd.q, pet.q) %>% 
   summarize(rwi_pred = mean(rwi_pred_mean, na.rm = TRUE),
-            rwi_change = mean(rwi_change_mean, na.rm = TRUE),
-            rwi_change_lb = mean(rwi_change_025, na.rm = TRUE),
-            rwi_change_ub = mean(rwi_change_975, na.rm = TRUE),
-            rwi_change_pclim = mean(rwi_change_pclim_mean, na.rm = TRUE),
-            rwi_change_pclim_lb = mean(rwi_change_pclim_025),
-            rwi_change_pclim_ub = mean(rwi_change_pclim_975),
+            # rwi_change = mean(rwi_pred_mean, na.rm = TRUE),
+            # rwi_change_lb = mean(rwi_pred_025, na.rm = TRUE),
+            # rwi_change_ub = mean(rwi_pred_975, na.rm = TRUE),
+            # rwi_change_pclim = mean(rwi_pclim_mean, na.rm = TRUE),
+            # rwi_change_pclim_lb = mean(rwi_pclim_025),
+            # rwi_change_pclim_ub = mean(rwi_pclim_975),
+            rwi_change = mean(rwi_pred_change_mean, na.rm = TRUE),
+            rwi_change_lb = mean(rwi_pred_change_025, na.rm = TRUE),
+            rwi_change_ub = mean(rwi_pred_change_975, na.rm = TRUE),
+            rwi_change_pclim = mean(rwi_pclim_change_mean, na.rm = TRUE),
+            rwi_change_pclim_lb = mean(rwi_pclim_change_025),
+            rwi_change_pclim_ub = mean(rwi_pclim_change_975),
             cwd_sens = mean(cwd_sens, na.rm = TRUE),
             pet_sens = mean(pet_sens, na.rm = TRUE),
             cwd_change = mean(cwd_change, na.rm = TRUE),
@@ -1343,7 +1342,7 @@ transect_1 <- transect_dat %>%
               alpha = 0.2) +
   geom_line(size = 2) +
   theme_bw(base_size = 20)+
-  ylim(c(-1.5, 0.4)) +
+  ylim(c(-1.1, 0.4)) +
   xlim(c(-2, 2)) +
   scale_linetype_manual(values=c("solid", "dotted", "dotted")) +
   scale_fill_manual(name = "Scenario",
@@ -1374,7 +1373,7 @@ transect_2 <- transect_dat %>%
               alpha = 0.2) +
   geom_line(size = 2) +
   theme_bw(base_size = 20)+
-  ylim(c(-1.5, 0.2)) +
+  ylim(c(-1.1, 0.2)) +
   xlim(c(-2, 2)) +
   scale_linetype_manual(values=c("solid", "dotted", "dotted"))+
   scale_fill_manual(name = "Scenario",
@@ -1393,7 +1392,7 @@ transect_2 <- transect_dat %>%
         legend.title = element_text(size=18),
         legend.background = element_blank()) +
   geom_hline(yintercept = 0, linetype = "dashed", size = 1)
-
+transect_2
 
 locator <- rwi_bin + 
   theme_bw(base_size = 20)+
@@ -1575,47 +1574,51 @@ a/e
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Species-level changes in CWD  ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-sp_predictions <- do.call('rbind', lapply(rwi_list[1:30], readRDS)) ## TO BE REMOVED - DATA IS ALREADY BEING LOADED AT TOP, JUST LOADING SMALLER SET TO PLAY WITH
+# sp_predictions <- do.call('rbind', lapply(rwi_list[1:30], readRDS)) ## TO BE REMOVED - DATA IS ALREADY BEING LOADED AT TOP, JUST LOADING SMALLER SET TO PLAY WITH
 
 
-sp_predictions <- sp_predictions %>% 
+sp_plot_dat <- sp_predictions %>% 
   group_by(sp_code) %>% 
-  mutate(beyond_max_cwd = cwd_cmip_end > max(cwd_hist)) %>% 
+  mutate(beyond_max_cwd = cwd_cmip_end_mean > max(cwd_hist)) %>% 
   mutate(cwd_end_bin = case_when(
     (beyond_max_cwd == TRUE) ~ "1. Beyond prior range max",
-    (cwd_cmip_end > 3) ~ "2. >2 s.d. above past mean",
-    (cwd_cmip_end > 1.5) ~ "3. >1 s.d. above past mean",
-    (cwd_cmip_end > 0) ~ "4. >0 s.d. above past mean",
-    (cwd_cmip_end < 0) ~ "5. below past mean",
+    (cwd_cmip_end_mean > 3) ~ "2. >2 s.d. above past mean",
+    (cwd_cmip_end_mean > 1.5) ~ "3. >1 s.d. above past mean",
+    (cwd_cmip_end_mean > 0) ~ "4. >0 s.d. above past mean",
+    (cwd_cmip_end_mean < 0) ~ "5. below past mean",
   ))
 
-bin_shares <- sp_predictions %>% # Add grouping by genera? 
+bin_shares <- sp_plot_dat %>% # Add grouping by genera? 
   group_by(sp_code, cwd_end_bin) %>% 
   summarise(n = n()) %>% 
   group_by(sp_code) %>% 
-  mutate(prop_cwd_bin = prop.table(n))
-
-sp_order <- bin_shares %>% 
-  filter(cwd_end_bin == "1. Beyond prior max") %>% 
+  mutate(prop_cwd_bin = prop.table(n)) %>% 
+  filter(cwd_end_bin == "1. Beyond prior range max") %>% 
   arrange(prop_cwd_bin) %>% 
-  pull(sp_code)
+  select(sp_code, prop_cwd_bin)
 
-sp_predictions %>%
-  ggplot(aes(x= sp_code, fill=cwd_end_bin)) + # Arrange columns by sp_order?
+sp_plot_dat <- sp_plot_dat %>% 
+  left_join(bin_shares, by = "sp_code") %>% 
+  mutate(sp_code = factor(sp_code))
+
+sp_plot_dat$sp_code <- fct_reorder(sp_plot_dat$sp_code, sp_plot_dat$prop_cwd_bin, median) ## Probably want to define order based on multiple categories to make smoother plot
+
+sp_plot_dat %>%
+  ggplot(aes(x= sp_code, fill=cwd_end_bin)) +
   geom_bar(position = "fill") # Use diverging color scheme? 
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Species-level changes in CWD  ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-sp_predictions <- sp_predictions %>% 
+sp_plot_dat <- sp_plot_dat %>% 
   mutate(rwi_change_bin = case_when(
     (rwi_pred_change_mean < -.5) ~ "1. RWI decline > 0.5",
     (rwi_pred_change_mean < -0.25) ~ "2. RWI decline between 0.25 and .5",
     (rwi_pred_change_mean < 0) ~ "3. RWI decline between 0 and 0.25",
     (rwi_pred_change_mean >= 0) ~ "4. RWI increase",
   ))
-sp_predictions %>% 
+sp_plot_dat %>% 
   ggplot(aes(x = sp_code, fill = rwi_change_bin)) +
   geom_bar(position = "fill")
 
