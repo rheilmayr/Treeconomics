@@ -61,13 +61,13 @@ n_mc <- 10000
 wdir <- 'remote\\'
 
 # 1. Site-level regressions
-flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv')) #%>%
+flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv')) %>%
   select(-X1)
 
 # 2. Historic site-level climate
 ave_site_clim <- read_rds(paste0(wdir, "out\\climate\\site_ave_clim.gz"))
 flm_df <- flm_df %>% 
-  left_join(ave_site_clim, by = c("collection_id")) ## TODO: Track down why some sites don't have cwd.spstd, but do have regression results
+  left_join(ave_site_clim, by = c("collection_id"))
 
 # 3. Site information
 site_df <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
@@ -124,14 +124,15 @@ trim_df <- flm_df %>%
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Describe average sensitivities ---------------------------------
+# Describe constant sensitivities ---------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-intercept_median <- median(trim_df$estimate_intercept)
-cwd_median <- median(trim_df$estimate_cwd.an)
-pet_median <- median(trim_df$estimate_pet.an)
-constant_sensitivities <- list("int" = intercept_median,
-                               "cwd" = cwd_median,
-                               "pet" = pet_median)
+cwd_const_mod <- lm(estimate_cwd.an ~ 1, data=trim_df, weights = cwd_errorweights)
+pet_const_mod <- lm(estimate_pet.an ~ 1, data=trim_df, weights = cwd_errorweights)
+int_const_mod <- lm(estimate_intercept ~ 1, data=trim_df, weights = cwd_errorweights)
+
+constant_sensitivities <- list("int" = int_const_mod$coefficients,
+                               "cwd" = cwd_const_mod$coefficients,
+                               "pet" = pet_const_mod$coefficients)
 
 constant_sensitivities %>% 
   write_rds(paste0(wdir, "out/first_stage/constant_sensitivities.rds"))
