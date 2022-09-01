@@ -125,7 +125,7 @@ cwd_cmip_start <- cwd_raster %>% mean()
 rm(cwd_raster)
 rm(aet_raster)
 cwd_cmip_change <- cwd_cmip_end - cwd_cmip_start
-
+cwd_cmip_pchange <- cwd_cmip_change / cwd_cmip_start
 
 # cwdlist=list();aetlist=list()
 # j=1
@@ -1437,7 +1437,8 @@ plot_dat %>%
 ranges_dissolve <- st_read(paste0(wdir,"in/species_ranges/merged_ranges_dissolve.shp"))
 
 #clip raster to species range
-cwdmeanchange_end=raster::mask(cwdmeanchange_end, ranges_dissolve)
+cwd_cmip_change=raster::mask(cwd_cmip_change, ranges_dissolve)
+cwd_cmip_pchange=raster::mask(cwd_cmip_pchange, ranges_dissolve)
 
 
 data(World)
@@ -1448,7 +1449,7 @@ bbox_new <- c(-180, -60, 180, 80)
 
 cwd_map <- tm_shape(World, bbox = bbox_new) +
   tm_fill() +
-  tm_shape(cwdmeanchange_end) +
+  tm_shape(cwd_cmip_change) +
   tm_raster(title = "Change in CWD\n1970-2000 to 2091-2100\n(mm per year)", palette = "viridis", n = 10)
   
 cwd_map
