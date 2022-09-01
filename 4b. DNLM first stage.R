@@ -339,7 +339,7 @@ lagged_effects$pet_quantile = ntile(lagged_effects$pet.spstd, 4) %>% as.factor()
 cwd_median_effect <- lagged_effects %>%
   filter(cwd_quantile==4) %>%
   group_by(lag) %>%
-  summarise(med_effect = mean(cwd_effect),
+  summarise(med_effect = median(cwd_effect),
             upper = quantile(cwd_effect, 0.66, na.rm = T),
             lower = quantile(cwd_effect, 0.33, na.rm = T))
 cwd_plot <- cwd_median_effect %>%
