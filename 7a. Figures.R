@@ -1438,7 +1438,7 @@ ranges_dissolve <- st_read(paste0(wdir,"in/species_ranges/merged_ranges_dissolve
 
 #clip raster to species range
 cwd_cmip_change=raster::mask(cwd_cmip_change, ranges_dissolve)
-cwd_cmip_pchange=raster::mask(cwd_cmip_pchange, ranges_dissolve)
+# cwd_cmip_pchange=raster::mask(cwd_cmip_pchange, ranges_dissolve)
 
 
 data(World)
