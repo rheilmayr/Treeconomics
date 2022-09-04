@@ -205,6 +205,10 @@ mod_df <- cb_df %>%
   # filter((collection_id %in% old_incompletes))
 
 
+mod_df <- cb_df %>% 
+  left_join(trim_df %>% select(collection_id, cwd_errorweights), by = "collection_id")
+
+
 # flm_df %>% arrange(desc(estimate_pet.an))
 # 
 # mod_df <- cb_df %>%
@@ -225,7 +229,7 @@ cwdnam <- paste("cwd_cbv1.l", 1:n_vars, sep="")
 xnam <- append(cwdnam, petnam)
 fmla <- as.formula(paste("rwi ~ ", paste(xnam, collapse= "+")) %>% paste0(" | tree_id"))
 vg.range <- 363. # km, calculated in 5b. Second stage
-lagmod=feols(fmla, vcov = conley(cutoff = vg.range, distance = "spherical"), data=mod_df)
+lagmod=feols(fmla, vcov = conley(cutoff = vg.range, distance = "spherical"), data=mod_df, weights = mod_df$cwd_errorweights)
 # fmla <- as.formula(paste("rwi ~ ", paste(xnam, collapse= "+")))
 # lagmod=feols(fmla, data=mod_df)
 
@@ -296,7 +300,8 @@ run_dnlm <- function(mod_df){
                             cwd_effect = cwd_cp$matfit[3,],
                             pet_effect = pet_cp$matfit[3,],
                             cwd_cum =  cwd_cp$cumfit[3,nlags + 1],
-                            pet_cum =  pet_cp$cumfit[3,nlags + 1])
+                            pet_cum =  pet_cp$cumfit[3,nlags + 1],
+                            cwd_cum_se = cwd_cp$cumse[3,nlags + 1])
     },
     error = function(e) {
       message("Returned dlnm error")
@@ -325,15 +330,23 @@ lagged_effects <- mod_df %>%
   left_join(ave_site_clim, by = "collection_id")
 
 cum_effects <- lagged_effects %>%
-  select(collection_id, lag, cwd_cum, pet_cum, cwd.spstd, pet.spstd) %>%
-  distinct()
+  select(collection_id, lag, cwd_cum, pet_cum, cwd_cum_se, cwd.spstd, pet.spstd) %>%
+  distinct()  %>% 
+  filter(lag == 15)
+
+cum_mod_df <- cum_effects %>% 
+  filter(abs(cwd_cum) < 20) %>%
+  mutate(errorweights = 1 / cwd_cum_se)
+mod <- lm(cwd_cum ~ pet.spstd + cwd.spstd, data = cum_mod_df, weights = errorweights)
+summary(mod)
 
 lagged_effects <- lagged_effects %>%
+  # filter(cwd.spstd>0) %>% 
   select(-cwd_cum, -pet_cum) %>%
   drop_na()
 
-lagged_effects$cwd_quantile <- ntile(lagged_effects$cwd.spstd, 4) %>% as.factor()
-lagged_effects$pet_quantile = ntile(lagged_effects$pet.spstd, 4) %>% as.factor()
+lagged_effects$cwd_quantile <- ntile(lagged_effects$cwd.spstd, 3) %>% as.factor()
+lagged_effects$pet_quantile = ntile(lagged_effects$pet.spstd, 3) %>% as.factor()
 
 
 cwd_median_effect <- lagged_effects %>%
@@ -375,7 +388,13 @@ pet_plot +
   ylab("Median effect of PET=1 shock on RWI")
 
 
-
+smpl <- lagged_effects$collection_id %>% sample(1)
+mod_single_lag <- lagged_effects %>% 
+  filter(collection_id == smpl)
+mod_single_lag %>% 
+  ggplot(aes(x = lag, y = cwd_effect)) +
+  geom_line() +
+  geom_hline(yintercept = 0)
 
 
 # median_effect <- lagged_effects %>%
@@ -415,8 +434,13 @@ pet_plot +
 # 
 # 
 # Look at variation across terciles. Particularly interesting for pet
+lagged_effects <- lagged_effects %>% 
+  group_by(collection_id) %>% 
+  mutate(cwd_tercile = ntile(x = cwd.spstd, 3),
+         pet_tercile = ntile(x = pet.spstd, 3))
+
 median_effect <- lagged_effects %>%
-  group_by(cwd_tercile, lag) %>%
+  group_by(cwd_quantile, lag) %>%
   summarise(med_effect = median(cwd_effect),
             upper = quantile(cwd_effect, 0.66, na.rm = T),
             lower = quantile(cwd_effect, 0.33, na.rm = T),
@@ -424,7 +448,7 @@ median_effect <- lagged_effects %>%
             lower2 = med_effect - sd(cwd_effect))
 median_effect %>%
   ggplot(aes(x = lag, y = med_effect, ymax = upper, ymin = lower)) +
-  facet_grid(rows = median_effect$cwd_tercile) +
+  facet_grid(rows = median_effect$cwd_quantile) +
   geom_line() +
   geom_ribbon(alpha = 0.2) +
   # geom_hline(yintercept = 0) +
@@ -433,7 +457,7 @@ median_effect %>%
 
 
 median_effect <- lagged_effects %>%
-  group_by(lag, pet_tercile) %>%
+  group_by(lag, pet_quantile) %>%
   summarise(med_effect = median(pet_effect),
             upper = quantile(pet_effect, 0.66, na.rm = T),
             lower = quantile(pet_effect, 0.33, na.rm = T))
@@ -442,7 +466,7 @@ median_effect %>%
   geom_line() +
   # geom_hline(yintercept = 0) +
   geom_ribbon(alpha = 0.2) +
-  facet_grid(rows = median_effect$pet_tercile) +
+  facet_grid(rows = median_effect$pet_quantile) +
   theme_bw()
 # 
 # 
