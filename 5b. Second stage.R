@@ -124,21 +124,6 @@ trim_df <- flm_df %>%
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Describe constant sensitivities ---------------------------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-cwd_const_mod <- lm(estimate_cwd.an ~ 1, data=trim_df, weights = cwd_errorweights)
-pet_const_mod <- lm(estimate_pet.an ~ 1, data=trim_df, weights = cwd_errorweights)
-int_const_mod <- lm(estimate_intercept ~ 1, data=trim_df, weights = cwd_errorweights)
-
-constant_sensitivities <- list("int" = int_const_mod$coefficients,
-                               "cwd" = cwd_const_mod$coefficients,
-                               "pet" = pet_const_mod$coefficients)
-
-constant_sensitivities %>% 
-  write_rds(paste0(wdir, "out/first_stage/constant_sensitivities.rds"))
-
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Spatial autocorrelation of trim_df ---------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 site_points=st_as_sf(trim_df,coords=c("longitude","latitude"),crs="+init=epsg:4326 +proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0")
@@ -148,6 +133,35 @@ vg.fit <- fit.variogram(vg, model = vgm(1, "Sph", 900, 1))
 plot(vg, vg.fit)
 
 vg.range = vg.fit[2,3] * 1000
+
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Describe constant sensitivities ---------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+cwd_const_mod <- feols(estimate_cwd.an ~ 1,
+                       weights = trim_df$cwd_errorweights, data = trim_df,
+                       vcov = conley(cutoff = vg.range, distance = "spherical")) %>% 
+  tidy(conf.int = TRUE, conf.level = 0.95) %>% 
+  mutate(ci_dif = estimate - conf.low) 
+  
+pet_const_mod <- feols(estimate_pet.an ~ 1,
+                       weights = trim_df$pet_errorweights, data = trim_df,
+                       vcov = conley(cutoff = vg.range, distance = "spherical")) %>% 
+  tidy(conf.int = TRUE, conf.level = 0.95) %>% 
+  mutate(ci_dif = estimate - conf.low) 
+int_const_mod <- feols(estimate_intercept ~ 1, 
+                       weights = trim_df$int_errorweights, data = trim_df,
+                       vcov = conley(cutoff = vg.range, distance = "spherical")) %>% 
+  tidy(conf.int = TRUE, conf.level = 0.95) %>% 
+  mutate(ci_dif = estimate - conf.low) 
+
+constant_sensitivities <- list("int" = int_const_mod,
+                               "cwd" = cwd_const_mod,
+                               "pet" = pet_const_mod)
+
+constant_sensitivities %>% 
+  write_rds(paste0(wdir, "out/first_stage/constant_sensitivities.rds"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

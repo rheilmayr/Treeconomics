@@ -133,8 +133,8 @@ calc_rwi_partials <- function(sppp_code, cmip_id, sensitivity){
     left_join(sensitivity, by = c("x", "y")) %>% 
     mutate(rwi_pred_end = intercept + (pet_cmip_end * pet_sens) + (cwd_cmip_end * cwd_sens),
            rwi_pred_start = intercept + (pet_cmip_start * pet_sens) + (cwd_cmip_start * cwd_sens),
-           rwi_pclim_end = constant_sensitivities$int + (pet_cmip_end * constant_sensitivities$pet) + (cwd_cmip_end * constant_sensitivities$cwd),
-           rwi_pclim_start = constant_sensitivities$int + (pet_cmip_start * constant_sensitivities$pet) + (cwd_cmip_start * constant_sensitivities$cwd)) %>% 
+           rwi_pclim_end = constant_sensitivities$int$estimate[1] + (pet_cmip_end * constant_sensitivities$pet$estimate[1]) + (cwd_cmip_end * constant_sensitivities$cwd$estimate[1]),
+           rwi_pclim_start = constant_sensitivities$int$estimate[1] + (pet_cmip_start * constant_sensitivities$pet$estimate[1]) + (cwd_cmip_start * constant_sensitivities$cwd$estimate[1])) %>% 
     select(x,y,
            cwd_sens,
            pet_sens,
