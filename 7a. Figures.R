@@ -1549,16 +1549,41 @@ cwd_cmip_change=raster::mask(cwd_cmip_change, ranges_dissolve)
 
 data(World)
 
-tmap_mode("plot")
+# tmap_mode("plot")
+# 
+# bbox_new <- c(-180, -60, 180, 80)
+# 
+# cwd_map <- tm_shape(World, bbox = bbox_new) +
+#   tm_fill() +
+#   tm_shape(cwd_cmip_change) +
+#   tm_raster(title = "Change in CWD\n1970-2000 to 2091-2100\n(mm per year)", palette = "viridis", n = 10) +
+#   tm_layout(legend.outside = TRUE)
 
-bbox_new <- c(-180, -60, 180, 80)
 
-cwd_map <- tm_shape(World, bbox = bbox_new) +
-  tm_fill() +
-  tm_shape(cwd_cmip_change) +
-  tm_raster(title = "Change in CWD\n1970-2000 to 2091-2100\n(mm per year)", palette = "viridis", n = 10)
-  
+
+cwd_cmip_df <- as.data.frame(cwd_cmip_change, xy = TRUE)
+world <- map_data("world")
+
+cwd_map <- ggplot() +
+  geom_map(data = world, map = world,
+           aes(map_id = region),
+           color = "lightgray", fill = "lightgray",size = 0.1) +
+  geom_tile(data = cwd_cmip_df %>% filter(!is.na(layer)), aes(x = x, y = y, fill = layer)) +
+  scale_fill_viridis(name = "Change in CWD\n1970-2000 to 2091-2100\n(mm per year)") +
+  coord_fixed() +
+  theme(axis.text.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title.y = element_blank(),
+        axis.ticks.y = element_blank())
 cwd_map
+  
+  
+  
+  
+  
+
 
 
 # test +
@@ -1794,7 +1819,7 @@ theme_set(
 )
 
 
-sp_plot_dat %>%
+genus_cwd_change <- sp_plot_dat %>%
   ggplot(aes(x= genus, fill=cwd_end_bin)) +
   geom_bar(position = "fill", alpha=.9) +
   scale_fill_viridis_d(direction = -1) + # Use diverging color scheme? 
@@ -1802,6 +1827,10 @@ sp_plot_dat %>%
   xlab("Genera")+
   guides(fill=guide_legend("Change in CWD"))+
   theme(axis.text.x = element_text(angle = 75, vjust = 1, hjust=1))
+
+
+cwd_map / genus_cwd_change +
+  plot_layout(heights = c(1, 1))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
