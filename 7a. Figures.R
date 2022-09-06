@@ -34,6 +34,7 @@ library(rgdal)
 library(viridis)
 library(patchwork)
 library(Hmisc)
+library(latticeExtra)
 library(prediction)
 library(colorspace)
 library(ggnewscale)
@@ -67,8 +68,7 @@ theme_set(
 wdir <- 'remote/'
 
 # 1. Site-level regressions
-flm_df <- read_csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv")) %>%
-  select(-X1)
+flm_df <- read_csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv"))
 
 # 3. Site information
 site_smry <- read_csv(paste0(wdir, 'out/dendro/site_summary.csv'))
@@ -95,8 +95,8 @@ trim_df <- flm_df %>%
   drop_na()
 
 # DNLM results
-dnlm_results <- read_rds(paste0(wdir, "out/first_stage/dnlm."))
-dnlm_results <- read_rds(paste0(wdir, "out/first_stage/dnlm_orig.")) # Something has changed - old version creates positive pet effect, but gone after july tweaks to data...
+dnlm_results <- read_rds(paste0(wdir, "out/first_stage/dnlm"))
+dnlm_results <- read_rds(paste0(wdir, "out/first_stage/dnlm_orig")) # Something has changed - old version creates positive pet effect, but gone after july tweaks to data...
 
 # 5. Prediction rasters
 rwi_list <- list.files(paste0(wdir, "out/predictions/sp_rwi_pred_10000/"), pattern = ".gz", full.names = TRUE)
@@ -604,7 +604,7 @@ pet_qqplot <- (itrdb_pet_hist / fullrange_pet_hist) | pet_qq_plot
 qqplot <- cwd_qqplot / pet_qqplot
 qqplot
 
-ggsave(paste0(wdir, 'figures\\a1_qqplots.svg'), plot = qqplot, width = 11, height = 7, units = "in")
+#ggsave(paste0(wdir, 'figures\\a1_qqplots.svg'), plot = qqplot, width = 11, height = 7, units = "in")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -697,7 +697,7 @@ pet_dynamic <- plot_dnlm(dnlm_results$pet) +
 first_stage_effects <- (cwd_dynamic / pet_dynamic) | (cwd_est_plot / pet_est_plot)
 first_stage_effects
 
-ggsave(paste0(wdir, 'figures\\a2_first_stage_effects.svg'), plot = first_stage_effects)
+#ggsave(paste0(wdir, 'figures\\a2_first_stage_effects.svg'), plot = first_stage_effects)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -756,12 +756,46 @@ plot_dat_b <- plot_dat_a %>%
 # plot_dat_b <- plot_dat_b %>% mutate(cwd_sens = sym_log(cwd_sens))
 
 base_text_size = 18
+
+# binned_margins <- plot_dat_b %>%
+#   ggplot(aes(x = cwd.q, y = pet.q, fill = cwd_sens)) +
+#   geom_tile() +
+#   # xlim(c(pred_min, pred_max)) +
+#   # ylim(c(pred_min, pred_max)) +
+#   # scale_fill_viridis_c(direction = -1) +
+#   scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
+#   ylab("Deviation from mean PET")+
+#   xlab("Deviation from mean CWD")+
+#   theme_bw(base_size = base_text_size)+
+#   labs(fill = "Marginal effect\nof CWD") +
+#   ylab("Historic PET\n(Deviation from species mean)") +
+#   xlab("Historic CWD\n(Deviation from species mean)") +
+#   theme(legend.position = c(.18,.83),
+#         legend.key = element_blank(),
+#         legend.background = element_blank(), 
+#         legend.title=element_text(size=base_text_size - 4),
+#         legend.text = element_text(size = base_text_size - 6))+
+#   #panel.grid.major = element_blank(), 
+#   #panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))+
+#   coord_fixed() +
+#   geom_hline(yintercept = 0, size = 1, linetype = 2) +
+#   geom_vline(xintercept = 0, size = 1, linetype = 2) +
+#   xlim(c(pred_min, pred_max)) +
+#   ylim(c(pred_min, pred_max))
+# # +
+# #   theme(panel.grid.major = element_blank(), 
+# #         panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
+# 
+# 
+
 binned_margins <- plot_dat_b %>%
-  ggplot(aes(x = cwd.q, y = pet.q, fill = cwd_sens)) +
-  geom_tile() +
+  ggplot(aes(x = cwd.q, y = pet.q, z = cwd_sens)) +
+  stat_summary_hex(fun = function(x) mean(x), bins=12)+
+  scale_fill_gradient2(low = "#401552", mid = "grey93", high = "#82bead", midpoint = .98, 
+                       na.value = NA, name="Mean RWI")+
   # xlim(c(pred_min, pred_max)) +
   # ylim(c(pred_min, pred_max)) +
-  # scale_fill_viridis_c(direction = -1) +
+  #scale_fill_viridis_c(direction = -1) +
   scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
   ylab("Deviation from mean PET")+
   xlab("Deviation from mean CWD")+
@@ -769,7 +803,7 @@ binned_margins <- plot_dat_b %>%
   labs(fill = "Marginal effect\nof CWD") +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") +
-  theme(legend.position = c(.18,.83),
+  theme(
         legend.key = element_blank(),
         legend.background = element_blank(), 
         legend.title=element_text(size=base_text_size - 4),
@@ -781,9 +815,6 @@ binned_margins <- plot_dat_b %>%
   geom_vline(xintercept = 0, size = 1, linetype = 2) +
   xlim(c(pred_min, pred_max)) +
   ylim(c(pred_min, pred_max))
-# +
-#   theme(panel.grid.major = element_blank(), 
-#         panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
 
 
 binned_margins
@@ -953,6 +984,11 @@ margins_plot
 #         panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
 # histogram
 
+theme_set(
+  theme_bw(base_size = 45)+
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+)
+
 
 out_fig <- binned_margins / margins_plot + 
   # plot_layout(widths = c(1,1))+
@@ -960,7 +996,7 @@ out_fig <- binned_margins / margins_plot +
 
 
 out_fig
-ggsave(paste0(wdir, 'figures\\2_cwd_margins.svg'), plot = out_fig, width = 9, height = 14, units = "in")
+#ggsave(paste0(wdir, 'figures\\2_cwd_margins.svg'), plot = out_fig, width = 9, height = 14, units = "in")
 #ggsave(paste0(wdir, 'figures\\2_cwd_margins_only.svg'), plot = margins_plot, width = 15, height = 9, units = "in")
 
 
@@ -1649,37 +1685,53 @@ cwd_map
 # Species-level changes in CWD  ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # sp_predictions <- do.call('rbind', lapply(rwi_list[1:30], readRDS)) ## TO BE REMOVED - DATA IS ALREADY BEING LOADED AT TOP, JUST LOADING SMALLER SET TO PLAY WITH
+gen_dat <- read_csv(paste0(wdir, "out/species_gen_gr.csv")) %>% 
+  rename(sp_code = "species_id")
 
+sp_predictions_gen <- sp_predictions %>% 
+  left_join(gen_dat)
 
-sp_plot_dat <- sp_predictions %>% 
-  group_by(sp_code) %>% 
+sp_plot_dat <- sp_predictions_gen %>% 
+  group_by(genus) %>% 
   mutate(beyond_max_cwd = cwd_cmip_end_mean > max(cwd_hist)) %>% 
   mutate(cwd_end_bin = case_when(
-    (beyond_max_cwd == TRUE) ~ "1. Beyond prior range max",
-    (cwd_cmip_end_mean > 3) ~ "2. >2 s.d. above past mean",
-    (cwd_cmip_end_mean > 1.5) ~ "3. >1 s.d. above past mean",
-    (cwd_cmip_end_mean > 0) ~ "4. >0 s.d. above past mean",
-    (cwd_cmip_end_mean < 0) ~ "5. below past mean",
+    (beyond_max_cwd == TRUE) ~ "1. Beyond prior max",
+    (cwd_cmip_end_mean > 3) ~ "2. >2 s.d. above mean",
+    (cwd_cmip_end_mean > 1.5) ~ "3. >1 s.d. above mean",
+    (cwd_cmip_end_mean > 0) ~ "4. >0 s.d. above mean",
+    (cwd_cmip_end_mean < 0) ~ "5. Below mean",
   ))
 
 bin_shares <- sp_plot_dat %>% # Add grouping by genera? 
-  group_by(sp_code, cwd_end_bin) %>% 
+  group_by(genus, cwd_end_bin) %>% 
   summarise(n = n()) %>% 
-  group_by(sp_code) %>% 
+  group_by(genus) %>% 
   mutate(prop_cwd_bin = prop.table(n)) %>% 
-  filter(cwd_end_bin == "1. Beyond prior range max") %>% 
+  filter(cwd_end_bin == "1. Beyond prior max") %>% 
   arrange(prop_cwd_bin) %>% 
-  select(sp_code, prop_cwd_bin)
+  select(genus, prop_cwd_bin)
 
 sp_plot_dat <- sp_plot_dat %>% 
-  left_join(bin_shares, by = "sp_code") %>% 
-  mutate(sp_code = factor(sp_code))
+  left_join(bin_shares, by = "genus") %>% 
+  mutate(genus = factor(genus))
 
-sp_plot_dat$sp_code <- fct_reorder(sp_plot_dat$sp_code, sp_plot_dat$prop_cwd_bin, median) ## Probably want to define order based on multiple categories to make smoother plot
+sp_plot_dat$genus <- fct_reorder(sp_plot_dat$genus, sp_plot_dat$prop_cwd_bin, median) ## Probably want to define order based on multiple categories to make smoother plot
+
+
+theme_set(
+  theme_bw(base_size = 25)+
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+)
+
 
 sp_plot_dat %>%
-  ggplot(aes(x= sp_code, fill=cwd_end_bin)) +
-  geom_bar(position = "fill") # Use diverging color scheme? 
+  ggplot(aes(x= genus, fill=cwd_end_bin)) +
+  geom_bar(position = "fill", alpha=.9) +
+  scale_fill_viridis_d(direction = -1) + # Use diverging color scheme? 
+  ylab("Count")+
+  xlab("Genera")+
+  guides(fill=guide_legend("Change in CWD"))+
+  theme(axis.text.x = element_text(angle = 75, vjust = 1, hjust=1))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1809,3 +1861,4 @@ sp_plot_dat %>%
 # ggsave(paste0(wdir, "figures\\", "pred_full_b.svg"), change_plot, width = 9, height = 15)
 # 
 # 
+
