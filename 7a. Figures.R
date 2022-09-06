@@ -544,8 +544,8 @@ qq_plot <- quantile_df %>%
   geom_point() +
   # xlim(c(-2, 2)) +
   # ylim(c(-2, 2)) +
-  xlim(c(-4, 15)) +
-  ylim(c(-4, 15)) +
+  # xlim(c(-4, 15)) +
+  # ylim(c(-4, 15)) +
   geom_abline(intercept = 0, slope = 1) +
   theme_bw() +
   coord_fixed() +
@@ -590,8 +590,8 @@ pet_qq_plot <- pquantile_df %>%
   geom_point() +
   # xlim(c(-2, 2)) +
   # ylim(c(-2, 2)) +
-  xlim(c(-3.5, 5)) +
-  ylim(c(-3.5, 5)) +
+  # xlim(c(-3.5, 5)) +
+  # ylim(c(-3.5, 5)) +
   geom_abline(intercept = 0, slope = 1) +
   theme_bw() +
   coord_fixed() +
