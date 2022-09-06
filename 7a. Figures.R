@@ -788,7 +788,7 @@ base_text_size = 18
 # 
 # 
 
-binned_margins <- plot_dat_b %>%
+cwd_binned_margins <- plot_dat_b %>%
   ggplot(aes(x = cwd.q, y = pet.q, z = cwd_sens)) +
   stat_summary_hex(fun = function(x) mean(x), bins=12)+
   scale_fill_gradient2(low = "#401552", mid = "grey93", high = "#82bead", midpoint = .98, 
@@ -817,7 +817,7 @@ binned_margins <- plot_dat_b %>%
   ylim(c(pred_min, pred_max))
 
 
-binned_margins
+cwd_binned_margins
 
 # ggsave(paste0(wdir, 'figures\\binned_margins.svg'), plot = binned_margins)
 
@@ -923,10 +923,8 @@ pull_marg_fx <- function(at_pet, at_cwd, mod_df){
 
 
 
-### Binned plot of cwd sensitivity
-cwd_inc <- 0.1
+### Marginal effects of CWD df
 at_pet <- 0
-
 init_pull_marg_fx = partial(.f = pull_marg_fx, mod_df = mod_df)
 cwd_me_df <- tibble(at_cwd = seq(cwd_min, cwd_max, seq_inc))
 cwd_me_df <- cwd_me_df %>%
@@ -935,27 +933,21 @@ cwd_me_df <- cwd_me_df %>%
                        .f = init_pull_marg_fx)) %>% 
   unnest(cwd_me)
 
-## Compare to observed sensitivities
-plot_dat_a %>%
-  group_by(cwd.q) %>%
-  summarize(cwd_sens = mean(estimate_cwd.an, na.rm = TRUE),
-            pet_sens = mean(estimate_pet.an, na.rm = TRUE),
-            n = n())
-# %>% 
-#   ggplot(aes(x = cwd.q, y = pet_sens)) +
-#   geom_point()
+
+### Marginal effects of PET df
+at_cwd <- 0
+pet_me_df <- tibble(at_pet = seq(pet_min, pet_max, seq_inc))
+pet_me_df <- pet_me_df %>%
+  mutate(pet_me = pmap(list(at_cwd = at_cwd,
+                            at_pet = pet_me_df$at_pet),
+                       .f = init_pull_marg_fx)) %>% 
+  unnest(pet_me)
 
 
-
-# cwd_me_predictions <- prediction(cwd_mod, at = list(cwd.spstd = seq(cwd_min, cwd_max, .1)), 
-#                              vcov = cwd_vcov, calculate_se = T, data = mod_df) %>% 
-#   summary() %>% 
-#   rename(cwd.spstd = "at(cwd.spstd)")
-
-margins_plot <- ggplot(cwd_me_df, aes(x = at_cwd)) + 
-  # stat_smooth(data = trim_df, aes(x = cwd.spstd, y = estimate_cwd.an)) +
+### CWD marginal effects plots
+cwd_cwd_margins_plot <- ggplot(cwd_me_df, aes(x = at_cwd)) + 
   geom_line(aes(y = cwd_mean), size = 2) +
-  geom_ribbon(aes(ymin=cwd_ci_min, ymax=cwd_ci_max), alpha=0.2, fill = "darkblue") +
+  geom_ribbon(aes(ymin=cwd_ci_min, ymax=cwd_ci_max), alpha=0.2, fill = "darkred") +
   geom_line(aes(y = cwd_ci_max), linetype = 3) +
   geom_line(aes(y = cwd_ci_min), linetype = 3) +
   geom_hline(yintercept = 0, size = 1, linetype = 2) +
@@ -963,26 +955,24 @@ margins_plot <- ggplot(cwd_me_df, aes(x = at_cwd)) +
   ylab("Pred. sensitivity to CWD") + 
   xlim(c(pred_min, pred_max)) +
   theme_bw(base_size = 18)
-# +
-#   theme(panel.grid.major = element_blank(), 
-#         panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
 
-margins_plot
+cwd_cwd_margins_plot
 
 
-# histogram <- ggplot(trim_df, aes(x = cwd.spstd)) + 
-#   geom_histogram(bins = 40, alpha = 0.8, fill = "#404788FF", color="white") +
-#   xlim(c(pred_min, pred_max)) +
-#   theme_bw(base_size = 23) + 
-#   ylab("# sites") +
-#   xlab("Historic CWD\n(Deviation from species mean)") + 
-#   theme(aspect.ratio = 0.3,
-#         #axis.title.x = element_blank(),
-#         #axis.text.x = element_blank(),
-#         #axis.ticks.x = element_blank(),
-#         panel.grid.major = element_blank(), 
-#         panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
-# histogram
+pet_cwd_margins_plot <- ggplot(pet_me_df, aes(x = at_pet)) + 
+  geom_line(aes(y = cwd_mean), size = 2) +
+  geom_ribbon(aes(ymin=cwd_ci_min, ymax=cwd_ci_max), alpha=0.2, fill = "darkred") +
+  geom_line(aes(y = cwd_ci_max), linetype = 3) +
+  geom_line(aes(y = cwd_ci_min), linetype = 3) +
+  geom_hline(yintercept = 0, size = 1, linetype = 2) +
+  xlab("Historic PET\n(Deviation from species mean)") + 
+  ylab("Pred. sensitivity to CWD") + 
+  xlim(c(pred_min, pred_max)) +
+  theme_bw(base_size = 18)
+
+pet_cwd_margins_plot
+
+
 
 theme_set(
   theme_bw(base_size = 45)+
@@ -990,13 +980,13 @@ theme_set(
 )
 
 
-out_fig <- binned_margins / margins_plot + 
+cwd_full_margins <- cwd_binned_margins / cwd_cwd_margins_plot  / pet_cwd_margins_plot+ 
   # plot_layout(widths = c(1,1))+
   plot_annotation(tag_levels="A") & theme(plot.tag = element_text(face = 'bold', size=23))
 
 
-out_fig
-ggsave(paste0(wdir, 'figures\\2_cwd_margins.svg'), plot = out_fig, width = 9, height = 14, units = "in")
+cwd_full_margins
+# ggsave(paste0(wdir, 'figures\\2_cwd_margins.svg'), plot = cwd_full_margins, width = 9, height = 14, units = "in")
 #ggsave(paste0(wdir, 'figures\\2_cwd_margins_only.svg'), plot = margins_plot, width = 15, height = 9, units = "in")
 
 
@@ -1030,19 +1020,9 @@ pet_binned_margins <- plot_dat_b %>%
 
 pet_binned_margins
 
-### Binned plot of cwd sensitivity
-at_cwd <- 0
-pet_inc <- 0.1
 
-pet_me_df <- tibble(at_pet = seq(pet_min, pet_max, seq_inc))
-pet_me_df <- pet_me_df %>%
-  mutate(pet_me = pmap(list(at_cwd = at_cwd,
-                            at_pet = pet_me_df$at_pet),
-                       .f = init_pull_marg_fx)) %>% 
-  unnest(pet_me)
-
-
-pet_margins_plot <- ggplot(pet_me_df, aes(x = at_pet)) + 
+## PET marginal effects plots
+pet_pet_margins_plot <- ggplot(pet_me_df, aes(x = at_pet)) + 
   geom_line(aes(y = pet_mean), size = 2) +
   geom_ribbon(aes(ymin=pet_ci_min, ymax=pet_ci_max), alpha=0.2, fill = "darkblue") +
   geom_line(aes(y = pet_ci_max), linetype = 3) +
@@ -1053,24 +1033,32 @@ pet_margins_plot <- ggplot(pet_me_df, aes(x = at_pet)) +
   xlim(c(pred_min, pred_max)) +
   theme_bw(base_size = 18)
 
-pet_margins_plot
+pet_pet_margins_plot
+
+cwd_pet_margins_plot <- ggplot(cwd_me_df, aes(x = at_cwd)) + 
+  geom_line(aes(y = pet_mean), size = 2) +
+  geom_ribbon(aes(ymin=pet_ci_min, ymax=pet_ci_max), alpha=0.2, fill = "darkblue") +
+  geom_line(aes(y = pet_ci_max), linetype = 3) +
+  geom_line(aes(y = pet_ci_min), linetype = 3) +
+  geom_hline(yintercept = 0, size = 1, linetype = 2) +
+  xlab("Historic CWD\n(Deviation from species mean)") + 
+  ylab("Pred. sensitivity to PET") + 
+  xlim(c(pred_min, pred_max)) +
+  theme_bw(base_size = 18)
+
+cwd_pet_margins_plot
 
 
-
-theme_set(
-  theme_bw(base_size = 45)+
-    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
-)
-
-
-pet_out_fig <- pet_binned_margins / pet_margins_plot + 
+pet_full_margins <- pet_binned_margins / cwd_pet_margins_plot / pet_pet_margins_plot + 
   plot_annotation(tag_levels="A") & theme(plot.tag = element_text(face = 'bold', size=23))
 
 
-pet_out_fig
-ggsave(paste0(wdir, 'figures\\a3_pet_margins.svg'), plot = pet_out_fig, width = 9, height = 14, units = "in")
+pet_full_margins
+# ggsave(paste0(wdir, 'figures\\a3_pet_margins.svg'), plot = pet_full_margins, width = 9, height = 14, units = "in")
 #ggsave(paste0(wdir, 'figures\\2_cwd_margins_only.svg'), plot = margins_plot, width = 15, height = 9, units = "in")
 
+margins_plot <- cwd_full_margins | pet_full_margins
+ggsave(paste0(wdir, 'figures\\2_all_margins.svg'), plot = margins_plot, width = 15, height = 14, units = "in")
 
 
 
@@ -1111,7 +1099,7 @@ pull_coefs <- function(gen_mod){
   p <- coef_table[2, 4] %>% round(digits = 3)
   n <- gen_mod$nobs
   
-  label <-  paste0("n sites: ", n, ";\nslope: ", coef, ";\np value: ", p)
+  label <-  paste0("   n sites: ", n, ";\n   slope: ", coef, ";\n   p value: ", p, "\n")
   return(label)
 }
 
@@ -1144,8 +1132,9 @@ gen_plot <- genus_predictions %>%
   # geom_ribbon(aes(ymin=cwd_ci_min, ymax=cwd_ci_max), alpha=0.2, fill = "darkblue") +
   theme_bw(base_size = 22) + 
   facet_wrap(~genus, scales = "free") +
-  theme(panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
+  theme(
+        # panel.grid.major = element_blank(),
+        # panel.grid.minor = element_blank(),
         strip.background = element_blank(),
         panel.border = element_rect(colour = "black", fill = NA)) +
   geom_line(aes(y = conf.low), linetype = 3) +
@@ -1156,81 +1145,82 @@ gen_plot <- genus_predictions %>%
   xlim(c(-3, 3))
 
 gen_plot <- gen_plot +
-  geom_text(data = coef_labels, aes(label = labels, x = -Inf, y = Inf),
-            hjust = 0, vjust = 1)
+  geom_text(data = coef_labels, aes(label = labels, x = -Inf, y = -Inf),
+            hjust = 0, vjust = 0)
+
   
 gen_plot
+ggsave(paste0(wdir, 'figures\\a3_genus_margins.svg'), gen_plot, width = 22, height = 12, units = "in")
 
 
 # margins_plot <- margins_plot +
 #   geom_text(data = genus_coefs, aes(x = -1.8, y = 0, label = lab))
-
-margins_plot
-
-
-
-gen_pred %>% ggplot(aes(x = cwd.spstd, y = predicted))
-gen_pred %>% plot()
-plot_cme(gen_mod, effect = "cwd.spstd", condition = "cwd.spstd")
-genus_lims <- genus_predictions %>% 
-  group_by(genus) %>% 
-  summarise(cwd_min = first(min_cwd),
-            cwd_max = first(max_cwd),
-            gymno_angio = first(gymno_angio))
-genus_df <- genus_predictions %>%
-  select(-min_cwd, -max_cwd, -range_cwd) %>% 
-  group_by(genus) %>% 
-  nest() %>% 
-  left_join(genus_lims, by = "genus")
-
-genus_df <- genus_df %>% 
-  mutate(cwd_me = pmap(list(mod_df = data, cwd_min = cwd_min, cwd_max = cwd_max),
-                       .f = gen_marg_fx_df))
-
-genus_df <- genus_df %>% 
-  select(genus, cwd_me, gymno_angio) %>% 
-  unnest(cwd_me)
-
-
-
-
-
-genus_keep <- genus_predictions %>% 
-  # filter(range_cwd>2) %>% 
-  filter(n_collections>25) %>%
-  pull(genus) %>% 
-  unique()
-
-margins_plot <- genus_df %>% 
-  filter(genus %in% genus_keep) %>%
-  ggplot(aes(x = at_cwd)) + 
-  geom_line(aes(y = cwd_mean)) +
-  geom_ribbon(aes(ymin=cwd_ci_min, ymax=cwd_ci_max, fill = gymno_angio), alpha=0.2) +
-  # geom_ribbon(aes(ymin=cwd_ci_min, ymax=cwd_ci_max), alpha=0.2, fill = "darkblue") +
-  theme_bw(base_size = 22) + 
-  facet_wrap(~genus, scales = "free") +
-  theme(panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        strip.background = element_blank(),
-        panel.border = element_rect(colour = "black", fill = NA)) +
-  geom_line(aes(y = cwd_ci_min), linetype = 3) +
-  geom_line(aes(y = cwd_ci_max), linetype = 3) +
-  geom_hline(yintercept = 0, linetype = 2) +
-  xlab("Historic CWD\n(Deviation from species mean)") + 
-  ylab("Predicted sensitivity to CWD") +
-  xlim(c(-2, 2))
-
-# margins_plot <- margins_plot +
-#   geom_text(data = genus_coefs, aes(x = -1.8, y = 0, label = lab))
-
-margins_plot
-#ggsave(paste0(wdir, 'figures\\3_genus_margins.svg'), margins_plot, width = 10, height = 8, units = "in")
+# 
+# margins_plot
+# 
+# 
+# 
+# gen_pred %>% ggplot(aes(x = cwd.spstd, y = predicted))
+# gen_pred %>% plot()
+# plot_cme(gen_mod, effect = "cwd.spstd", condition = "cwd.spstd")
+# genus_lims <- genus_predictions %>% 
+#   group_by(genus) %>% 
+#   summarise(cwd_min = first(min_cwd),
+#             cwd_max = first(max_cwd),
+#             gymno_angio = first(gymno_angio))
+# genus_df <- genus_predictions %>%
+#   select(-min_cwd, -max_cwd, -range_cwd) %>% 
+#   group_by(genus) %>% 
+#   nest() %>% 
+#   left_join(genus_lims, by = "genus")
+# 
+# genus_df <- genus_df %>% 
+#   mutate(cwd_me = pmap(list(mod_df = data, cwd_min = cwd_min, cwd_max = cwd_max),
+#                        .f = gen_marg_fx_df))
+# 
+# genus_df <- genus_df %>% 
+#   select(genus, cwd_me, gymno_angio) %>% 
+#   unnest(cwd_me)
+# 
+# 
+# 
+# 
+# 
+# genus_keep <- genus_predictions %>% 
+#   # filter(range_cwd>2) %>% 
+#   filter(n_collections>25) %>%
+#   pull(genus) %>% 
+#   unique()
+# 
+# margins_plot <- genus_df %>% 
+#   filter(genus %in% genus_keep) %>%
+#   ggplot(aes(x = at_cwd)) + 
+#   geom_line(aes(y = cwd_mean)) +
+#   geom_ribbon(aes(ymin=cwd_ci_min, ymax=cwd_ci_max, fill = gymno_angio), alpha=0.2) +
+#   # geom_ribbon(aes(ymin=cwd_ci_min, ymax=cwd_ci_max), alpha=0.2, fill = "darkblue") +
+#   theme_bw(base_size = 22) + 
+#   facet_wrap(~genus, scales = "free") +
+#   theme(panel.grid.major = element_blank(),
+#         panel.grid.minor = element_blank(),
+#         strip.background = element_blank(),
+#         panel.border = element_rect(colour = "black", fill = NA)) +
+#   geom_line(aes(y = cwd_ci_min), linetype = 3) +
+#   geom_line(aes(y = cwd_ci_max), linetype = 3) +
+#   geom_hline(yintercept = 0, linetype = 2) +
+#   xlab("Historic CWD\n(Deviation from species mean)") + 
+#   ylab("Predicted sensitivity to CWD") +
+#   xlim(c(-2, 2))
+# 
+# # margins_plot <- margins_plot +
+# #   geom_text(data = genus_coefs, aes(x = -1.8, y = 0, label = lab))
+# 
+# margins_plot
+# #ggsave(paste0(wdir, 'figures\\3_genus_margins.svg'), margins_plot, width = 10, height = 8, units = "in")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Main summary figure ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-## ToDo - rwi_null should probably be calculated as part of the MC analysis in prediction script?
 sp_predictions <- sp_predictions %>% 
   mutate(cwd_change = cwd_cmip_end_mean - cwd_cmip_start_mean,
          pet_change = pet_cmip_end_mean - pet_cmip_start_mean)
@@ -1276,6 +1266,11 @@ plot_dat <- plot_dat %>%
   filter(n>10)
 
 
+# theme_set(
+#   theme_bw(base_size = 24)+
+#     theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+# )
+
 ### CWD sensitivity
 cwd_sens_bin <- plot_dat %>% 
   ggplot(aes(x = cwd.q, y = pet.q, fill = cwd_sens)) +
@@ -1285,10 +1280,10 @@ cwd_sens_bin <- plot_dat %>%
   scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
   # scale_fill_distiller(type = "div") +
   # scale_fill_viridis_c(direction = -1, option = "viridis") +
-  theme_bw(base_size = 55)+
+  theme_bw(base_size = 35)+
   theme(legend.position = c(.13,.83),
-        legend.text = element_text(size=25),
-        legend.title = element_text(size=29),
+        legend.text = element_text(size=18),
+        legend.title = element_text(size=23),
         legend.background = element_blank())+
   labs(fill = "Predicted\nsensitivity\nto CWD") +
   ylab("Historic PET\n(Deviation from species mean)") +
@@ -1306,10 +1301,10 @@ pet_sens_bin <- plot_dat %>%
   ylim(c(-2.5, 2.5)) +
   scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
   # scale_fill_viridis_c(direction = -1, option = "viridis") +
-  theme_bw(base_size = 55)+
+  theme_bw(base_size = 35)+
   theme(legend.position = c(.13,.83),
-        legend.text = element_text(size=25),
-        legend.title = element_text(size=29),
+        legend.text = element_text(size=18),
+        legend.title = element_text(size=23),
         legend.background = element_blank())+
   labs(fill = "Predicted\nsensitivity\nto PET") +
   ylab("Historic PET\n(Deviation from species mean)") +
@@ -1325,10 +1320,10 @@ cwd_change_bin <- plot_dat %>%
   xlim(c(-2.5, 2.5)) +
   ylim(c(-2.5, 2.5)) +
   scale_fill_viridis_c(direction = 1, option = "magma") +
-  theme_bw(base_size = 55)+
+  theme_bw(base_size = 35)+
   theme(legend.position = c(.19,.83),
-        legend.text = element_text(size=25),
-        legend.title = element_text(size=29),
+        legend.text = element_text(size=18),
+        legend.title = element_text(size=23),
         legend.background = element_blank())+
   labs(fill = "Predicted change\nin CWD (std)") +
   ylab("Historic PET\n(Deviation from species mean)") +
@@ -1345,10 +1340,10 @@ pet_change_bin <- plot_dat %>%
   xlim(c(-2.5, 2.5)) +
   ylim(c(-2.5, 2.5)) +
   scale_fill_viridis_c(direction = 1, option = "magma") +
-  theme_bw(base_size = 55)+
+  theme_bw(base_size = 35)+
   theme(legend.position = c(.19,.83),
-        legend.text = element_text(size=25),
-        legend.title = element_text(size=29),
+        legend.text = element_text(size=18),
+        legend.title = element_text(size=23),
         legend.background = element_blank())+
   labs(fill = "Predicted change\nin PET (std)") +
   ylab("Historic PET\n(Deviation from species mean)") +
@@ -1430,10 +1425,10 @@ rwi_bin <- rwi_bin +
     legend.background = element_blank()
   )
 rwi_bin
-#ggsave(paste0(wdir, "figures\\", "pred_full_c.svg"), rwi_bin, width = 9, height = 9)
 
 
-cwd_change_bin/pet_change_bin | cwd_sens_bin/ pet_sens_bin | rwi_bin
+pred_full <- cwd_sens_bin/ pet_sens_bin | cwd_change_bin/pet_change_bin | rwi_bin
+ggsave(paste0(wdir, "figures\\", "4_pred_full.svg"), pred_full, width = 48, height = 30)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
