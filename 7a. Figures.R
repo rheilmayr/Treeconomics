@@ -996,8 +996,83 @@ out_fig <- binned_margins / margins_plot +
 
 
 out_fig
-#ggsave(paste0(wdir, 'figures\\2_cwd_margins.svg'), plot = out_fig, width = 9, height = 14, units = "in")
+ggsave(paste0(wdir, 'figures\\2_cwd_margins.svg'), plot = out_fig, width = 9, height = 14, units = "in")
 #ggsave(paste0(wdir, 'figures\\2_cwd_margins_only.svg'), plot = margins_plot, width = 15, height = 9, units = "in")
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Supplemental figure for PET ------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+### Binned plot of pet sensitivity
+pet_binned_margins <- plot_dat_b %>%
+  ggplot(aes(x = cwd.q, y = pet.q, z = pet_sens)) +
+  stat_summary_hex(fun = function(x) mean(x), bins=12)+
+  scale_fill_gradient2(low = "#401552", mid = "grey93", high = "#82bead", midpoint = .98, 
+                       na.value = NA, name="Mean RWI")+
+  scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
+  ylab("Deviation from mean PET")+
+  xlab("Deviation from mean CWD")+
+  theme_bw(base_size = base_text_size)+
+  labs(fill = "Marginal effect\nof PET") +
+  ylab("Historic PET\n(Deviation from species mean)") +
+  xlab("Historic CWD\n(Deviation from species mean)") +
+  theme(
+    legend.key = element_blank(),
+    legend.background = element_blank(), 
+    legend.title=element_text(size=base_text_size - 4),
+    legend.text = element_text(size = base_text_size - 6))+
+  coord_fixed() +
+  geom_hline(yintercept = 0, size = 1, linetype = 2) +
+  geom_vline(xintercept = 0, size = 1, linetype = 2) +
+  xlim(c(pred_min, pred_max)) +
+  ylim(c(pred_min, pred_max))
+
+
+pet_binned_margins
+
+### Binned plot of cwd sensitivity
+at_cwd <- 0
+pet_inc <- 0.1
+
+pet_me_df <- tibble(at_pet = seq(pet_min, pet_max, seq_inc))
+pet_me_df <- pet_me_df %>%
+  mutate(pet_me = pmap(list(at_cwd = at_cwd,
+                            at_pet = pet_me_df$at_pet),
+                       .f = init_pull_marg_fx)) %>% 
+  unnest(pet_me)
+
+
+pet_margins_plot <- ggplot(pet_me_df, aes(x = at_pet)) + 
+  geom_line(aes(y = pet_mean), size = 2) +
+  geom_ribbon(aes(ymin=pet_ci_min, ymax=pet_ci_max), alpha=0.2, fill = "darkblue") +
+  geom_line(aes(y = pet_ci_max), linetype = 3) +
+  geom_line(aes(y = pet_ci_min), linetype = 3) +
+  geom_hline(yintercept = 0, size = 1, linetype = 2) +
+  xlab("Historic PET\n(Deviation from species mean)") + 
+  ylab("Pred. sensitivity to PET") + 
+  xlim(c(pred_min, pred_max)) +
+  theme_bw(base_size = 18)
+
+pet_margins_plot
+
+
+
+theme_set(
+  theme_bw(base_size = 45)+
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+)
+
+
+pet_out_fig <- pet_binned_margins / pet_margins_plot + 
+  plot_annotation(tag_levels="A") & theme(plot.tag = element_text(face = 'bold', size=23))
+
+
+pet_out_fig
+ggsave(paste0(wdir, 'figures\\a3_pet_margins.svg'), plot = pet_out_fig, width = 9, height = 14, units = "in")
+#ggsave(paste0(wdir, 'figures\\2_cwd_margins_only.svg'), plot = margins_plot, width = 15, height = 9, units = "in")
+
+
+
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
