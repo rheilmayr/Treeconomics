@@ -229,18 +229,17 @@ cwd_low_mod <- feols(estimate_cwd.an ~ 1,
 
 # After controlling for the correlation between historic CWD and PET, we estimate that 
 # the slope of the line describing the relationship between historic CWD and sensitivity 
-# to CWD is XX (Figure 2B). In other words, while a one standard deviation shock to CWD 
-# is anticipated to lead to an XX% decline in growth in sites located at a species’ mean 
-# CWD, a comparable shock to CWD would lead to only an XX% decline in growth for sites 
-# that are historically one standard deviation dryer than the species mean.
+# to CWD is XX (Figure 2B). 
 ss_df %>%
   summarise(mean_cwd = mean(cwd_cwd),
             lower_cwd = quantile(cwd_cwd, 0.025),
             upper_cwd = quantile(cwd_cwd, 0.975))
 
 
-
-
+# In other words, while a one standard deviation shock to CWD 
+# is anticipated to lead to an XX% decline in growth in sites located at a species’ mean 
+# CWD, a comparable shock to CWD would lead to only an XX% decline in growth for sites 
+# that are historically one standard deviation dryer than the species mean.
 pull_marg_fx <- function(at_pet, at_cwd, mod_df){
   cwd_me_predictions <- mod_df$cwd_int + (at_cwd * mod_df$cwd_cwd) + (at_pet * mod_df$cwd_pet)
   cwd_ci_min <- cwd_me_predictions %>% quantile(0.025)
@@ -258,7 +257,7 @@ pull_marg_fx <- function(at_pet, at_cwd, mod_df){
 
 at_pet <- 0
 init_pull_marg_fx = partial(.f = pull_marg_fx, mod_df = ss_df)
-cwd_me_df <- tibble(at_cwd = c(0, 1))
+cwd_me_df <- tibble(at_cwd = c(-2,-1,0, 1, 2))
 cwd_me_df <- cwd_me_df %>%
   mutate(cwd_me = pmap(list(at_pet = at_pet,
                             at_cwd = cwd_me_df$at_cwd),
@@ -267,4 +266,17 @@ cwd_me_df <- cwd_me_df %>%
   mutate(cwd_ci_dif = cwd_mean - cwd_ci_min,
          cwd_ci_dif2 = cwd_ci_max - cwd_mean) %>% 
   print()
+
+
+# at_cwd <- 0
+# init_pull_marg_fx = partial(.f = pull_marg_fx, mod_df = ss_df)
+# cwd_me_df <- tibble(at_pet = c(-2,-1, 0, 1, 2))
+# cwd_me_df <- cwd_me_df %>%
+#   mutate(cwd_me = pmap(list(at_pet = cwd_me_df$at_pet,
+#                             at_cwd = at_cwd),
+#                        .f = init_pull_marg_fx)) %>% 
+#   unnest(cwd_me) %>% 
+#   mutate(cwd_ci_dif = cwd_mean - cwd_ci_min,
+#          cwd_ci_dif2 = cwd_ci_max - cwd_mean) %>% 
+#   print()
 
