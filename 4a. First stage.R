@@ -325,6 +325,7 @@ fs_mod <- function(site_data){
         # } else{
         #   mod <- lm(rwi ~ cwd.an + pet.an, site_data)
         # }
+        mod_sum <- summary(mod)
         mod_vcov <- vcov(mod)
         cov <- list(int_cwd = mod_vcov[1, 2], 
                     int_pet = mod_vcov[1, 3], 
@@ -337,6 +338,7 @@ fs_mod <- function(site_data){
         mod$cov_int_cwd = mod_vcov[c("(Intercept)"), c("cwd.an")]
         mod$cov_int_pet = mod_vcov[c("(Intercept)"), c("pet.an")]
         mod$cov_cwd_pet = mod_vcov[c("cwd.an"), c("pet.an")]
+        mod$r2 = mod_sum$r.squared
       },
       error = function(e){ 
         message("Returned regression error")
