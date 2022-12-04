@@ -227,9 +227,10 @@ bylag = 0.1
 petnam <- paste("pet_cbv1.l", 1:n_vars, sep="")
 cwdnam <- paste("cwd_cbv1.l", 1:n_vars, sep="")
 xnam <- append(cwdnam, petnam)
-fmla <- as.formula(paste("rwi ~ ", paste(xnam, collapse= "+")) %>% paste0(" | tree_id"))
+fmla <- as.formula(paste("rwi ~ ", paste(xnam, collapse= "+")) %>% paste0(" | collection_id"))
 vg.range <- 363. # km, calculated in 5b. Second stage
-lagmod=feols(fmla, vcov = conley(cutoff = vg.range, distance = "spherical"), data=mod_df, weights = mod_df$cwd_errorweights)
+lagmod=feols(fmla, vcov = conley(cutoff = vg.range, distance = "spherical"), data=mod_df)
+# lagmod=feols(fmla, vcov = conley(cutoff = vg.range, distance = "spherical"), data=mod_df, weights = mod_df$cwd_errorweights)
 # fmla <- as.formula(paste("rwi ~ ", paste(xnam, collapse= "+")))
 # lagmod=feols(fmla, data=mod_df)
 
@@ -262,25 +263,63 @@ dynamic_pet <- plot(pet_cp,
 
 
 
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Aggregate lagged model  ------------------------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-cb_df <- cb_df %>% 
-  mutate(tree_id = paste0(collection_id, "_", tree))
-simple_mod_df <- cb_df %>% 
-  # filter()
-  filter(cwd.spstd > 0, pet.spstd > 0)
-  # filter(cwd.spstd > 0.5, pet.spstd > 0.5)
-mod <- feols(rwi ~ cwd.an.spstd + pet.an.spstd | tree_id, vcov = conley(cutoff = vg.range, distance = "spherical"), data = simple_mod_df)
-summary(mod)
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# # Site-level lagged model  ------------------------------
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# lag_df <- dendro_df %>% 
+#   inner_join(clim_lagged, by = c("collection_id", "year")) %>% 
+#   left_join(ave_site_clim, by = "collection_id") 
+# 
+# n_vars = 15
+# cwd_lags <- c("cwd_L00", "cwd_L01", "cwd_L02", "cwd_L03", "cwd_L04", "cwd_L05", "cwd_L06", "cwd_L07", "cwd_L08")
+# pet_lags <- c("pet_L00", "pet_L01", "pet_L02", "pet_L03", "pet_L04", "pet_L05", "pet_L06", "pet_L07", "pet_L08")
+# all_lags <- append(cwd_lags, pet_lags)
+# lags_fmla <- as.formula(paste("rwi ~ ", paste(all_lags, collapse= "+")))
+# 
+# run_lags <- function(mod_df){
+#   failed <- F
+#   tryCatch(
+#     expr = {
+#       lagmod=feols(lags_fmla, data=mod_df)
+#     },
+#     error = function(e) {
+#       message("Returned dlnm error")
+#       reg_error <<- e[1]
+#       failed <<- T
+#     }
+#   )
+#   if (failed){
+#     return(NA)
+#   }
+#   return(lagmod %>% tidy())
+# }
+# 
+# lag_df <- lag_df %>% 
+#   group_by(collection_id) %>% 
+#   nest()
+# 
+# lag_df <- lag_df %>% 
+#   mutate(dnlm = map(data, run_lags))
+# 
+# lag_df <- lag_df %>% 
+#   mutate(mod = map(data, run_lags)) 
+# 
+# test <- lag_df %>% 
+#   select(-data) %>% 
+#   unnest(mod) %>% 
+#   filter(term %>% str_detect("cwd")) %>% 
+#   mutate(lag = str_sub(term, -2, -1) %>% as.integer()) %>% 
+#   group_by(lag) %>% 
+#   summarize(median = median(estimate),
+#             low = quantile(estimate, 0.33),
+#             high = quantile(estimate, 0.66))
+# test %>% 
+#   ggplot() +
+#   geom_line(aes(x = lag, y = median)) +
+#   geom_ribbon(aes(x = lag, ymax = high, ymin = low), alpha = 0.2)
 
-mod <- feols(rwi ~ cwd_L00 + cwd_L01 + cwd_L02 + cwd_L03 + cwd_L04 + cwd_L05 + cwd_L06 + cwd_L07 + cwd_L08 +
-               pet_L00 + pet_L01 + pet_L02 + pet_L03 + pet_L04 + pet_L05 | tree_id, vcov = conley(cutoff = 363), data = simple_mod_df)
-summary(mod)
 
-mod <- feols(rwi ~ cwd_L00 + cwd_L01 + cwd_L02 + cwd_L03 + cwd_L04 + cwd_L05 + cwd_L06 + cwd_L07 + cwd_L08 +
-               pet_L00 + pet_L01 + pet_L02 + pet_L03 + pet_L04 + pet_L05 | collection_id, data = cb_df %>% filter(gymno_angio=="gymno"))
-summary(mod)
+
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -340,6 +379,12 @@ cum_mod_df <- cum_effects %>%
 mod <- lm(cwd_cum ~ pet.spstd + cwd.spstd, data = cum_mod_df, weights = errorweights)
 summary(mod)
 
+# mod <- lm(cwd_cum ~ pet.spstd + cwd.spstd, data = cum_mod_df)
+# summary(mod)
+# 
+# mod <- lm(pet_cum ~ pet.spstd + cwd.spstd, data = cum_mod_df, weights = errorweights)
+# summary(mod)
+
 lagged_effects <- lagged_effects %>%
   # filter(cwd.spstd>0) %>% 
   select(-cwd_cum, -pet_cum) %>%
@@ -348,9 +393,11 @@ lagged_effects <- lagged_effects %>%
 lagged_effects$cwd_quantile <- ntile(lagged_effects$cwd.spstd, 3) %>% as.factor()
 lagged_effects$pet_quantile = ntile(lagged_effects$pet.spstd, 3) %>% as.factor()
 
+lagged_effects %>% 
+  write_rds(paste0(wdir, "out/first_stage/dnlm_lagged_effects.rmd"))
 
 cwd_median_effect <- lagged_effects %>%
-  filter(cwd_quantile==4) %>%
+  # filter(cwd_quantile==4) %>%
   group_by(lag) %>%
   summarise(med_effect = median(cwd_effect),
             upper = quantile(cwd_effect, 0.66, na.rm = T),
@@ -369,7 +416,7 @@ cwd_plot +
 
 
 pet_median_effect <- lagged_effects %>%
-  filter(pet_quantile==4) %>%
+  # filter(pet_quantile==4) %>%
   group_by(lag) %>%
   summarise(med_effect = median(pet_effect),
             upper = quantile(pet_effect, 0.66, na.rm = T),
@@ -392,7 +439,8 @@ smpl <- lagged_effects$collection_id %>% sample(1)
 mod_single_lag <- lagged_effects %>% 
   filter(collection_id == smpl)
 mod_single_lag %>% 
-  ggplot(aes(x = lag, y = cwd_effect)) +
+  pivot_longer(cols = c("cwd_effect", "pet_effect"), names_to = "variable") %>% 
+  ggplot(aes(x = lag, y = value, color = variable)) +
   geom_line() +
   geom_hline(yintercept = 0)
 
@@ -468,6 +516,12 @@ median_effect %>%
   geom_ribbon(alpha = 0.2) +
   facet_grid(rows = median_effect$pet_quantile) +
   theme_bw()
+
+
+
+cwd_lagged
+
+
 # 
 # 
 # thresh_low <- cum_effects$cwd_cum %>% quantile(0.02, na.rm = T)
