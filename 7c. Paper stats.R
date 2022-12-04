@@ -13,6 +13,8 @@
 library(raster)
 library(sf)
 library(tidyverse)
+library(broom)
+library(fixest)
 # library(dbplyr)
 # library(RSQLite)
 # library(ggplot2)
@@ -267,6 +269,26 @@ cwd_me_df <- cwd_me_df %>%
          cwd_ci_dif2 = cwd_ci_max - cwd_mean) %>% 
   print()
 
+# For example, 
+mod_df <- trim_df %>% 
+  filter(pet.spstd < 0)
+pet_low_mod <- feols(estimate_pet.an ~ 1,
+                      weights = mod_df$pet_errorweights, data = mod_df,
+                      vcov = conley(cutoff = 363, distance = "spherical")) %>% 
+  tidy(conf.int = TRUE, conf.level = 0.95) %>% 
+  mutate(ci_dif = estimate - conf.low) %>% 
+  print()
+
+# For example, 
+mod_df <- trim_df %>% 
+  filter(pet.spstd > 0)
+pet_low_mod <- feols(estimate_pet.an ~ 1,
+                     weights = mod_df$pet_errorweights, data = mod_df,
+                     vcov = conley(cutoff = 363, distance = "spherical")) %>% 
+  tidy(conf.int = TRUE, conf.level = 0.95) %>% 
+  mutate(ci_dif = estimate - conf.low) %>% 
+  print()
+
 
 # at_cwd <- 0
 # init_pull_marg_fx = partial(.f = pull_marg_fx, mod_df = ss_df)
@@ -280,3 +302,38 @@ cwd_me_df <- cwd_me_df %>%
 #          cwd_ci_dif2 = cwd_ci_max - cwd_mean) %>% 
 #   print()
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Forecasted changes in CWD and PET across species’ climatic niches  --------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+gen_dat <- read_csv(paste0(wdir, "out/species_gen_gr.csv")) %>% 
+  rename(sp_code = "species_id")
+
+sp_predictions_gen <- sp_predictions %>% 
+  left_join(gen_dat)
+
+sp_plot_dat <- sp_predictions_gen %>% 
+  group_by(sp_code) %>% 
+  mutate(beyond_max_cwd = cwd_cmip_end_mean > max(cwd_hist)) %>% 
+  ungroup() %>% 
+  mutate(cwd_end_bin = case_when(
+    (beyond_max_cwd == TRUE) ~ "Beyond prior max",
+    (cwd_cmip_end_mean > 1.5) ~ "1-2 s.d. above prior mean",
+    (cwd_cmip_end_mean >= 0) ~ "0-1 s.d. above prior mean",
+    (cwd_cmip_end_mean < 0) ~ "Below prior mean"),
+    cwd_end_bin = fct_relevel(cwd_end_bin, 
+                              "Beyond prior max", "1-2 s.d. above prior mean", 
+                              "0-1 s.d. above prior mean", 
+                              "Below prior mean"))
+sp_plot_dat %>%
+  ungroup() %>% 
+  group_by(cwd_end_bin) %>% 
+  summarise(n = n()) %>%
+  mutate(freq = n / sum(n))
+
+
+sp_plot_dat %>% 
+  mutate(greater_cwd = cwd_cmip_end_mean >= cwd_cmip_start_mean,
+         greater_pet = pet_cmip_end_mean >= pet_cmip_start_mean,
+         greater_both = greater_cwd * greater_pet) %>% 
+  pull(greater_both) %>% 
+  mean(na.rm = TRUE)
