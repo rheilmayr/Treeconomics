@@ -47,6 +47,9 @@ library(ggExtra)
 library(extrafont)
 library(marginaleffects)
 library(tmap)
+library(fixest)
+library(forcats)
+
 
 loadfonts(device = "win")
 theme(family="Serif")
@@ -95,8 +98,8 @@ trim_df <- flm_df %>%
   drop_na()
 
 # DNLM results
-dnlm_results <- read_rds(paste0(wdir, "out/first_stage/dnlm"))
-dnlm_results <- read_rds(paste0(wdir, "out/first_stage/dnlm_orig")) # Something has changed - old version creates positive pet effect, but gone after july tweaks to data...
+dnlm_results <- read_rds(paste0(wdir, "out/first_stage/dnlm_lagged_effects"))
+# dnlm_results <- read_rds(paste0(wdir, "out/first_stage/dnlm_orig")) # Something has changed - old version creates positive pet effect, but gone after july tweaks to data...
 
 # 5. Prediction rasters
 rwi_list <- list.files(paste0(wdir, "out/predictions/sp_rwi_pred_10000/"), pattern = ".gz", full.names = TRUE)
@@ -641,7 +644,7 @@ cwd_est_plot <- long_trim_df %>%
   theme(legend.position = c(.9,.85),
         legend.key = element_blank(),
         legend.background = element_blank()) +
-  ggtitle("Site-level estimates of marginal effect of CWD")
+  ggtitle("Site-level estimates of contemporaneous, marginal effect of CWD")
 
 pet_est_plot <- long_trim_df %>%
   filter(variable == "pet") %>% 
@@ -659,7 +662,7 @@ pet_est_plot <- long_trim_df %>%
   theme(legend.position = c(.9,.85),
         legend.key = element_blank(),
         legend.background = element_blank()) +
-  ggtitle("Site-level estimates of marginal effect of PET")
+  ggtitle("Site-level estimates of contemporaneous, marginal effect of PET")
 
 cwd_est_plot
 pet_est_plot
@@ -668,34 +671,78 @@ pet_est_plot
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Dynamic lag plot --------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-plot_dnlm <- function(crosspredictions){
-  nlags = 15
-  bylag = 0.1
-  
-  plot_df <- data.frame(est = crosspredictions$matfit[3,],
-                        ci_low = crosspredictions$matlow[3,],
-                        ci_high = crosspredictions$mathigh[3,]) %>% 
-    mutate(lag = seq(0,nlags, bylag))
-  
-  plot_df %>% 
-    ggplot(aes(x = lag)) +
-    geom_ribbon(aes(ymin = ci_low, ymax = ci_high), fill = "dodgerblue4", alpha = 0.2) +
-    geom_line(aes(y = est), color = "dodgerblue4") +
-    geom_hline(yintercept = 0) +
-    theme_bw() +
-    xlab("Time lag (years)") +
-    ylab("Effect on ring width index") +
-    scale_x_continuous(breaks = seq(0,10,2), limits = c(0,10))
-  }
+cwd_median_effect <- dnlm_results %>%
+  # filter(cwd_quantile==4) %>%
+  group_by(lag) %>%
+  summarise(med_effect = median(cwd_effect),
+            upper = quantile(cwd_effect, 0.66, na.rm = T),
+            lower = quantile(cwd_effect, 0.33, na.rm = T))
+cwd_plot <- cwd_median_effect %>%
+  ggplot(aes(x = lag, y = med_effect, ymax = upper, ymin = lower)) +
+  geom_line(color = "dodgerblue4") +
+  geom_hline(yintercept = 0, linetype = 2) +
+  geom_ribbon(alpha = 0.2, fill = "dodgerblue4", alpha = 0.2) +
+  theme_bw() +
+  xlim(0, 10) +
+  ylim(-0.3, 0.1)
+cwd_dynamic = cwd_plot +
+  xlab("Lag (years)") +
+  ylab("Median effect of CWD=1 shock on RWI") +
+  ggtitle("Dynamic, marginal effect of CWD on RWI")
 
-cwd_dynamic <- plot_dnlm(dnlm_results$cwd) +
-  ggtitle("Dynamic effect of 1 s.d. increase in CWD")
-  
-pet_dynamic <- plot_dnlm(dnlm_results$pet) +
-  ggtitle("Dynamic effect of 1 s.d. increase in PET")
 
-first_stage_effects <- (cwd_dynamic / pet_dynamic) | (cwd_est_plot / pet_est_plot)
+
+pet_median_effect <- dnlm_results %>%
+  # filter(pet_quantile==4) %>%
+  group_by(lag) %>%
+  summarise(med_effect = median(pet_effect),
+            upper = quantile(pet_effect, 0.66, na.rm = T),
+            lower = quantile(pet_effect, 0.33, na.rm = T))
+pet_plot <- pet_median_effect %>%
+  ggplot(aes(x = lag, y = med_effect, ymax = upper, ymin = lower)) +
+  geom_line(color = "dodgerblue4") +
+  geom_hline(yintercept = 0, linetype = 2) +
+  geom_ribbon(alpha = 0.2, fill = "dodgerblue4", alpha = 0.2) +
+  theme_bw() +
+  xlim(0, 10) +
+  ylim(-0.15, 0.3)
+
+pet_dynamic = pet_plot +
+  xlab("Lag (years)") +
+  ylab("Median effect of PET=1 shock on RWI") +
+  ggtitle("Dynamic, marginal effect of PET on RWI")
+
+
+first_stage_effects <- (cwd_est_plot / pet_est_plot) | (cwd_dynamic / pet_dynamic)
 first_stage_effects
+
+# plot_dnlm <- function(crosspredictions){
+#   nlags = 15
+#   bylag = 0.1
+#   
+#   plot_df <- data.frame(est = crosspredictions$matfit[3,],
+#                         ci_low = crosspredictions$matlow[3,],
+#                         ci_high = crosspredictions$mathigh[3,]) %>% 
+#     mutate(lag = seq(0,nlags, bylag))
+#   
+#   plot_df %>% 
+#     ggplot(aes(x = lag)) +
+#     geom_ribbon(aes(ymin = ci_low, ymax = ci_high), fill = "dodgerblue4", alpha = 0.2) +
+#     geom_line(aes(y = est), color = "dodgerblue4") +
+#     geom_hline(yintercept = 0) +
+#     theme_bw() +
+#     xlab("Time lag (years)") +
+#     ylab("Effect on ring width index") +
+#     scale_x_continuous(breaks = seq(0,10,2), limits = c(0,10))
+#   }
+# 
+# cwd_dynamic <- plot_dnlm(dnlm_results$cwd) +
+#   ggtitle("Dynamic effect of 1 s.d. increase in CWD")
+#   
+# pet_dynamic <- plot_dnlm(dnlm_results$pet) +
+#   ggtitle("Dynamic effect of 1 s.d. increase in PET")
+
+
 
 #ggsave(paste0(wdir, 'figures\\a2_first_stage_effects.svg'), plot = first_stage_effects)
 
@@ -1058,6 +1105,7 @@ pet_full_margins
 #ggsave(paste0(wdir, 'figures\\2_cwd_margins_only.svg'), plot = margins_plot, width = 15, height = 9, units = "in")
 
 margins_plot <- cwd_full_margins | pet_full_margins
+margins_plot
 ggsave(paste0(wdir, 'figures\\2_all_margins.svg'), plot = margins_plot, width = 15, height = 14, units = "in")
 
 
@@ -1428,7 +1476,8 @@ rwi_bin
 
 
 pred_full <- cwd_sens_bin/ pet_sens_bin | cwd_change_bin/pet_change_bin | rwi_bin
-ggsave(paste0(wdir, "figures\\", "4_pred_full.svg"), pred_full, width = 48, height = 30)
+pred_full
+ggsave(paste0(wdir, "figures\\", "4_pred_full.svg"), pred_full, width = 40, height = 35)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1563,6 +1612,11 @@ data(World)
 
 cwd_cmip_df <- as.data.frame(cwd_cmip_change, xy = TRUE)
 world <- map_data("world")
+
+theme_set(
+  theme_bw(base_size = 12)+
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+)
 
 cwd_map <- ggplot() +
   geom_map(data = world, map = world,
@@ -1779,7 +1833,6 @@ cwd_map
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Species-level changes in CWD  ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# sp_predictions <- do.call('rbind', lapply(rwi_list[1:30], readRDS)) ## TO BE REMOVED - DATA IS ALREADY BEING LOADED AT TOP, JUST LOADING SMALLER SET TO PLAY WITH
 gen_dat <- read_csv(paste0(wdir, "out/species_gen_gr.csv")) %>% 
   rename(sp_code = "species_id")
 
@@ -1787,22 +1840,25 @@ sp_predictions_gen <- sp_predictions %>%
   left_join(gen_dat)
 
 sp_plot_dat <- sp_predictions_gen %>% 
-  group_by(genus) %>% 
+  group_by(sp_code) %>% 
   mutate(beyond_max_cwd = cwd_cmip_end_mean > max(cwd_hist)) %>% 
+  ungroup() %>% 
   mutate(cwd_end_bin = case_when(
-    (beyond_max_cwd == TRUE) ~ "1. Beyond prior max",
-    (cwd_cmip_end_mean > 3) ~ "2. >2 s.d. above mean",
-    (cwd_cmip_end_mean > 1.5) ~ "3. >1 s.d. above mean",
-    (cwd_cmip_end_mean > 0) ~ "4. >0 s.d. above mean",
-    (cwd_cmip_end_mean < 0) ~ "5. Below mean",
-  ))
+    (beyond_max_cwd == TRUE) ~ "Beyond prior max",
+    (cwd_cmip_end_mean > 1.5) ~ "1-2 s.d. above prior mean",
+    (cwd_cmip_end_mean >= 0) ~ "0-1 s.d. above prior mean",
+    (cwd_cmip_end_mean < 0) ~ "Below prior mean"),
+    cwd_end_bin = fct_relevel(cwd_end_bin, 
+                              "Beyond prior max", "1-2 s.d. above prior mean", 
+                              "0-1 s.d. above prior mean", 
+                              "Below prior mean"))
 
 bin_shares <- sp_plot_dat %>% # Add grouping by genera? 
   group_by(genus, cwd_end_bin) %>% 
   summarise(n = n()) %>% 
   group_by(genus) %>% 
   mutate(prop_cwd_bin = prop.table(n)) %>% 
-  filter(cwd_end_bin == "1. Beyond prior max") %>% 
+  filter(cwd_end_bin == "Beyond prior max") %>% 
   arrange(prop_cwd_bin) %>% 
   select(genus, prop_cwd_bin)
 
@@ -1814,7 +1870,7 @@ sp_plot_dat$genus <- fct_reorder(sp_plot_dat$genus, sp_plot_dat$prop_cwd_bin, me
 
 
 theme_set(
-  theme_bw(base_size = 25)+
+  theme_bw(base_size = 12)+
     theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
 )
 
@@ -1823,18 +1879,68 @@ genus_cwd_change <- sp_plot_dat %>%
   ggplot(aes(x= genus, fill=cwd_end_bin)) +
   geom_bar(position = "fill", alpha=.9) +
   scale_fill_viridis_d(direction = -1) + # Use diverging color scheme? 
-  ylab("Count")+
+  ylab("Proportion of range")+
   xlab("Genera")+
   guides(fill=guide_legend("Change in CWD"))+
   theme(axis.text.x = element_text(angle = 75, vjust = 1, hjust=1))
 
+genus_cwd_change
 
-cwd_map / genus_cwd_change +
-  plot_layout(heights = c(1, 1))
+cwd_change <- sp_plot_dat %>% 
+  ggplot(aes(x = cwd_cmip_start_mean, y = cwd_cmip_end_mean)) +
+  geom_hex(bins = 60) +
+  scale_fill_viridis(limits = c(0,5000), option = "magma") +
+  geom_abline(intercept = 0, slope = 1) +
+  coord_fixed() +
+  xlim(-5, 20) +
+  ylim(-5, 20) +
+  xlab("Mean CWD in 1970-2000\n(Deviation from species mean)") +
+  ylab("Mean CWD in 2091-2100\n(Deviation from species mean)") +
+  labs(fill = "Count of\ngrid cells") +
+  theme_bw(base_size = 12)
 
+pet_change <- sp_plot_dat %>% 
+  ggplot(aes(x = pet_cmip_start_mean, y = pet_cmip_end_mean)) +
+  geom_hex(bins = 60) +
+  scale_fill_viridis(limits = c(0,5000), option = "magma") +
+  geom_abline(intercept = 0, slope = 1) +
+  coord_fixed() +
+  xlim(-5, 18) +
+  ylim(-5, 18) +
+  xlab("Mean PET in 1970-2000\n(Deviation from species mean)") +
+  ylab("Mean PET in 2091-2100\n(Deviation from species mean)") +
+  labs(fill = "Count of\ngrid cells") +
+  theme_bw(base_size = 12)
+# +
+#   theme(legend.position = c(.9,.2),
+#         legend.background = element_blank())
+
+change_plot <- (cwd_change | pet_change) + 
+  plot_layout(guides = "collect")
+change_plot
+
+cwd_change_fig <- cwd_map / change_plot / genus_cwd_change +
+  plot_layout(heights = c(1.4, 1.7, 1))
+
+ggsave(paste0(wdir, "figures\\", "f3_cwd_change.svg"), cwd_change_fig, width = 7.5, height = 11)
+
+cwd_change_fig
+
+
+rwi_change <- sp_plot_dat %>% 
+  filter(pet_hist > 1 & pet_hist < 1.5) %>% 
+  ggplot(aes(x = cwd_hist, y = rwi_pred_change_mean)) +
+  geom_hex(bins = 30) +
+  scale_fill_viridis() +
+  xlab("Mean CWD in 1970-2000\n(Deviation from species mean)") +
+  ylab("RWI") +
+  xlim(c(-2,3)) +
+  labs(fill = "Count of\ngrid cells") +
+  theme_bw(base_size = 12)
+rwi_change
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Species-level changes in CWD  ------------------------------------
+# Species-level changes in RWI  ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 sp_plot_dat <- sp_plot_dat %>% 
   mutate(rwi_change_bin = case_when(
