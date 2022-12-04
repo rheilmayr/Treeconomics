@@ -51,7 +51,7 @@ set.seed(5597)
 
 select <- dplyr::select
 
-n_mc <- 10000
+n_mc <- 100
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -321,7 +321,7 @@ bs_ss <- function(data){
   int_mod <- data %>% 
     run_ss(outcome = "int_coef")
   return(list(int_int = int_mod[1], 
-              int_cwd = int_mod[2], 
+              int_cwd = int_mod[2],
               int_pet = int_mod[3],
               cwd_int = cwd_mod[1], 
               cwd_cwd = cwd_mod[2], 
@@ -382,7 +382,23 @@ mod <- feols(estimate_cwd.an ~ cwd.spstd + pet.spstd,
              weights = trim_df$cwd_errorweights, data = trim_df)
 summary(mod) 
 
+mod <- feols(estimate_cwd.an ~ cwd.spstd + cwd.spstd**2 + pet.spstd + pet.spstd**2, 
+             weights = trim_df$cwd_errorweights, data = trim_df)
 
+# mod <- feols(estimate_cwd.an ~ cwd.spstd + cwd.spstd**2 + cwd.spstd**3 + pet.spstd + pet.spstd**2 + pet.spstd**3,
+#              weights = trim_df$cwd_errorweights, data = trim_df)
+summary(mod) 
+plot_cap(mod, condition = "pet.spstd")
+plot_cap(mod, condition = "cwd.spstd")
+
+
+mod <- feols(estimate_pet.an ~ cwd.spstd + cwd.spstd**2 + pet.spstd + pet.spstd**2, 
+             weights = trim_df$cwd_errorweights, data = trim_df)
+# mod <- feols(estimate_pet.an ~ cwd.spstd + cwd.spstd**2 + cwd.spstd**3 + pet.spstd + pet.spstd**2 + pet.spstd**3, 
+#              weights = trim_df$cwd_errorweights, data = trim_df)
+summary(mod) 
+plot_cap(mod, condition = "pet.spstd")
+plot_cap(mod, condition = "cwd.spstd")
 
 ## Save out bootstrapped coefficients that reflect uncertainty from both first and second stage models
 write_rds(boot_df, paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
