@@ -11,7 +11,6 @@
 # - essentialcwd_data.csv: File detailing plot-level weather history
 #
 # ToDo:
-# - Transition towards block bootstrap to deal with spatial autocorrelation
 # - Update / finalize genus analyses
 # - Rebuild robustness tests based on final baseline model
 #
@@ -51,7 +50,7 @@ set.seed(5597)
 
 select <- dplyr::select
 
-n_mc <- 100
+n_mc <- 10000
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -102,17 +101,24 @@ flm_df <- flm_df %>%
 
 # Identify and trim extreme outliers
 cwd_est_bounds = quantile(flm_df$estimate_cwd.an, c(0.01, 0.99),na.rm=T)
+pet_est_bounds = quantile(flm_df$estimate_pet.an, c(0.01, 0.99),na.rm=T)
 cwd_spstd_bounds = quantile(flm_df$cwd.spstd, c(0.01, 0.99), na.rm = T)
 pet_spstd_bounds = quantile(flm_df$pet.spstd, c(0.01, 0.99), na.rm = T)
 
+# flm_df <- flm_df %>% 
+#   mutate(outlier = (estimate_cwd.an<cwd_est_bounds[1]) |
+#            (estimate_cwd.an>cwd_est_bounds[2]) |
+#            (cwd.spstd<cwd_spstd_bounds[1]) |
+#            (cwd.spstd>cwd_spstd_bounds[2]) |
+#            (pet.spstd<pet_spstd_bounds[1]) |
+#            (pet.spstd>pet_spstd_bounds[2]))
+           
+
 flm_df <- flm_df %>% 
   mutate(outlier = (estimate_cwd.an<cwd_est_bounds[1]) |
-           (estimate_cwd.an>cwd_est_bounds[2]) |
-           (cwd.spstd<cwd_spstd_bounds[1]) |
-           (cwd.spstd>cwd_spstd_bounds[2]) |
-           (pet.spstd<pet_spstd_bounds[1]) |
-           (pet.spstd>pet_spstd_bounds[2]))
-           
+                   (estimate_cwd.an>cwd_est_bounds[2]) |
+                   (estimate_pet.an<pet_est_bounds[1]) |
+                   (estimate_pet.an>pet_est_bounds[2]))
 
 # Save out full flm_df to simplify downstream scripts and ensure consistency
 flm_df %>% write.csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv"))
@@ -303,11 +309,21 @@ block_draw_df <- block_draw_df %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ## Function defining main second stage model
 run_ss <- function(data, outcome = "cwd_coef"){
-  formula <- as.formula(paste(outcome, " ~ cwd.spstd + pet.spstd")) ## ADD BACK WEIGHTING HERE?
-  mod <- lm(formula, data=data, weights = cwd_errorweights)
-  coefs <- mod$coefficients
+  if (outcome == "cwd_coef") {
+    error_weights = data$cwd_errorweights
+  } else if (outcome == "pet_coef") {
+    error_weights = data$pet_errorweights
+  } else if (outcome == "int_coef") {
+    error_weights = data$int_errorweights
+  }
+  formula <- as.formula(paste(outcome, " ~ cwd.spstd + I(cwd.spstd^2) + pet.spstd + I(pet.spstd^2)"))
+  mod <- lm(formula, data=data, weights = error_weights)
+  coefs <- mod %>% 
+    tidy() %>% 
+    pull(estimate) 
   return(coefs)
 }
+
 
 ## Function to run second stage model for first stage CWD, 
 ## PET and Intercept terms and organize coefficients
@@ -320,16 +336,26 @@ bs_ss <- function(data){
     run_ss(outcome = "pet_coef")
   int_mod <- data %>% 
     run_ss(outcome = "int_coef")
-  return(list(int_int = int_mod[1], 
+  # return(list("int_mod" = c(int_mod),
+  #             "cwd_mod" = c(cwd_mod),
+  #             "pet_mot" = c(pet_mod)))
+  return(list(int_int = int_mod[1],
               int_cwd = int_mod[2],
-              int_pet = int_mod[3],
-              cwd_int = cwd_mod[1], 
-              cwd_cwd = cwd_mod[2], 
-              cwd_pet = cwd_mod[3],
-              pet_int = pet_mod[1], 
-              pet_cwd = pet_mod[2], 
-              pet_pet = pet_mod[3]))
+              int_cwd2 = int_mod[3],
+              int_pet = int_mod[4],
+              int_pet2 = int_mod[5],
+              cwd_int = cwd_mod[1],
+              cwd_cwd = cwd_mod[2],
+              cwd_cwd2 = cwd_mod[3],
+              cwd_pet = cwd_mod[4],
+              cwd_pet2 = cwd_mod[5],
+              pet_int = pet_mod[1],
+              pet_cwd = pet_mod[2],
+              pet_cwd2 = pet_mod[3],
+              pet_pet = pet_mod[4],
+              pet_pet2 = pet_mod[5]))
 }
+
 
 ## Create dataframe holding bootstrap samples
 boot_df <- block_draw_df %>%
@@ -370,9 +396,20 @@ boot_df <- boot_df %>%
   select(-data) %>% 
   ungroup()
 
+
 ## Summarize bootstrap results
 bs_coefs <- apply(boot_df %>% select(-boot_id), 2, mean) %>% print()
 bs_ste <- apply(boot_df %>% select(-boot_id), 2, sd) %>% print()
+
+
+## Save out bootstrapped coefficients that reflect uncertainty from both first and second stage models
+write_rds(boot_df, paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
+
+
+
+
+
+
 
 
 
@@ -382,27 +419,32 @@ mod <- feols(estimate_cwd.an ~ cwd.spstd + pet.spstd,
              weights = trim_df$cwd_errorweights, data = trim_df)
 summary(mod) 
 
+library(marginaleffects)
+mod_df <- trim_df 
+mod_df <- mod_df %>% 
+  mutate(int_coef = estimate_intercept,
+         pet_coef = estimate_pet.an, 
+         cwd_coef = estimate_cwd.an)
+
+run_ss(mod_df, outcome = "cwd_coef")
 mod <- feols(estimate_cwd.an ~ cwd.spstd + cwd.spstd**2 + pet.spstd + pet.spstd**2, 
-             weights = trim_df$cwd_errorweights, data = trim_df)
-
-# mod <- feols(estimate_cwd.an ~ cwd.spstd + cwd.spstd**2 + cwd.spstd**3 + pet.spstd + pet.spstd**2 + pet.spstd**3,
-#              weights = trim_df$cwd_errorweights, data = trim_df)
+             weights = mod_df$cwd_errorweights, data = mod_df)
 summary(mod) 
-plot_cap(mod, condition = "pet.spstd")
-plot_cap(mod, condition = "cwd.spstd")
+plot_cap(mod, condition = "pet.spstd") + xlim(-3,3) + ylim(-.2, 0)
+plot_cap(mod, condition = "cwd.spstd") + xlim(-3,3) + ylim(-.2, 0)
 
 
-mod <- feols(estimate_pet.an ~ cwd.spstd + cwd.spstd**2 + pet.spstd + pet.spstd**2, 
-             weights = trim_df$cwd_errorweights, data = trim_df)
-# mod <- feols(estimate_pet.an ~ cwd.spstd + cwd.spstd**2 + cwd.spstd**3 + pet.spstd + pet.spstd**2 + pet.spstd**3, 
-#              weights = trim_df$cwd_errorweights, data = trim_df)
+
+
+mod <- feols(estimate_pet.an ~ cwd.spstd + cwd.spstd**2 + cwd.spstd**3 + pet.spstd + pet.spstd**2 + pet.spstd**3,
+             weights = trim_df$pet_errorweights, data = trim_df)
 summary(mod) 
-plot_cap(mod, condition = "pet.spstd")
-plot_cap(mod, condition = "cwd.spstd")
+plot_cap(mod, condition = "pet.spstd") + xlim(-3,3) + ylim(-.1, .3)
+plot_cap(mod, condition = "cwd.spstd") + xlim(-3,3) + ylim(-.2, .2)
 
-## Save out bootstrapped coefficients that reflect uncertainty from both first and second stage models
-write_rds(boot_df, paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
-
+newdata <- tibble("cwd.spstd" = 0, 
+                  "pet.spstd" = 0)
+predict(mod, newdata)
 
 ## OLD VERSION OF BOOTSTRAPPING USING BOOT PACKAGE
 # mod_df <- trim_df %>% filter(genus == "Araucaria")
@@ -458,6 +500,20 @@ summary(mod)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Investigate variation by genus  ----------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+run_ss_conley <- function(data, outcome = "cwd_coef"){
+  if (outcome == "cwd_coef") {
+    error_weights = data$cwd_errorweights
+  } else if (outcome == "pet_coef") {
+    error_weights = data$pet_errorweights
+  } else if (outcome == "int_coef") {
+    error_weights = data$int_errorweights
+  }
+  formula <- as.formula(paste(outcome, " ~ cwd.spstd + (cwd.spstd^2) + pet.spstd + (pet.spstd^2)"))
+  mod <- feols(formula, data=data, weights = error_weights, 
+               vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
+  return(mod)
+}
+
 run_ss_conley <- function(data, outcome = "estimate_cwd.an"){
   formula <- as.formula(paste(outcome, " ~ cwd.spstd + pet.spstd")) ## ADD BACK WEIGHTING HERE?
   mod <- feols(formula, data = data, weights = data$cwd_errorweights, 
@@ -486,12 +542,19 @@ genus_keep <- genus_freq %>%
   pull(genus)
 
 genus_df <- trim_df %>% 
+  mutate(int_coef = estimate_intercept,
+         pet_coef = estimate_pet.an, 
+         cwd_coef = estimate_cwd.an) %>% 
   filter(genus %in% genus_keep) %>% 
   group_by(genus) %>% 
   nest() %>% 
   mutate(model_estimates = map(data, run_ss_conley))
 
 genus_df$model_estimates
+
+genus_df$model_estimates[10][[1]] %>% 
+  plot_cap(condition = "cwd.spstd") + xlim(-3,3) + ylim(-1, 1)
+
 
 write_rds(genus_df, paste0(wdir, "out/second_stage/ss_conley_genus.rds"))
 
