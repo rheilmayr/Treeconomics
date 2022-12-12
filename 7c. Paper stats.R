@@ -76,7 +76,7 @@ trim_df <- flm_df %>%
   drop_na()
 
 # 5. Prediction rasters
-rwi_list <- list.files(paste0(wdir, "out/predictions/sp_rwi_pred/"), pattern = ".rds", full.names = TRUE)
+rwi_list <- list.files(paste0(wdir, "out/predictions/sp_rwi_pred_10000/"), pattern = ".gz", full.names = TRUE)
 sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
 # sp_predictions <- readRDS(paste0(wdir, "out/predictions/sp_predictions.rds"))
 
@@ -337,3 +337,48 @@ sp_plot_dat %>%
          greater_both = greater_cwd * greater_pet) %>% 
   pull(greater_both) %>% 
   mean(na.rm = TRUE)
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Changes in RWI  --------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+# Proportion of grid cells forecasted to experience significant decline in growth
+changes <- sp_predictions %>%
+  mutate(rwi_change_qual = case_when(
+    rwi_pred_change_025 > 0 ~ "increase",
+    rwi_pred_change_975 < 0 ~ "decrease",
+    TRUE ~ "neither"
+  )) %>% 
+  group_by(rwi_change_qual) %>% 
+  tally() %>% 
+  print()
+
+sp_predictions %>% select(rwi_pred_change_mean) %>% summary()
+sp_predictions %>% select(rwi_pred_change_025) %>% summary()
+sp_predictions %>% select(rwi_pred_change_975) %>% summary()
+
+
+
+pet_band_bounds <- c(0.9, 1.1)
+cwd_quantiles <- sp_predictions %>% 
+  filter(pet_hist > pet_band_bounds[1], pet_hist < pet_band_bounds[2]) %>% 
+  pull(cwd_hist) %>% 
+  quantile(c(0.01, 0.99))
+
+sp_predictions %>% 
+  filter(pet_hist > pet_band_bounds[1], pet_hist < pet_band_bounds[2]) %>% 
+  filter(cwd_hist < cwd_quantiles[1]) %>% 
+  select(rwi_pred_change_mean, rwi_pred_change_025, rwi_pred_change_975) %>% 
+  summary()
+
+sp_predictions %>% 
+  filter(pet_hist > pet_band_bounds[1], pet_hist < pet_band_bounds[2]) %>% 
+  filter(cwd_hist > cwd_quantiles[2]) %>% 
+  select(rwi_pred_change_mean, rwi_pred_change_025, rwi_pred_change_975) %>% 
+  summary()
+
+sp_predictions %>% filter(cwd_hist > 1) %>% select(rwi_pred_change_mean) %>% summary()
+sp_predictions %>% filter(cwd_hist < -0) %>% select(rwi_pred_change_mean) %>% summary()
+sp_predictions$rwi_pred_change_mean %>% quantile(.5)
+sp_predictions %>% filter(rwi_pred_change_mean < -0.1) %>% select(cwd_hist) %>% summary()
+# Proportion of grid cells forecasted to experience significant increase in growth
