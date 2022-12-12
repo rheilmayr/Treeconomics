@@ -519,7 +519,7 @@ fullrange_cwd <- sp_predictions %>%
 fullrange_quantiles <- (fullrange_cwd$cwd_hist) %>% 
   quantile(probs = seq(0, 1, 0.01))
 
-itrdb_cwd <- trim_df %>% 
+itrdb_cwd <- flm_df %>% 
   select(cwd.spstd)
 itrdb_quantiles <- (itrdb_cwd$cwd.spstd) %>% 
   quantile(probs = seq(0, 1, 0.01))
@@ -527,7 +527,7 @@ itrdb_quantiles <- (itrdb_cwd$cwd.spstd) %>%
 itrdb_hist <- itrdb_cwd %>% 
   ggplot(aes(x = cwd.spstd)) +
   geom_histogram(bins = 50) +
-  xlim(-2.5, 5) +
+  xlim(-3, 5) +
   theme_bw() +
   ggtitle("CWD frequency among ITRDB sites") +
   xlab("Historic CWD (Deviation from species mean)")
@@ -535,7 +535,7 @@ itrdb_hist <- itrdb_cwd %>%
 fullrange_hist <- fullrange_cwd %>% 
   ggplot(aes(x = cwd_hist)) +
   geom_histogram(bins = 50) +
-  xlim(-2.5, 5) +
+  xlim(-3, 5) +
   theme_bw() +
   ggtitle("CWD frequency across species ranges") +
   xlab("Historic CWD (Deviation from species mean)")
@@ -545,8 +545,8 @@ quantile_df <- tibble(itrdb = itrdb_quantiles, fullrange = fullrange_quantiles)
 qq_plot <- quantile_df %>%
   ggplot(aes(x = fullrange, y = itrdb)) +
   geom_point() +
-  # xlim(c(-2, 2)) +
-  # ylim(c(-2, 2)) +
+  xlim(c(-3, 5)) +
+  ylim(c(-3, 5)) +
   # xlim(c(-4, 15)) +
   # ylim(c(-4, 15)) +
   geom_abline(intercept = 0, slope = 1) +
@@ -565,7 +565,7 @@ fullrange_pet <- sp_predictions %>%
 fullrange_pquantiles <- (fullrange_pet$pet_hist) %>% 
   quantile(probs = seq(0, 1, 0.01))
 
-itrdb_pet <- trim_df %>% 
+itrdb_pet <- flm_df %>% 
   select(pet.spstd)
 itrdb_pquantiles <- (itrdb_pet$pet.spstd) %>% 
   quantile(probs = seq(0, 1, 0.01))
@@ -573,7 +573,7 @@ itrdb_pquantiles <- (itrdb_pet$pet.spstd) %>%
 itrdb_pet_hist <- itrdb_pet %>% 
   ggplot(aes(x = pet.spstd)) +
   geom_histogram(bins = 50) +
-  xlim(-2.5, 5) +
+  xlim(-3, 5) +
   theme_bw() +
   ggtitle("PET frequency among ITRDB sites") +
   xlab("Historic PET (Deviation from species mean)")
@@ -581,7 +581,7 @@ itrdb_pet_hist <- itrdb_pet %>%
 fullrange_pet_hist <- fullrange_pet %>% 
   ggplot(aes(x = pet_hist)) +
   geom_histogram(bins = 50) +
-  xlim(-2.5, 5) +
+  xlim(-3, 5) +
   theme_bw() +
   ggtitle("PET frequency across species ranges") +
   xlab("Historic PET (Deviation from species mean)")
@@ -591,8 +591,8 @@ pquantile_df <- tibble(itrdb = itrdb_pquantiles, fullrange = fullrange_pquantile
 pet_qq_plot <- pquantile_df %>%
   ggplot(aes(x = fullrange, y = itrdb)) +
   geom_point() +
-  # xlim(c(-2, 2)) +
-  # ylim(c(-2, 2)) +
+  xlim(c(-3, 5)) +
+  ylim(c(-3, 5)) +
   # xlim(c(-3.5, 5)) +
   # ylim(c(-3.5, 5)) +
   geom_abline(intercept = 0, slope = 1) +
@@ -607,7 +607,7 @@ pet_qqplot <- (itrdb_pet_hist / fullrange_pet_hist) | pet_qq_plot
 qqplot <- cwd_qqplot / pet_qqplot
 qqplot
 
-#ggsave(paste0(wdir, 'figures\\a1_qqplots.svg'), plot = qqplot, width = 11, height = 7, units = "in")
+ggsave(paste0(wdir, 'figures\\a1_qqplots.svg'), plot = qqplot, width = 11, height = 7, units = "in")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -758,16 +758,21 @@ first_stage_effects
 #          estimate_pet.an = pet_coef)
 
 # Note: PET 1-99% quantiles vary from -1.9 to 3.5; PET from -2.9 to 1.8. -3 to 3.5 seems like a good block for plots
-pred_min <- -2.5
-pred_max <- 2.5
-
+cwd_pred_min <- -2
+cwd_pred_max <- 2
+pet_pred_min <- -2
+pet_pred_max <- 2
 
 ### Binned plot of cwd sensitivity
 seq_inc <- 0.25
 half_inc <- (seq_inc / 2)
-seq_min <- pred_min - half_inc
-seq_max <- pred_max + half_inc
-sequence <- seq(seq_min, seq_max, seq_inc)
+cwd_seq_min <- cwd_pred_min - half_inc
+cwd_seq_max <- cwd_pred_max + half_inc
+cwd_sequence <- seq(cwd_seq_min, cwd_seq_max, seq_inc)
+
+pet_seq_min <- pet_pred_min - half_inc
+pet_seq_max <- pet_pred_max + half_inc
+pet_sequence <- seq(pet_seq_min, pet_seq_max, seq_inc)
 
 convert_bin <- function(n){
   sequence[n] + half_inc
@@ -783,10 +788,14 @@ plot_dat <- trim_df
 #   drop_na()
 
 plot_dat_a <- plot_dat %>%
-  mutate(cwd.q = cut(cwd.spstd, breaks = sequence, labels = FALSE),
+  mutate(cwd.q = cut(cwd.spstd, breaks = cwd_sequence, labels = FALSE),
          cwd.q = convert_bin(cwd.q),
-         pet.q = cut(pet.spstd, breaks = sequence, labels = FALSE),
-         pet.q = convert_bin(pet.q))
+         pet.q = cut(pet.spstd, breaks = pet_sequence, labels = FALSE),
+         pet.q = convert_bin(pet.q)) %>% 
+  filter(pet.spstd > pet_pred_min,
+         pet.spstd < pet_pred_max,
+         cwd.spstd > cwd_pred_min,
+         cwd.spstd < cwd_pred_max)
 
 plot_dat_b <- plot_dat_a %>%
   group_by(cwd.q, pet.q) %>%
@@ -795,6 +804,8 @@ plot_dat_b <- plot_dat_a %>%
             pet_sens = mean(estimate_pet.an, na.rm = TRUE),
             n = n()) %>%
   filter(n>=5)
+
+
 
 # sym_log <- function(x){
 #   y = sign(x) * log10(1 + abs(x))
@@ -860,8 +871,8 @@ cwd_binned_margins <- plot_dat_b %>%
   coord_fixed() +
   geom_hline(yintercept = 0, size = 1, linetype = 2) +
   geom_vline(xintercept = 0, size = 1, linetype = 2) +
-  xlim(c(pred_min, pred_max)) +
-  ylim(c(pred_min, pred_max))
+  xlim(c(cwd_pred_min, cwd_pred_max)) +
+  ylim(c(pet_pred_min, pet_pred_max))
 
 
 cwd_binned_margins
@@ -955,12 +966,12 @@ cwd_binned_margins
 # Plot marginal effects from ss model ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 pull_marg_fx <- function(at_pet, at_cwd, mod_df){
-  cwd_me_predictions <- mod_df$cwd_int + (at_cwd * mod_df$cwd_cwd) + (at_pet * mod_df$cwd_pet)
+  cwd_me_predictions <- mod_df$cwd_int + (at_cwd * mod_df$cwd_cwd) + (at_cwd^2 * mod_df$cwd_cwd2) + (at_pet * mod_df$cwd_pet) + (at_pet^2 * mod_df$cwd_pet2)
   cwd_ci_min <- cwd_me_predictions %>% quantile(0.025)
   cwd_ci_max <- cwd_me_predictions %>% quantile(0.975)
   cwd_mean <- cwd_me_predictions %>% mean()
   
-  pet_me_predictions <- mod_df$pet_int + (at_cwd * mod_df$pet_cwd) + (at_pet * mod_df$pet_pet)
+  pet_me_predictions <- mod_df$pet_int + (at_cwd * mod_df$pet_cwd) + (at_cwd^2 * mod_df$pet_cwd2) + (at_pet * mod_df$pet_pet) + (at_pet^2 * mod_df$pet_pet2)
   pet_ci_min <- pet_me_predictions %>% quantile(0.025)
   pet_ci_max <- pet_me_predictions %>% quantile(0.975)
   pet_mean <- pet_me_predictions %>% mean()
@@ -1000,7 +1011,7 @@ cwd_cwd_margins_plot <- ggplot(cwd_me_df, aes(x = at_cwd)) +
   geom_hline(yintercept = 0, size = 1, linetype = 2) +
   xlab("Historic CWD\n(Deviation from species mean)") + 
   ylab("Pred. sensitivity to CWD") + 
-  xlim(c(pred_min, pred_max)) +
+  xlim(c(cwd_pred_min, cwd_pred_max)) +
   theme_bw(base_size = 18)
 
 cwd_cwd_margins_plot
@@ -1014,7 +1025,7 @@ pet_cwd_margins_plot <- ggplot(pet_me_df, aes(x = at_pet)) +
   geom_hline(yintercept = 0, size = 1, linetype = 2) +
   xlab("Historic PET\n(Deviation from species mean)") + 
   ylab("Pred. sensitivity to CWD") + 
-  xlim(c(pred_min, pred_max)) +
+  xlim(c(pet_pred_min, pet_pred_max)) +
   theme_bw(base_size = 18)
 
 pet_cwd_margins_plot
@@ -1061,8 +1072,8 @@ pet_binned_margins <- plot_dat_b %>%
   coord_fixed() +
   geom_hline(yintercept = 0, size = 1, linetype = 2) +
   geom_vline(xintercept = 0, size = 1, linetype = 2) +
-  xlim(c(pred_min, pred_max)) +
-  ylim(c(pred_min, pred_max))
+  xlim(c(cwd_pred_min, cwd_pred_max)) +
+  ylim(c(pet_pred_min, pet_pred_max))
 
 
 pet_binned_margins
@@ -1077,7 +1088,8 @@ pet_pet_margins_plot <- ggplot(pet_me_df, aes(x = at_pet)) +
   geom_hline(yintercept = 0, size = 1, linetype = 2) +
   xlab("Historic PET\n(Deviation from species mean)") + 
   ylab("Pred. sensitivity to PET") + 
-  xlim(c(pred_min, pred_max)) +
+  xlim(c(pet_pred_min, pet_pred_max)) +
+  ylim(c(-0.2, 0.3)) +
   theme_bw(base_size = 18)
 
 pet_pet_margins_plot
@@ -1090,7 +1102,8 @@ cwd_pet_margins_plot <- ggplot(cwd_me_df, aes(x = at_cwd)) +
   geom_hline(yintercept = 0, size = 1, linetype = 2) +
   xlab("Historic CWD\n(Deviation from species mean)") + 
   ylab("Pred. sensitivity to PET") + 
-  xlim(c(pred_min, pred_max)) +
+  xlim(c(cwd_pred_min, cwd_pred_max)) +
+  ylim(c(-0.3, 0.1)) +
   theme_bw(base_size = 18)
 
 cwd_pet_margins_plot
@@ -1277,17 +1290,23 @@ plot_dat <- sp_predictions %>%
   filter(((abs(cwd_hist)<2.5) & (abs(pet_hist<2.5)))) %>%
   drop_na()
 
-seq_min <- -2.625
-seq_max <- 2.625
-seq_inc <- 0.25
-sequence <- seq(seq_min, seq_max, seq_inc)
+cwd_seq_min <- -2.125
+cwd_seq_max <- 2.375
+cwd_seq_inc <- 0.25
+cwd_sequence <- seq(cwd_seq_min, cwd_seq_max, seq_inc)
+
+
+pet_seq_min <- -2.125
+pet_seq_max <- 2.375
+pet_seq_inc <- 0.25
+pet_sequence <- seq(pet_seq_min, pet_seq_max, seq_inc)
 convert_bin <- function(n){
   sequence[n] + 0.125
 }
 plot_dat <- plot_dat %>% 
-  mutate(cwd.q = cut(cwd_hist, breaks = sequence, labels = FALSE),
+  mutate(cwd.q = cut(cwd_hist, breaks = cwd_sequence, labels = FALSE),
          cwd.q = convert_bin(cwd.q),
-         pet.q = cut(pet_hist, breaks = sequence, labels = FALSE),
+         pet.q = cut(pet_hist, breaks = pet_sequence, labels = FALSE),
          pet.q = convert_bin(pet.q))
 
 
@@ -1310,8 +1329,8 @@ plot_dat <- plot_dat %>%
             pet_sens = mean(pet_sens, na.rm = TRUE),
             cwd_change = mean(cwd_change, na.rm = TRUE),
             pet_change = mean(pet_change, na.rm = TRUE),
-            n = n()) %>% 
-  filter(n>10)
+            n = n()) %>%
+  filter(n>5)
 
 
 # theme_set(
@@ -1323,8 +1342,8 @@ plot_dat <- plot_dat %>%
 cwd_sens_bin <- plot_dat %>% 
   ggplot(aes(x = cwd.q, y = pet.q, fill = cwd_sens)) +
   geom_tile() +
-  xlim(c(-2.5, 2.5)) +
-  ylim(c(-2.5, 2.5)) +
+  xlim(c(cwd_seq_min, cwd_seq_max)) +
+  ylim(c(pet_seq_min, pet_seq_max)) +
   scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
   # scale_fill_distiller(type = "div") +
   # scale_fill_viridis_c(direction = -1, option = "viridis") +
@@ -1503,7 +1522,11 @@ transect_dat <- pred_dat %>%
   mutate(scenario = fct_relevel(scenario, "rwi_change", "rwi_change_pclim"))
 
 transect_1 <- transect_dat %>% 
-  filter(pet.q == 1) %>% 
+  filter(pet.q == 0) %>%
+  group_by(cwd.q, scenario) %>% 
+  summarise(rwi_change = mean(rwi_change),
+            rwi_change_lb = mean(rwi_change_lb),
+            rwi_change_ub = mean(rwi_change_ub)) %>% 
   ggplot(aes(x = cwd.q, y = rwi_change, group = scenario, color = scenario)) +
   geom_ribbon(aes(ymin = rwi_change_lb,
                   ymax = rwi_change_ub,
@@ -1511,7 +1534,7 @@ transect_1 <- transect_dat %>%
               alpha = 0.2) +
   geom_line(size = 2) +
   theme_bw(base_size = 20)+
-  ylim(c(-1.1, 0.4)) +
+  ylim(c(-1, 0.2)) +
   xlim(c(-2, 2)) +
   scale_linetype_manual(values=c("solid", "dotted", "dotted")) +
   scale_fill_manual(name = "Scenario",
@@ -1563,7 +1586,7 @@ transect_2 <- transect_dat %>%
   geom_hline(yintercept = 0, linetype = "dashed", size = 1)
 transect_2
 
-locator <- rwi_bin + 
+  locator <- rwi_bin + 
   theme_bw(base_size = 20)+
   theme(legend.position = c(.18,.83),
         legend.text = element_text(size=13),
