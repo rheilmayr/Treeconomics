@@ -87,8 +87,10 @@ sp_mc <- sp_mc %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define functions ---------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-predict_sens <- function(sppp_code, int_int, int_cwd, int_pet, cwd_int, 
-                         cwd_cwd, cwd_pet, pet_int, pet_cwd, pet_pet){
+predict_sens <- function(sppp_code, 
+                         int_int, int_cwd, int_cwd2, int_pet, int_pet2, 
+                         cwd_int, cwd_cwd, cwd_cwd2, cwd_pet, cwd_pet2, 
+                         pet_int, pet_cwd, pet_cwd2, pet_pet, pet_pet2){
   ## Function used to predict species' sensitivity rasters based on historic 
   ## climate and randomly drawn parameters from second stage model.
   
@@ -102,9 +104,9 @@ predict_sens <- function(sppp_code, int_int, int_cwd, int_pet, cwd_int,
   sp_df <- sp_df %>% 
     rename(cwd_hist = cwd,
            pet_hist = pet) %>%
-    mutate(cwd_sens = cwd_int + cwd_cwd * cwd_hist + cwd_pet * pet_hist,
-           pet_sens = pet_int + pet_cwd * cwd_hist + pet_pet * pet_hist,
-           intercept = int_int + int_cwd * cwd_hist + int_pet * pet_hist) %>% 
+    mutate(cwd_sens = cwd_int + (cwd_cwd * cwd_hist) + (cwd_cwd2 * cwd_hist * cwd_hist) + (cwd_pet * pet_hist) + (cwd_pet2 * pet_hist * pet_hist),
+           pet_sens = pet_int + (pet_cwd * cwd_hist) + (pet_cwd2 * cwd_hist * cwd_hist) + (pet_pet * pet_hist) + (pet_pet2 * pet_hist * pet_hist),
+           intercept = int_int + (int_cwd * cwd_hist) + (int_cwd2 * cwd_hist * cwd_hist) + (int_pet * pet_hist) + (int_pet2 * pet_hist * pet_hist)) %>% 
     select(-cwd_hist, -pet_hist) %>% 
     as_tibble()
   
@@ -171,28 +173,40 @@ calc_rwi_quantiles <- function(spp_code, mc_data, parallel = TRUE){
       mutate(sensitivity = future_pmap(list(sppp_code = spp_code,
                                             int_int = int_int,
                                             int_cwd = int_cwd,
+                                            int_cwd2 = int_cwd2,
                                             int_pet = int_pet,
+                                            int_pet2 = int_pet2,
                                             cwd_int = cwd_int,
                                             cwd_cwd = cwd_cwd,
+                                            cwd_cwd2 = cwd_cwd2,
                                             cwd_pet = cwd_pet,
+                                            cwd_pet2 = cwd_pet2,
                                             pet_int = pet_int,
                                             pet_cwd = pet_cwd,
-                                            pet_pet = pet_pet),
+                                            pet_cwd2 = pet_cwd2,
+                                            pet_pet = pet_pet,
+                                            pet_pet2 = pet_pet2),
                                        .f = predict_sens,
                                        .options = furrr_options(seed = my_seed, 
                                                                 packages = c( "dplyr", "raster", "dtplyr"))))
   } else {
     sp_predictions <- mc_data %>% 
       mutate(sensitivity = pmap(list(sppp_code = spp_code,
-                                            int_int = int_int,
-                                            int_cwd = int_cwd,
-                                            int_pet = int_pet,
-                                            cwd_int = cwd_int,
-                                            cwd_cwd = cwd_cwd,
-                                            cwd_pet = cwd_pet,
-                                            pet_int = pet_int,
-                                            pet_cwd = pet_cwd,
-                                            pet_pet = pet_pet),
+                                     int_int = int_int,
+                                     int_cwd = int_cwd,
+                                     int_cwd2 = int_cwd2,
+                                     int_pet = int_pet,
+                                     int_pet2 = int_pet2,
+                                     cwd_int = cwd_int,
+                                     cwd_cwd = cwd_cwd,
+                                     cwd_cwd2 = cwd_cwd2,
+                                     cwd_pet = cwd_pet,
+                                     cwd_pet2 = cwd_pet2,
+                                     pet_int = pet_int,
+                                     pet_cwd = pet_cwd,
+                                     pet_cwd2 = pet_cwd2,
+                                     pet_pet = pet_pet,
+                                     pet_pet2 = pet_pet2),
                                        .f = predict_sens))
   }
   sp_predictions <- sp_predictions %>% 
