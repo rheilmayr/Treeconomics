@@ -45,10 +45,10 @@ site_smry <- site_smry %>%
   select(collection_id, sp_id, latitude, longitude) %>% 
   mutate(species_id = tolower(sp_id)) %>% 
   select(-sp_id)
-site_loc <- site_smry %>% 
-  select(collection_id, latitude, longitude)
-flm_df <- flm_df %>% 
-  left_join(site_loc, by = "collection_id")
+# site_loc <- site_smry %>% 
+#   select(collection_id, latitude, longitude)
+# flm_df <- flm_df %>% 
+#   left_join(site_loc, by = "collection_id")
 
 # 4. Species information
 sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
@@ -58,7 +58,8 @@ site_smry <- site_smry %>%
   left_join(sp_info, by = c("species_id"))
 
 # 5. Prediction rasters
-sp_predictions <- readRDS(paste0(wdir, "out/predictions/sq_sp_predictions.rds"))
+rwi_list <- list.files(paste0(wdir, "out/predictions/sp_rwi_pred_10000/"), pattern = ".gz", full.names = TRUE)
+sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
 
 # 6. Dendro examples - note: currently just exporting two pipo sites in first stage script
 dendro_ex <- read.csv(paste0(wdir, "out/dendro/example_sites.csv"))
@@ -74,28 +75,27 @@ spp_code <- 'pipo'
 
 
 trim_df <- flm_df %>% 
-  filter(species_id == spp_code,
-         outlier != 1)
+  filter(species_id == spp_code)
 
 spp_predictions <- sp_predictions %>% 
   filter(sp_code == spp_code)
 
-sp_fut <- (spp_predictions %>% 
-             pull(clim_future_sp))[[1]]
-names(sp_fut) <- c("cwd.fut", "pet.fut")
-
-sp_hist <- (spp_predictions %>% 
-              pull(clim_historic_sp))[[1]]
-sp_sens  <- (spp_predictions %>% 
-               pull(sensitivity))[[1]]
-sp_rwi  <- (spp_predictions %>% 
-              pull(rwi_predictions))[[1]]
-names(sp_rwi) <- "rwi"
-
-
-clim_compare <- brick(c(sp_fut, sp_hist, sp_sens, sp_rwi))
-clim_compare <- clim_compare %>% 
-  as.data.frame(xy = TRUE)
+# sp_fut <- (spp_predictions %>% 
+#              pull(clim_future_sp))[[1]]
+# names(sp_fut) <- c("cwd.fut", "pet.fut")
+# 
+# sp_hist <- (spp_predictions %>% 
+#               pull(clim_historic_sp))[[1]]
+# sp_sens  <- (spp_predictions %>% 
+#                pull(sensitivity))[[1]]
+# sp_rwi  <- (spp_predictions %>% 
+#               pull(rwi_predictions))[[1]]
+# names(sp_rwi) <- "rwi"
+# 
+# 
+# clim_compare <- brick(c(sp_fut, sp_hist, sp_sens, sp_rwi))
+# clim_compare <- clim_compare %>% 
+#   as.data.frame(xy = TRUE)
 
 
 #===============================================================================
@@ -132,7 +132,7 @@ map
 ### Plot of climatic range with ITRDB sites
 xmin <- -2
 xmax <- 2
-hex <- clim_compare %>% ggplot(aes(x = cwd.spstd, y = pet.spstd)) +
+hex <- spp_predictions %>% ggplot(aes(x = cwd_hist, y = pet_hist)) +
   geom_density_2d(colour = "black") +
   geom_density_2d_filled(alpha = 0.5) +
   xlim(xmin, xmax) +
@@ -254,9 +254,9 @@ sens_map
 
 ### Plot of observed CWD sensitivity on climatic range 
 lgd_pos <- c(.18, .75)
-sens_niche <- clim_compare %>% 
-  filter(cwd_sens <= 1&cwd.spstd<=1&pet.spstd<=1) %>% 
-  ggplot(aes(x = cwd.spstd, y = pet.spstd)) +
+sens_niche <- spp_predictions %>% 
+  filter(cwd_sens <= 1, cwd_hist<=1, pet_hist <= 1) %>% 
+  ggplot(aes(x = cwd_hist, y = pet_hist)) +
   geom_density_2d(colour = "black", alpha=.5) +
   # geom_density_2d_filled(alpha = 0.5) +
   #xlim(xmin, xmax) +
@@ -282,7 +282,7 @@ sens_niche
 
 
 ### Plot of cwd sensitivity against cwd.spstd
-mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd , data = trim_df)
+mod <- lm(estimate_cwd.an ~ cwd.spstd + I(cwd.spstd^2) + pet.spstd + I(pet.spstd^2), data = trim_df)
 eff = effect("cwd.spstd", mod, partial.residuals=T)
 closest <- function(x, x0) apply(outer(x, x0, FUN=function(x, x0) abs(x - x0)), 1, which.min)
 x.fit <- unlist(eff$x.all)
@@ -316,30 +316,32 @@ ggsave(paste0(wdir, "figures\\", "sp_example.svg"), combined_plot, width = 15, h
 #===============================================================================
 # 5) Predictions  ---------
 #===============================================================================
-### Plot of cwd.spstd vs cwd.fut
-clim_compare %>% 
-  ggplot(aes(x = cwd.spstd, y = cwd.fut)) +
+spp_predictions <- spp_predictions %>% filter(abs(cwd_hist) < 2) ## TODO - FIgure out correct cut-off for predictions
+
+### Plot of cwd.start vs cwd.fut
+spp_predictions %>% 
+  ggplot(aes(x = cwd_cmip_start_mean, y = cwd_cmip_end_mean)) +
   geom_point() +
   geom_abline(slope = 1, intercept = 0) +
   coord_fixed() +
-  xlim(c(-4,4)) +
-  ylim(c(-4,4)) +
+  xlim(c(-4,6)) +
+  ylim(c(-4,6)) +
   theme_bw()
 
 ### Plot of cwd.spstd vs cwd.sens
-clim_compare %>% 
-  ggplot(aes(x = cwd.spstd, y = cwd_sens)) +
+spp_predictions %>% 
+  ggplot(aes(x = cwd_hist, y = cwd_sens)) +
   geom_point() +
-  xlim(c(-2,2)) +
-  ylim(c(-.3,.3)) +
+  xlim(c(-2,4)) +
+  ylim(c(-.09,-0.04)) +
   theme_bw()
 
 ### Plot of cwd.spstd vs rwi
-clim_compare %>% 
-  ggplot(aes(x = cwd.spstd, y = rwi)) +
+spp_predictions %>% 
+  ggplot(aes(x = cwd_hist, y = rwi_pred_change_mean)) +
   geom_point(color = "dark blue", alpha = 0.5) +
-  xlim(c(-2,2)) +
-  ylim(c(-.5,.3)) +
+  # xlim(c(-2,2)) +
+  # ylim(c(-.5,.3)) +
   theme_bw() +
   stat_smooth(method = "gam", formula = y ~ s(x), size = 1, color = "red")
 
@@ -347,7 +349,7 @@ clim_compare %>%
 ### Map of historic CWD
 cwd_map <- ggplot() +
   geom_sf(data = world) +
-  geom_raster(data = clim_compare %>% drop_na(), aes(x = x, y = y, fill = cwd.spstd)) +
+  geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = cwd_hist)) +
   theme_bw(base_size = 22)+
   ylab("Latitude")+
   xlab("Longitude")+
@@ -358,7 +360,7 @@ cwd_map
 ### Map of historic PET
 pet_map <- ggplot() +
   geom_sf(data = world) +
-  geom_raster(data = clim_compare %>% drop_na(), aes(x = x, y = y, fill = pet.spstd)) +
+  geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = pet_hist)) +
   theme_bw(base_size = 22)+
   ylab("Latitude")+
   xlab("Longitude")+
@@ -367,13 +369,13 @@ pet_map <- ggplot() +
 pet_map
 
 ### Map of CWD change
-clim_compare <- clim_compare %>% 
-  mutate(cwd_change = cwd.fut - cwd.spstd,
-         pet_change = pet.fut - pet.spstd)
+spp_predictions <- spp_predictions %>% 
+  mutate(cwd_change = cwd_cmip_end_mean - cwd_cmip_start_mean,
+         pet_change = pet_cmip_end_mean - pet_cmip_start_mean)
 
 cwd_change_map <- ggplot() +
   geom_sf(data = world) +
-  geom_raster(data = clim_compare %>% drop_na(), aes(x = x, y = y, fill = cwd_change)) +
+  geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = cwd_change)) +
   theme_bw(base_size = 22)+
   ylab("Latitude")+
   xlab("Longitude")+
@@ -385,7 +387,7 @@ cwd_change_map
 ### Map of PET change
 pet_change_map <- ggplot() +
   geom_sf(data = world) +
-  geom_raster(data = clim_compare %>% drop_na(), aes(x = x, y = y, fill = pet_change)) +
+  geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = pet_change)) +
   theme_bw(base_size = 22)+
   ylab("Latitude")+
   xlab("Longitude")+
@@ -397,7 +399,7 @@ pet_change_map
 ### Map of CWD sensitivity
 cwd_sens_map <- ggplot() +
   geom_sf(data = world) +
-  geom_raster(data = clim_compare %>% drop_na(), aes(x = x, y = y, fill = cwd_sens)) +
+  geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = cwd_sens)) +
   theme_bw(base_size = 22)+
   ylab("Latitude")+
   xlab("Longitude")+
@@ -409,7 +411,7 @@ cwd_sens_map
 ### Map of PET sensitivity
 pet_sens_map <- ggplot() +
   geom_sf(data = world) +
-  geom_raster(data = clim_compare %>% drop_na(), aes(x = x, y = y, fill = pet_sens)) +
+  geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = pet_sens)) +
   theme_bw(base_size = 22)+
   ylab("Latitude")+
   xlab("Longitude")+
@@ -421,7 +423,7 @@ pet_sens_map
 ### Map of predicted RWI
 rwi_map <- ggplot() +
   geom_sf(data = world) +
-  geom_raster(data = clim_compare %>% drop_na(), aes(x = x, y = y, fill = rwi)) +
+  geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = rwi_pred_change_mean)) +
   theme_bw(base_size = 22)+
   ylab("Latitude")+
   xlab("Longitude")+
