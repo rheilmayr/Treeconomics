@@ -340,10 +340,12 @@ spp_predictions %>%
 spp_predictions %>% 
   ggplot(aes(x = cwd_hist, y = rwi_pred_change_mean)) +
   geom_point(color = "dark blue", alpha = 0.5) +
+  geom_errorbar(aes(ymin=rwi_pred_change_025, ymax=rwi_pred_change_975)) +
   # xlim(c(-2,2)) +
   # ylim(c(-.5,.3)) +
-  theme_bw() +
-  stat_smooth(method = "gam", formula = y ~ s(x), size = 1, color = "red")
+  theme_bw() 
+# +
+#   stat_smooth(method = "gam", formula = y ~ s(x), size = 1, color = "red")
 
 
 ### Map of historic CWD
