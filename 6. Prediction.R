@@ -38,7 +38,7 @@ future::plan(multisession, workers = n_cores)
 
 my_seed <- 5597
 
-n_mc <- 10000
+n_mc <- 100
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -60,8 +60,8 @@ mod_df <- mod_df %>%
 sp_clim <- read_rds(paste0(wdir, "out/climate/sp_clim_predictions.gz"))
 species_list <- sp_clim %>% select(sp_code)
 
-# 3. Constant sensitivites (median of first stage, rather than running 2nd stage)
-constant_sensitivities <- read_rds(paste0(wdir, "out/first_stage/constant_sensitivities.rds"))
+# # 3. Constant sensitivites (median of first stage, rather than running 2nd stage)
+# constant_sensitivities <- read_rds(paste0(wdir, "out/first_stage/constant_sensitivities.rds"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -114,7 +114,7 @@ predict_sens <- function(sppp_code,
 }
 
 
-calc_rwi_partials <- function(sppp_code, cmip_id, sensitivity){
+calc_rwi_partials <- function(sppp_code, cmip_id, sensitivity, cwd_const_sens, pet_const_sens, int_const_sens){
   select <- dplyr::select
   
   ## Function used to predict species' RWI rasters based on predicted 
@@ -135,8 +135,8 @@ calc_rwi_partials <- function(sppp_code, cmip_id, sensitivity){
     left_join(sensitivity, by = c("x", "y")) %>% 
     mutate(rwi_pred_end = intercept + (pet_cmip_end * pet_sens) + (cwd_cmip_end * cwd_sens),
            rwi_pred_start = intercept + (pet_cmip_start * pet_sens) + (cwd_cmip_start * cwd_sens),
-           rwi_pclim_end = constant_sensitivities$int$estimate[1] + (pet_cmip_end * constant_sensitivities$pet$estimate[1]) + (cwd_cmip_end * constant_sensitivities$cwd$estimate[1]),
-           rwi_pclim_start = constant_sensitivities$int$estimate[1] + (pet_cmip_start * constant_sensitivities$pet$estimate[1]) + (cwd_cmip_start * constant_sensitivities$cwd$estimate[1])) %>% 
+           rwi_pclim_end = int_const_sens + (pet_cmip_end * pet_const_sens) + (cwd_cmip_end * cwd_const_sens),
+           rwi_pclim_start = int_const_sens + (pet_cmip_start * pet_const_sens) + (cwd_cmip_start * cwd_const_sens)) %>% 
     select(x,y,
            cwd_sens,
            pet_sens,
@@ -210,7 +210,7 @@ calc_rwi_quantiles <- function(spp_code, mc_data, parallel = TRUE){
                                        .f = predict_sens))
   }
   sp_predictions <- sp_predictions %>% 
-    select(iter_idx, cmip_idx, sensitivity)
+    select(iter_idx, cmip_idx, sensitivity, cwd_const_sens, pet_const_sens, int_const_sens)
   gc(verbose = TRUE)
 
   ## Predict future RWI for each of n_mc run
@@ -218,7 +218,10 @@ calc_rwi_quantiles <- function(spp_code, mc_data, parallel = TRUE){
     sp_predictions <- sp_predictions %>% 
       mutate(rwi_predictions = future_pmap(list(sppp_code = spp_code,
                                                 cmip_id = cmip_idx,
-                                                sensitivity = sensitivity),
+                                                sensitivity = sensitivity,
+                                                cwd_const_sens = cwd_const_sens,
+                                                pet_const_sens = pet_const_sens,
+                                                int_const_sens = int_const_sens),
                                            .f = calc_rwi_partials,
                                            .options = furrr_options(seed = my_seed,
                                                                     packages = c("raster", "dplyr", "dtplyr"))))     
@@ -226,7 +229,10 @@ calc_rwi_quantiles <- function(spp_code, mc_data, parallel = TRUE){
     sp_predictions <- sp_predictions %>% 
       mutate(rwi_predictions = pmap(list(sppp_code = spp_code,
                                                 cmip_id = cmip_idx,
-                                                sensitivity = sensitivity),
+                                                sensitivity = sensitivity,
+                                         cwd_const_sens = cwd_const_sens,
+                                         pet_const_sens = pet_const_sens,
+                                         int_const_sens = int_const_sens),
                                            .f = calc_rwi_partials)) 
   }
   sp_predictions <- sp_predictions %>% 
@@ -234,14 +240,12 @@ calc_rwi_quantiles <- function(spp_code, mc_data, parallel = TRUE){
     unnest(rwi_predictions)
   gc(verbose = TRUE)
   
+  
+  ## C
+  
   sp_predictions <- sp_predictions %>% 
     lazy_dt()
-  
-  # ## Store historic climate to re-join later
-  # hist_df <- sp_predictions %>% 
-  #   filter(iter_idx == 1) %>% 
-  #   select(x, y, cwd_hist, pet_hist)
-    
+
   ## For each species, calculate cell-wise quantiles of variables from n_mc runs
   sp_predictions <- sp_predictions %>% 
     mutate(rwi_pred_change = rwi_pred_end - rwi_pred_start,

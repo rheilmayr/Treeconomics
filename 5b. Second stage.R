@@ -143,34 +143,6 @@ vg.range = vg.fit[2,3] * 1000
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Describe constant sensitivities ---------------------------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-cwd_const_mod <- feols(estimate_cwd.an ~ 1,
-                       weights = trim_df$cwd_errorweights, data = trim_df,
-                       vcov = conley(cutoff = vg.range, distance = "spherical")) %>% 
-  tidy(conf.int = TRUE, conf.level = 0.95) %>% 
-  mutate(ci_dif = estimate - conf.low) 
-  
-pet_const_mod <- feols(estimate_pet.an ~ 1,
-                       weights = trim_df$pet_errorweights, data = trim_df,
-                       vcov = conley(cutoff = vg.range, distance = "spherical")) %>% 
-  tidy(conf.int = TRUE, conf.level = 0.95) %>% 
-  mutate(ci_dif = estimate - conf.low) 
-int_const_mod <- feols(estimate_intercept ~ 1, 
-                       weights = trim_df$int_errorweights, data = trim_df,
-                       vcov = conley(cutoff = vg.range, distance = "spherical")) %>% 
-  tidy(conf.int = TRUE, conf.level = 0.95) %>% 
-  mutate(ci_dif = estimate - conf.low) 
-
-constant_sensitivities <- list("int" = int_const_mod,
-                               "cwd" = cwd_const_mod,
-                               "pet" = pet_const_mod)
-
-constant_sensitivities %>% 
-  write_rds(paste0(wdir, "out/first_stage/constant_sensitivities.rds"))
-
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Identify spatially proximate blocks of sites ---------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 site_list <- trim_df %>%
@@ -304,6 +276,7 @@ block_draw_df <- block_draw_df %>%
   left_join(mc_df, by = c("collection_id", "iter_idx"))
 
 
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Run bootstrap estimation of second stage model -------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -356,6 +329,20 @@ bs_ss <- function(data){
               pet_pet2 = pet_mod[5]))
 }
 
+bs_constant <- function(data){
+  # data <- data %>% # Needed to add this since block bootstrap is returning nested tibble
+  #   unnest(cols = c(data))
+  const_sens <- data %>% 
+    summarise(cwd_const_sens = weighted.mean(cwd_coef, cwd_errorweights),
+          pet_const_sens = weighted.mean(pet_coef, pet_errorweights),
+          int_const_sens = weighted.mean(int_coef, pet_errorweights))
+    # summarise(cwd_const_sens = mean(cwd_coef),
+    #           pet_const_sens = mean(pet_coef),
+    #           int_const_sens = mean(pet_coef))
+    
+  return(const_sens)
+}
+
 
 ## Create dataframe holding bootstrap samples
 boot_df <- block_draw_df %>%
@@ -391,6 +378,8 @@ boot_df <- block_draw_df %>%
 
 ## Estimate second stage models
 boot_df <- boot_df %>% 
+  mutate(const_sens = map(.x = data, .f = bs_constant)) %>% 
+  unnest_wider(const_sens) %>% 
   mutate(estimates = map(.x = data, .f = bs_ss)) %>% 
   unnest_wider(estimates) %>% 
   select(-data) %>% 
