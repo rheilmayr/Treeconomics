@@ -103,6 +103,7 @@ dnlm_results <- read_rds(paste0(wdir, "out/first_stage/dnlm_lagged_effects"))
 
 # 5. Prediction rasters
 rwi_list <- list.files(paste0(wdir, "out/predictions/sp_rwi_pred_10000/"), pattern = ".gz", full.names = TRUE)
+rwi_list <- rwi_list[-45]
 sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
 # sp_predictions <- readRDS(paste0(wdir, "out/predictions/sp_predictions.rds"))
 
@@ -775,7 +776,7 @@ pet_seq_max <- pet_pred_max + half_inc
 pet_sequence <- seq(pet_seq_min, pet_seq_max, seq_inc)
 
 convert_bin <- function(n){
-  sequence[n] + half_inc
+  cwd_sequence[n] + half_inc
 }
 
 plot_dat <- trim_df
@@ -1089,7 +1090,7 @@ pet_pet_margins_plot <- ggplot(pet_me_df, aes(x = at_pet)) +
   xlab("Historic PET\n(Deviation from species mean)") + 
   ylab("Pred. sensitivity to PET") + 
   xlim(c(pet_pred_min, pet_pred_max)) +
-  ylim(c(-0.2, 0.3)) +
+  ylim(c(-0.4, 0.3)) +
   theme_bw(base_size = 18)
 
 pet_pet_margins_plot
@@ -1103,7 +1104,7 @@ cwd_pet_margins_plot <- ggplot(cwd_me_df, aes(x = at_cwd)) +
   xlab("Historic CWD\n(Deviation from species mean)") + 
   ylab("Pred. sensitivity to PET") + 
   xlim(c(cwd_pred_min, cwd_pred_max)) +
-  ylim(c(-0.3, 0.1)) +
+  ylim(c(-0.6, 0.1)) +
   theme_bw(base_size = 18)
 
 cwd_pet_margins_plot
@@ -1301,7 +1302,7 @@ pet_seq_max <- 2.375
 pet_seq_inc <- 0.25
 pet_sequence <- seq(pet_seq_min, pet_seq_max, seq_inc)
 convert_bin <- function(n){
-  sequence[n] + 0.125
+  cwd_sequence[n] + 0.125
 }
 plot_dat <- plot_dat %>% 
   mutate(cwd.q = cut(cwd_hist, breaks = cwd_sequence, labels = FALSE),
@@ -1557,7 +1558,7 @@ transect_1
 
 
 transect_2 <- transect_dat %>% 
-  filter(pet.q == -1) %>% 
+  filter(pet.q == 2) %>% 
   ggplot(aes(x = cwd.q, y = rwi_change, group = scenario, color = scenario)) +
   geom_ribbon(aes(ymin = rwi_change_lb,
                   ymax = rwi_change_ub,
