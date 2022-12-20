@@ -38,7 +38,7 @@ future::plan(multisession, workers = n_cores)
 
 my_seed <- 5597
 
-n_mc <- 100
+n_mc <- 10000
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -47,10 +47,12 @@ n_mc <- 100
 # Define path
 wdir <- 'remote/'
 
-# Create output directory
-out_dir <- paste0(wdir,"out/predictions/sp_rwi_pred_", as.character(n_mc), "/")
+# Create output directories
+out_dir <- paste0(wdir,"out/predictions/pred_", as.character(n_mc), "/")
 dir.create(file.path(out_dir), showWarnings = FALSE)
-
+dir.create(file.path(paste0(out_dir, "sp_rwi/")), showWarnings = FALSE)
+dir.create(file.path(paste0(out_dir, "sp_hot_cells/")), showWarnings = FALSE)
+                      
 # 1. Second stage model
 mod_df <- read_rds(paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
 mod_df <- mod_df %>% 
@@ -210,8 +212,15 @@ calc_rwi_quantiles <- function(spp_code, mc_data, parallel = TRUE){
                                        .f = predict_sens))
   }
   sp_predictions <- sp_predictions %>% 
+    mutate(cwd_const_sens = cwd_int,
+           pet_const_sens = pet_int,
+           int_const_sens = int_int)
+  
+  sp_predictions <- sp_predictions %>% 
     select(iter_idx, cmip_idx, sensitivity, cwd_const_sens, pet_const_sens, int_const_sens)
   gc(verbose = TRUE)
+  
+
 
   ## Predict future RWI for each of n_mc run
   if (parallel == TRUE){
@@ -237,19 +246,94 @@ calc_rwi_quantiles <- function(spp_code, mc_data, parallel = TRUE){
   }
   sp_predictions <- sp_predictions %>% 
     select(iter_idx, rwi_predictions) %>% 
-    unnest(rwi_predictions)
+    unnest(rwi_predictions) %>% 
+    mutate(rwi_pred_change = rwi_pred_end - rwi_pred_start,
+           rwi_pclim_change = rwi_pclim_end - rwi_pclim_start, 
+           rwi_pred_pclim_change_dif = rwi_pred_change - rwi_pclim_change)
+    
   gc(verbose = TRUE)
   
   
-  ## C
+  ## Calculate aggregate stats by run
+  agg_stats <- sp_predictions %>% 
+    # mutate(change_dif = rwi_pred_change - rwi_pclim_change) %>% 
+    group_by(iter_idx) %>% 
+    summarise(rwi_pred_change = mean(rwi_pred_change),
+              rwi_pclim_change = mean(rwi_pclim_change))
+              # change_dif = mean(change_dif))
   
-  sp_predictions <- sp_predictions %>% 
-    lazy_dt()
-
+  ## Prep historic climate data
+  sp_hist <- (sp_clim %>% 
+                filter(sp_code == spp_code) %>% 
+                pull(clim_historic_sp))[[1]] %>% 
+    rename(cwd_hist = cwd,
+           pet_hist = pet)
+  
+  ## Write out full mc rwi change results for subset of hot cells (pet ~= 1)
+  hot_cells <- sp_hist %>% filter(pet_hist > 0.9, pet_hist < 1.1)
+  hot_cells <- hot_cells %>% 
+    lazy_dt() %>% 
+    left_join(sp_predictions, by = c("x", "y")) %>% 
+    mutate(sp_code = spp_code) %>% 
+    select(sp_code, iter_idx, x, y, cwd_hist, pet_hist, rwi_pred_change) %>% 
+    as.data.frame()
+  hot_cells %>% 
+    write_rds(file = paste0(out_dir, "sp_hot_cells/", spp_code, ".gz"), compress = "gz")
+  
+  # ## Contrast RWI change in wettest and dryest sites (all warm)
+  # pet_range <- sp_hist %>% pull(pet_hist) %>% quantile(c(0.75, 1))
+  # hot_cells <- sp_hist %>% filter(pet_hist > pet_range[1], pet_hist < pet_range[2])
+  # cwd_quantile <- hot_cells %>% pull(cwd_hist) %>% quantile(c(0.1, 0.9))
+  # wet_cells <- hot_cells %>% filter(cwd_hist < cwd_quantile[1]) %>% 
+  #   mutate(wet_dry = "wet")
+  # dry_cells <- hot_cells %>% filter(cwd_hist > cwd_quantile[2]) %>% 
+  #   mutate(wet_dry = "dry")
+  # extreme_cells <- rbind(wet_cells, dry_cells)
+  # 
+  # extreme_cells <- extreme_cells %>% 
+  #   lazy_dt() %>% 
+  #   left_join(sp_predictions, by = c("x", "y")) %>% 
+  #   group_by(iter_idx, wet_dry) %>% 
+  #   summarise(rwi_change = mean(rwi_pred_change)) %>% 
+  #   pivot_wider(names_from = wet_dry, values_from = rwi_change) %>% 
+  #   mutate(wet_dry_dif = wet - dry) %>% 
+  #   as.data.frame()
+  #   
+  # agg_stats <- agg_stats %>%
+  #   left_join(extreme_cells %>% select(iter_idx, wet_dry_dif), by = "iter_idx")
+  
+  
+  # ## Contrast RWI change under two scenarios for PET-centered sites
+  # pet_range = sp_hist$pet_hist %>% quantile(c(0.45, 0.55))
+  # pet_cells <- sp_hist %>% filter(pet_hist > pet_range[1], pet_hist < pet_range[2])
+  # cwd_quantile <- pet_cells %>% pull(cwd_hist) %>% quantile(c(0.1, 0.9))
+  # wet_cells <- pet_cells %>% filter(cwd_hist < cwd_quantile[1]) %>% 
+  #   mutate(wet_dry = "wet")
+  # dry_cells <- pet_cells %>% filter(cwd_hist > cwd_quantile[2]) %>% 
+  #   mutate(wet_dry = "dry")
+  # extreme_cells <- rbind(wet_cells, dry_cells)
+  # 
+  # extreme_cells <- extreme_cells %>% 
+  #   lazy_dt() %>% 
+  #   left_join(sp_predictions, by = c("x", "y")) %>% 
+  #   group_by(iter_idx, wet_dry) %>% 
+  #   summarise(rwi_pred_change = mean(rwi_pred_change),
+  #             rwi_pclim_change = mean(rwi_pclim_change)) %>% 
+  #   pivot_wider(names_from = wet_dry, values_from = c(rwi_pclim_change, rwi_pred_change)) %>% 
+  #   mutate(wet_pred_pclim_dif = rwi_pred_change_wet - rwi_pclim_change_wet,
+  #          dry_pred_pclim_dif = rwi_pred_change_dry - rwi_pclim_change_dry) %>% 
+  #   as.data.frame()
+  # 
+  # agg_stats <- agg_stats %>%
+  #   left_join(extreme_cells %>% select(iter_idx, wet_pred_pclim_dif, dry_pred_pclim_dif),
+  #             by = "iter_idx")
+  
+  
   ## For each species, calculate cell-wise quantiles of variables from n_mc runs
   sp_predictions <- sp_predictions %>% 
-    mutate(rwi_pred_change = rwi_pred_end - rwi_pred_start,
-           rwi_pclim_change = rwi_pclim_end - rwi_pclim_start) %>% 
+    lazy_dt()
+  
+  sp_predictions <- sp_predictions %>% 
     group_by(x, y) %>% 
     summarise(rwi_pred_mean = mean(rwi_pred_end),
               rwi_pred_025 = quantile(rwi_pred_end, 0.025),
@@ -263,6 +347,9 @@ calc_rwi_quantiles <- function(spp_code, mc_data, parallel = TRUE){
               rwi_pclim_change_mean = mean(rwi_pclim_change),
               rwi_pclim_change_025 = quantile(rwi_pclim_change, 0.025),
               rwi_pclim_change_975 = quantile(rwi_pclim_change, 0.975),
+              rwi_pred_pclim_change_dif_mean = mean(rwi_pred_pclim_change_dif),
+              rwi_pred_pclim_change_dif_025 = quantile(rwi_pred_pclim_change_dif, 0.025),
+              rwi_pred_pclim_change_dif_975 = quantile(rwi_pred_pclim_change_dif, 0.975),
               cwd_sens = mean(cwd_sens),
               pet_sens = mean(pet_sens),
               int_sens = mean(intercept),
@@ -274,13 +361,6 @@ calc_rwi_quantiles <- function(spp_code, mc_data, parallel = TRUE){
               .groups = "drop")
 
   ## Add back observed climate data
-  sp_hist <- (sp_clim %>% 
-              filter(sp_code == spp_code) %>% 
-              pull(clim_historic_sp))[[1]] %>% 
-    lazy_dt() %>% 
-    rename(cwd_hist = cwd,
-           pet_hist = pet)
-  
   sp_predictions <- sp_predictions %>% 
     left_join(sp_hist, by = c("x", "y"))
   
@@ -303,10 +383,10 @@ calc_rwi_quantiles <- function(spp_code, mc_data, parallel = TRUE){
   
   ## Write out
   sp_predictions %>% 
-    write_rds(file = paste0(out_dir, spp_code, ".gz"), compress = "gz")
+    write_rds(file = paste0(out_dir, "sp_rwi/", spp_code, ".gz"), compress = "gz")
   
   toc()
-  return("done")
+  return(agg_stats)
 }
 
 
@@ -336,6 +416,18 @@ mc_nests_small <- mc_nests %>%
                                  parallel = TRUE),
                               .f = calc_rwi_quantiles)) 
 
+agg_stats <- mc_nests_small %>% 
+  select(-data) %>% 
+  unnest(predictions) %>% 
+  write_rds(file = paste0(out_dir, "mc_agg_stats.gz"), compress = "gz")
+
+
+test <- agg_stats %>% 
+  group_by(iter_idx) %>% 
+  summarise(rwi_pred_change = mean(rwi_pred_change))
+test %>%
+  pull(rwi_pred_change) %>% 
+  quantile(c(0.025, 0.5, 0.975))
  
 
 
