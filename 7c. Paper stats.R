@@ -171,7 +171,6 @@ ss_df$cwd_const_sens %>%
   quantile(c(0.025, 0.5, 0.975))
 
 
-
 ## The site-level, marginal effect of CWD was significantly (p<0.05) negative for XX percent of sites, while only XX 
 ## percent of sites exhibited a significantly positive relationship. 
 cwd_te_count_neg <- flm_df %>%
@@ -226,7 +225,7 @@ pet_te_count_pos <- flm_df %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # For example, plots sites with a historic, mean CWD exceeding their species’ 
 # average historic CWD value experienced across a species’ range experienced an
-# 3.3+/-3.7XX percent percent decline in growth in years with in response to a
+# 2.1+/-3.1 percent percent decline in growth in years with in response to a
 # one standard deviation increase in CWD (Figure 3, Panel A). 
 mod_df <- trim_df %>% 
   filter(cwd.spstd > 0)
@@ -238,7 +237,7 @@ cwd_high_mod <- feols(estimate_cwd.an ~ 1,
   print()
 
 # In contrast, sites with a lower than average historic CWD (i.e., relatively cooler 
-# and wetter regions of a species’ niche) experienced an 8.9+/-3.9 percent decline 
+# and wetter regions of a species’ niche) experienced an 8.5+/-4.2 percent decline 
 # in growth from a one standard deviation increase in CWD.
 mod_df <- trim_df %>% 
   filter(cwd.spstd < 0)
@@ -289,7 +288,11 @@ cwd_me_df <- cwd_me_df %>%
          cwd_ci_dif2 = cwd_ci_max - cwd_mean) %>% 
   print()
 
-# For example, 
+
+
+# For example, ITRDB sites located below their species’ mean, historic PET 
+# experienced an average 7.2+/-4.9 percent increase in annual growth in response 
+# to a single-year, one standard deviation increase in PET.
 mod_df <- trim_df %>% 
   filter(pet.spstd < 0)
 pet_low_mod <- feols(estimate_pet.an ~ 1,
@@ -299,7 +302,8 @@ pet_low_mod <- feols(estimate_pet.an ~ 1,
   mutate(ci_dif = estimate - conf.low) %>% 
   print()
 
-# For example, 
+# In contrast, increases in PET in sites falling above their species’ historic mean PET 
+# were, on average, not associated with a significant change in growth.
 mod_df <- trim_df %>% 
   filter(pet.spstd > 0)
 pet_low_mod <- feols(estimate_pet.an ~ 1,
@@ -309,18 +313,6 @@ pet_low_mod <- feols(estimate_pet.an ~ 1,
   mutate(ci_dif = estimate - conf.low) %>% 
   print()
 
-
-# at_cwd <- 0
-# init_pull_marg_fx = partial(.f = pull_marg_fx, mod_df = ss_df)
-# cwd_me_df <- tibble(at_pet = c(-2,-1, 0, 1, 2))
-# cwd_me_df <- cwd_me_df %>%
-#   mutate(cwd_me = pmap(list(at_pet = cwd_me_df$at_pet,
-#                             at_cwd = at_cwd),
-#                        .f = init_pull_marg_fx)) %>% 
-#   unnest(cwd_me) %>% 
-#   mutate(cwd_ci_dif = cwd_mean - cwd_ci_min,
-#          cwd_ci_dif2 = cwd_ci_max - cwd_mean) %>% 
-#   print()
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Forecasted changes in CWD and PET across species’ climatic niches  --------------
