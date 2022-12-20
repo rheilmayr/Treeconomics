@@ -291,6 +291,7 @@ run_ss <- function(data, outcome = "cwd_coef"){
   }
   formula <- as.formula(paste(outcome, " ~ cwd.spstd + I(cwd.spstd^2) + pet.spstd + I(pet.spstd^2)"))
   mod <- lm(formula, data=data, weights = error_weights)
+  # mod <- lm(formula, data=data)
   coefs <- mod %>% 
     tidy() %>% 
     pull(estimate) 
@@ -378,8 +379,8 @@ boot_df <- block_draw_df %>%
 
 ## Estimate second stage models
 boot_df <- boot_df %>% 
-  mutate(const_sens = map(.x = data, .f = bs_constant)) %>% 
-  unnest_wider(const_sens) %>% 
+  mutate(const_sens = map(.x = data, .f = bs_constant)) %>%
+  unnest_wider(const_sens) %>%
   mutate(estimates = map(.x = data, .f = bs_ss)) %>% 
   unnest_wider(estimates) %>% 
   select(-data) %>% 
@@ -409,7 +410,7 @@ mod <- feols(estimate_cwd.an ~ cwd.spstd + pet.spstd,
 summary(mod) 
 
 library(marginaleffects)
-mod_df <- trim_df 
+mod_df <- trim_df
 mod_df <- mod_df %>% 
   mutate(int_coef = estimate_intercept,
          pet_coef = estimate_pet.an, 
@@ -422,11 +423,18 @@ summary(mod)
 plot_cap(mod, condition = "pet.spstd") + xlim(-3,3) + ylim(-.2, 0)
 plot_cap(mod, condition = "cwd.spstd") + xlim(-3,3) + ylim(-.2, 0)
 
+newdata <- tibble("cwd.spstd" = 1, 
+                  "pet.spstd" = 0)
+predict(mod, newdata)
 
 
+mod <- feols(estimate_cwd.an ~ 1, 
+             weights = mod_df$cwd_errorweights, data = mod_df)
+mod_df %>% summarise(test = weighted.mean(estimate_cwd.an, cwd_errorweights))
 
-mod <- feols(estimate_pet.an ~ cwd.spstd + cwd.spstd**2 + cwd.spstd**3 + pet.spstd + pet.spstd**2 + pet.spstd**3,
-             weights = trim_df$pet_errorweights, data = trim_df)
+
+mod <- feols(estimate_pet.an ~ cwd.spstd + cwd.spstd**2 + pet.spstd + pet.spstd**2,
+             weights = mod_df$pet_errorweights, data = mod_df)
 summary(mod) 
 plot_cap(mod, condition = "pet.spstd") + xlim(-3,3) + ylim(-.1, .3)
 plot_cap(mod, condition = "cwd.spstd") + xlim(-3,3) + ylim(-.2, .2)
@@ -434,6 +442,38 @@ plot_cap(mod, condition = "cwd.spstd") + xlim(-3,3) + ylim(-.2, .2)
 newdata <- tibble("cwd.spstd" = 0, 
                   "pet.spstd" = 0)
 predict(mod, newdata)
+
+
+
+mod <- feols(estimate_cwd.an ~ cwd.spstd + cwd.spstd**2 + pet.spstd + pet.spstd**2, 
+             data = mod_df)
+summary(mod) 
+plot_cap(mod, condition = "pet.spstd") + xlim(-3,3) + ylim(-.4, .1)
+plot_cap(mod, condition = "cwd.spstd") + xlim(-3,3) + ylim(-.4, .1)
+
+newdata <- tibble("cwd.spstd" = 0, 
+                  "pet.spstd" = 1)
+predict(mod, newdata)
+
+
+mod <- feols(estimate_pet.an ~ cwd.spstd + cwd.spstd**2 + pet.spstd + pet.spstd**2,
+             data = mod_df)
+summary(mod) 
+plot_cap(mod, condition = "pet.spstd") + xlim(-3,3) + ylim(-.4, .5)
+plot_cap(mod, condition = "cwd.spstd") + xlim(-3,3) + ylim(-.4, .5)
+
+newdata <- tibble("cwd.spstd" = -2, 
+                  "pet.spstd" = -2)
+predict(mod, newdata)
+
+
+
+mod <- feols(estimate_intercept ~ cwd.spstd + cwd.spstd**2 + pet.spstd + pet.spstd**2, 
+             weights = mod_df$int_errorweights, data = mod_df)
+summary(mod) 
+plot_cap(mod, condition = "pet.spstd") + xlim(-3,3) + ylim(.6,1.3)
+plot_cap(mod, condition = "cwd.spstd") + xlim(-3,3) + ylim(.6,1.3)
+mod_df %>% summarise(test = weighted.mean(estimate_intercept, int_errorweights))
 
 ## OLD VERSION OF BOOTSTRAPPING USING BOOT PACKAGE
 # mod_df <- trim_df %>% filter(genus == "Araucaria")
