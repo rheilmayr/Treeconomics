@@ -382,7 +382,7 @@ hex
 
   
 hex2 <- ggMarginal(hex, type="histogram", fill ="#404788FF", alpha=.5)
-hex2
+hex2 <- hex2 %>% as.ggplot()
 
 figs1 <- map/range_map
 figs1+
@@ -427,11 +427,12 @@ hypfig <- ggplot(newdat, aes(x=cwd,y=value, color=hyp))+
   annotate("text", x = 2, y = -2.4, angle =-50, 
            size=7, label = "H1: Range-edge", family ="Helvetica")+
   #xlab("Climate water deficit (mm/H20)")+
-  labs(y="RWI sensitivity",x=expression(Climate~water~deficit~(mm/H[2]*O)))
+  labs(y="Marginal effect of CWD on RWI",x=expression(Climate~water~deficit~(mm/H[2]*O)))
 
 hypfig
 
-map/range_map|hex2+hypfig
+f1 <- (map/range_map) | hex2 + hypfig
+ggsave(paste0(wdir, 'figures\\1_data_and_hypoth.svg'), plot = f1, width = 8, height = 5)
 
 
 # figs1
@@ -716,6 +717,8 @@ pet_dynamic = pet_plot +
 
 first_stage_effects <- (cwd_est_plot / pet_est_plot) | (cwd_dynamic / pet_dynamic)
 first_stage_effects
+ggsave(paste0(wdir, 'figures\\a2_first_stage_effects.svg'), plot = first_stage_effects,
+       width = 15, height = 8, units = "in")
 
 # plot_dnlm <- function(crosspredictions){
 #   nlags = 15
@@ -745,7 +748,6 @@ first_stage_effects
 
 
 
-#ggsave(paste0(wdir, 'figures\\a2_first_stage_effects.svg'), plot = first_stage_effects)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1617,21 +1619,8 @@ ranges_dissolve <- st_read(paste0(wdir,"in/species_ranges/merged_ranges_dissolve
 
 #clip raster to species range
 cwd_cmip_change=raster::mask(cwd_cmip_change, ranges_dissolve)
-# cwd_cmip_pchange=raster::mask(cwd_cmip_pchange, ranges_dissolve)
-
 
 data(World)
-
-# tmap_mode("plot")
-# 
-# bbox_new <- c(-180, -60, 180, 80)
-# 
-# cwd_map <- tm_shape(World, bbox = bbox_new) +
-#   tm_fill() +
-#   tm_shape(cwd_cmip_change) +
-#   tm_raster(title = "Change in CWD\n1970-2000 to 2091-2100\n(mm per year)", palette = "viridis", n = 10) +
-#   tm_layout(legend.outside = TRUE)
-
 
 
 cwd_cmip_df <- as.data.frame(cwd_cmip_change, xy = TRUE)
@@ -1662,6 +1651,244 @@ cwd_map
   
   
 
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Species-level changes in CWD  ------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+gen_dat <- read_csv(paste0(wdir, "out/species_gen_gr.csv")) %>% 
+  rename(sp_code = "species_id")
+
+sp_predictions_gen <- sp_predictions %>% 
+  left_join(gen_dat)
+
+sp_plot_dat <- sp_predictions_gen %>% 
+  group_by(sp_code) %>% 
+  mutate(beyond_max_cwd = cwd_cmip_end_mean > max(cwd_hist)) %>% 
+  ungroup() %>% 
+  mutate(cwd_end_bin = case_when(
+    (beyond_max_cwd == TRUE) ~ "Beyond prior max",
+    (cwd_cmip_end_mean > 1.5) ~ "1-2 s.d. above prior mean",
+    (cwd_cmip_end_mean >= 0) ~ "0-1 s.d. above prior mean",
+    (cwd_cmip_end_mean < 0) ~ "Below prior mean"),
+    cwd_end_bin = fct_relevel(cwd_end_bin, 
+                              "Beyond prior max", "1-2 s.d. above prior mean", 
+                              "0-1 s.d. above prior mean", 
+                              "Below prior mean"))
+
+bin_shares <- sp_plot_dat %>% # Add grouping by genera? 
+  group_by(genus, cwd_end_bin) %>% 
+  summarise(n = n()) %>% 
+  group_by(genus) %>% 
+  mutate(prop_cwd_bin = prop.table(n)) %>% 
+  filter(cwd_end_bin == "Beyond prior max") %>% 
+  arrange(prop_cwd_bin) %>% 
+  select(genus, prop_cwd_bin)
+
+sp_plot_dat <- sp_plot_dat %>% 
+  left_join(bin_shares, by = "genus") %>% 
+  mutate(genus = factor(genus))
+
+sp_plot_dat$genus <- fct_reorder(sp_plot_dat$genus, sp_plot_dat$prop_cwd_bin, median) ## Probably want to define order based on multiple categories to make smoother plot
+
+
+theme_set(
+  theme_bw(base_size = 12)+
+    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+)
+
+
+genus_cwd_change <- sp_plot_dat %>%
+  ggplot(aes(x= genus, fill=cwd_end_bin)) +
+  geom_bar(position = "fill", alpha=.9) +
+  scale_fill_viridis_d(direction = -1) + # Use diverging color scheme? 
+  ylab("Proportion of range")+
+  xlab("Genera")+
+  guides(fill=guide_legend("Change in CWD"))+
+  theme(axis.text.x = element_text(angle = 75, vjust = 1, hjust=1))
+
+genus_cwd_change
+
+cwd_change <- sp_plot_dat %>% 
+  ggplot(aes(x = cwd_cmip_start_mean, y = cwd_cmip_end_mean)) +
+  geom_hex(bins = 60) +
+  scale_fill_viridis(limits = c(0,5000), option = "magma") +
+  geom_abline(intercept = 0, slope = 1) +
+  coord_fixed() +
+  xlim(-5, 20) +
+  ylim(-5, 20) +
+  xlab("Mean CWD in 1970-2000\n(Deviation from species mean)") +
+  ylab("Mean CWD in 2091-2100\n(Deviation from species mean)") +
+  labs(fill = "Count of\ngrid cells") +
+  theme_bw(base_size = 12)
+
+pet_change <- sp_plot_dat %>% 
+  ggplot(aes(x = pet_cmip_start_mean, y = pet_cmip_end_mean)) +
+  geom_hex(bins = 60) +
+  scale_fill_viridis(limits = c(0,5000), option = "magma") +
+  geom_abline(intercept = 0, slope = 1) +
+  coord_fixed() +
+  xlim(-5, 18) +
+  ylim(-5, 18) +
+  xlab("Mean PET in 1970-2000\n(Deviation from species mean)") +
+  ylab("Mean PET in 2091-2100\n(Deviation from species mean)") +
+  labs(fill = "Count of\ngrid cells") +
+  theme_bw(base_size = 12)
+# +
+#   theme(legend.position = c(.9,.2),
+#         legend.background = element_blank())
+
+change_plot <- (cwd_change | pet_change) + 
+  plot_layout(guides = "collect")
+change_plot
+
+cwd_change_fig <- cwd_map / change_plot / genus_cwd_change +
+  plot_layout(heights = c(1.4, 1.7, 1))
+
+ggsave(paste0(wdir, "figures\\", "3_cwd_change.svg"), cwd_change_fig, width = 7.5, height = 11)
+
+cwd_change_fig
+
+
+rwi_change <- sp_plot_dat %>% 
+  filter(pet_hist > 1 & pet_hist < 1.5) %>% 
+  ggplot(aes(x = cwd_hist, y = rwi_pred_change_mean)) +
+  geom_hex(bins = 30) +
+  scale_fill_viridis() +
+  xlab("Mean CWD in 1970-2000\n(Deviation from species mean)") +
+  ylab("RWI") +
+  xlim(c(-2,3)) +
+  labs(fill = "Count of\ngrid cells") +
+  theme_bw(base_size = 12)
+rwi_change
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Species-level changes in RWI  ------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+sp_plot_dat <- sp_plot_dat %>% 
+  mutate(rwi_change_bin = case_when(
+    (rwi_pred_change_mean < -.5) ~ "1. RWI decline > 0.5",
+    (rwi_pred_change_mean < -0.25) ~ "2. RWI decline between 0.25 and .5",
+    (rwi_pred_change_mean < 0) ~ "3. RWI decline between 0 and 0.25",
+    (rwi_pred_change_mean >= 0) ~ "4. RWI increase",
+  ))
+sp_plot_dat %>% 
+  ggplot(aes(x = sp_code, fill = rwi_change_bin)) +
+  geom_bar(position = "fill")
+
+
+# transect_dat <- plot_dat %>% 
+#   select(cwd.q, pet.q, rwi_change, rwi_change_psens, rwi_change_pclim) %>% 
+#   pivot_longer(c(rwi_change, rwi_change_psens, rwi_change_pclim), names_to = 'scenario', values_to = "rwi_change") %>% 
+#   mutate(scenario = fct_relevel(scenario, "rwi_change", "rwi_change_psens", "rwi_change_pclim"))
+# 
+# transect_1 <- transect_dat %>% 
+#   filter(pet.q == 1) %>% 
+#   ggplot(aes(x = cwd.q, y = rwi_change, group = scenario, color = scenario)) +
+#   geom_line(size = 2) +
+#   theme_bw(base_size = 20)+
+#   ylim(c(-0.6, 0.2)) +
+#   xlim(c(-2, 2)) +
+#   scale_linetype_manual(values=c("solid", "dotted", "dotted")) +
+#   scale_color_manual(name = "Scenario",
+#                      labels = c("Full model", 
+#                                 "Constant shift in climate,\nvariable sensitivity",
+#                                 "Variable shift in climate,\nconstant sensitivity"), 
+#                      values = c("dark blue", "dark red", "dark green")) +
+#   ggtitle("Historic PET = 1 std above mean") +
+#   ylab("Predicted change in RWI") +
+#   xlab("Historic CWD (Deviation from species mean)") +
+#   theme(legend.position = c(.18,.75),
+#         legend.text = element_text(size=13),
+#         legend.title = element_text(size=18),
+#         legend.background = element_blank()) +
+#   geom_hline(yintercept = 0, linetype = "dashed", size = 1)
+# 
+# 
+# transect_2 <- transect_dat %>% 
+#   filter(pet.q == -1) %>% 
+#   ggplot(aes(x = cwd.q, y = rwi_change, group = scenario, color = scenario)) +
+#   geom_line(size = 2) +
+#   theme_bw(base_size = 20)+
+#   ylim(c(-0.4, 0.4)) +
+#   xlim(c(-2, 2)) +
+#   scale_linetype_manual(values=c("solid", "dotted", "dotted"))+
+#   scale_color_manual(name = "Scenario",
+#                      labels = c("Full model", 
+#                                 "Constant shift in climate,\nvariable sensitivity",
+#                                 "Variable shift in climate,\nconstant sensitivity"), 
+#                      values = c("dark blue", "dark red", "dark green")) +
+#   ggtitle("Historic PET = 1 std below mean") +
+#   ylab("Predicted change in RWI") +
+#   xlab("Historic CWD (Deviation from species mean)") +
+#   theme(legend.position = c(.18,.75),
+#       legend.text = element_text(size=13),
+#       legend.title = element_text(size=18),
+#       legend.background = element_blank()) +
+#   geom_hline(yintercept = 0, linetype = "dashed", size = 1)
+# 
+# 
+# locator <- rwi_bin + 
+#   theme_bw(base_size = 20)+
+#   theme(legend.position = c(.18,.83),
+#         legend.text = element_text(size=13),
+#         legend.title = element_text(size=18),
+#         legend.background = element_blank())+
+#   geom_hline(yintercept = 1, size = 1) + 
+#   geom_hline(yintercept = -1, size = 1)
+# 
+# locator | transect_1 / transect_2
+
+
+
+
+# 
+# lgd_pos <- c(.2, .8)
+# cwd_sens_bin <- cwd_sens_bin +
+#   theme(
+#     legend.position = c(lgd_pos),
+#     legend.key = element_blank(),
+#     legend.background = element_blank(),
+#     plot.margin = margin(t=0, r=0, b=0, l=0, "cm"))
+# ggsave(paste0(wdir, "figures\\", "pres_cwd_sens.svg"), cwd_sens_bin, width = 9, height = 9)
+# 
+# pet_sens_bin <- pet_sens_bin +
+#   theme(
+#     plot.margin = margin(t=0, r=0, b=0, l=0, "cm"),
+#     legend.position = c(lgd_pos),
+#     legend.key = element_blank(),
+#     legend.background = element_blank(),
+#     axis.text.y = element_blank(),
+#     axis.title.y = element_blank(),
+#     axis.ticks.y = element_blank())
+# ggsave(paste0(wdir, "figures\\", "pres_pet_sens.svg"), pet_sens_bin, width = 9, height = 9)
+# 
+
+# cwd_change_bin <- cwd_change_bin +
+#   theme(
+#     legend.position = c(lgd_pos),
+#     legend.key = element_blank(),
+#     legend.background = element_blank(),
+#     plot.margin = margin(t=0, r=0, b=0, l=0, "cm"))
+# cwd_change_bin
+# ggsave(paste0(wdir, "figures\\", "pres_cwd_change.svg"), cwd_change_bin, width = 9, height = 9)
+
+# pet_change_bin <- pet_change_bin + 
+#   theme(
+#     legend.position = c(lgd_pos),
+#     legend.key = element_blank(),
+#     legend.background = element_blank(),
+#     plot.margin = margin(t=0, r=0, b=0, l=0, "cm"),
+#     axis.text.y = element_blank(),
+#     axis.title.y = element_blank(),
+#     axis.ticks.y = element_blank())
+# pet_change_bin
+# ggsave(paste0(wdir, "figures\\", "pres_pet_change.svg"), pet_change_bin, width = 9, height = 9)
+# 
+# change_plot <- cwd_change_bin / pet_change_bin
+# ggsave(paste0(wdir, "figures\\", "pred_full_b.svg"), change_plot, width = 9, height = 15)
+# 
+# 
 
 
 # test +
@@ -1853,241 +2080,3 @@ cwd_map
 # 
 # x11()
 # a/e
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Species-level changes in CWD  ------------------------------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-gen_dat <- read_csv(paste0(wdir, "out/species_gen_gr.csv")) %>% 
-  rename(sp_code = "species_id")
-
-sp_predictions_gen <- sp_predictions %>% 
-  left_join(gen_dat)
-
-sp_plot_dat <- sp_predictions_gen %>% 
-  group_by(sp_code) %>% 
-  mutate(beyond_max_cwd = cwd_cmip_end_mean > max(cwd_hist)) %>% 
-  ungroup() %>% 
-  mutate(cwd_end_bin = case_when(
-    (beyond_max_cwd == TRUE) ~ "Beyond prior max",
-    (cwd_cmip_end_mean > 1.5) ~ "1-2 s.d. above prior mean",
-    (cwd_cmip_end_mean >= 0) ~ "0-1 s.d. above prior mean",
-    (cwd_cmip_end_mean < 0) ~ "Below prior mean"),
-    cwd_end_bin = fct_relevel(cwd_end_bin, 
-                              "Beyond prior max", "1-2 s.d. above prior mean", 
-                              "0-1 s.d. above prior mean", 
-                              "Below prior mean"))
-
-bin_shares <- sp_plot_dat %>% # Add grouping by genera? 
-  group_by(genus, cwd_end_bin) %>% 
-  summarise(n = n()) %>% 
-  group_by(genus) %>% 
-  mutate(prop_cwd_bin = prop.table(n)) %>% 
-  filter(cwd_end_bin == "Beyond prior max") %>% 
-  arrange(prop_cwd_bin) %>% 
-  select(genus, prop_cwd_bin)
-
-sp_plot_dat <- sp_plot_dat %>% 
-  left_join(bin_shares, by = "genus") %>% 
-  mutate(genus = factor(genus))
-
-sp_plot_dat$genus <- fct_reorder(sp_plot_dat$genus, sp_plot_dat$prop_cwd_bin, median) ## Probably want to define order based on multiple categories to make smoother plot
-
-
-theme_set(
-  theme_bw(base_size = 12)+
-    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
-)
-
-
-genus_cwd_change <- sp_plot_dat %>%
-  ggplot(aes(x= genus, fill=cwd_end_bin)) +
-  geom_bar(position = "fill", alpha=.9) +
-  scale_fill_viridis_d(direction = -1) + # Use diverging color scheme? 
-  ylab("Proportion of range")+
-  xlab("Genera")+
-  guides(fill=guide_legend("Change in CWD"))+
-  theme(axis.text.x = element_text(angle = 75, vjust = 1, hjust=1))
-
-genus_cwd_change
-
-cwd_change <- sp_plot_dat %>% 
-  ggplot(aes(x = cwd_cmip_start_mean, y = cwd_cmip_end_mean)) +
-  geom_hex(bins = 60) +
-  scale_fill_viridis(limits = c(0,5000), option = "magma") +
-  geom_abline(intercept = 0, slope = 1) +
-  coord_fixed() +
-  xlim(-5, 20) +
-  ylim(-5, 20) +
-  xlab("Mean CWD in 1970-2000\n(Deviation from species mean)") +
-  ylab("Mean CWD in 2091-2100\n(Deviation from species mean)") +
-  labs(fill = "Count of\ngrid cells") +
-  theme_bw(base_size = 12)
-
-pet_change <- sp_plot_dat %>% 
-  ggplot(aes(x = pet_cmip_start_mean, y = pet_cmip_end_mean)) +
-  geom_hex(bins = 60) +
-  scale_fill_viridis(limits = c(0,5000), option = "magma") +
-  geom_abline(intercept = 0, slope = 1) +
-  coord_fixed() +
-  xlim(-5, 18) +
-  ylim(-5, 18) +
-  xlab("Mean PET in 1970-2000\n(Deviation from species mean)") +
-  ylab("Mean PET in 2091-2100\n(Deviation from species mean)") +
-  labs(fill = "Count of\ngrid cells") +
-  theme_bw(base_size = 12)
-# +
-#   theme(legend.position = c(.9,.2),
-#         legend.background = element_blank())
-
-change_plot <- (cwd_change | pet_change) + 
-  plot_layout(guides = "collect")
-change_plot
-
-cwd_change_fig <- cwd_map / change_plot / genus_cwd_change +
-  plot_layout(heights = c(1.4, 1.7, 1))
-
-ggsave(paste0(wdir, "figures\\", "f3_cwd_change.svg"), cwd_change_fig, width = 7.5, height = 11)
-
-cwd_change_fig
-
-
-rwi_change <- sp_plot_dat %>% 
-  filter(pet_hist > 1 & pet_hist < 1.5) %>% 
-  ggplot(aes(x = cwd_hist, y = rwi_pred_change_mean)) +
-  geom_hex(bins = 30) +
-  scale_fill_viridis() +
-  xlab("Mean CWD in 1970-2000\n(Deviation from species mean)") +
-  ylab("RWI") +
-  xlim(c(-2,3)) +
-  labs(fill = "Count of\ngrid cells") +
-  theme_bw(base_size = 12)
-rwi_change
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Species-level changes in RWI  ------------------------------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-sp_plot_dat <- sp_plot_dat %>% 
-  mutate(rwi_change_bin = case_when(
-    (rwi_pred_change_mean < -.5) ~ "1. RWI decline > 0.5",
-    (rwi_pred_change_mean < -0.25) ~ "2. RWI decline between 0.25 and .5",
-    (rwi_pred_change_mean < 0) ~ "3. RWI decline between 0 and 0.25",
-    (rwi_pred_change_mean >= 0) ~ "4. RWI increase",
-  ))
-sp_plot_dat %>% 
-  ggplot(aes(x = sp_code, fill = rwi_change_bin)) +
-  geom_bar(position = "fill")
-
-
-# transect_dat <- plot_dat %>% 
-#   select(cwd.q, pet.q, rwi_change, rwi_change_psens, rwi_change_pclim) %>% 
-#   pivot_longer(c(rwi_change, rwi_change_psens, rwi_change_pclim), names_to = 'scenario', values_to = "rwi_change") %>% 
-#   mutate(scenario = fct_relevel(scenario, "rwi_change", "rwi_change_psens", "rwi_change_pclim"))
-# 
-# transect_1 <- transect_dat %>% 
-#   filter(pet.q == 1) %>% 
-#   ggplot(aes(x = cwd.q, y = rwi_change, group = scenario, color = scenario)) +
-#   geom_line(size = 2) +
-#   theme_bw(base_size = 20)+
-#   ylim(c(-0.6, 0.2)) +
-#   xlim(c(-2, 2)) +
-#   scale_linetype_manual(values=c("solid", "dotted", "dotted")) +
-#   scale_color_manual(name = "Scenario",
-#                      labels = c("Full model", 
-#                                 "Constant shift in climate,\nvariable sensitivity",
-#                                 "Variable shift in climate,\nconstant sensitivity"), 
-#                      values = c("dark blue", "dark red", "dark green")) +
-#   ggtitle("Historic PET = 1 std above mean") +
-#   ylab("Predicted change in RWI") +
-#   xlab("Historic CWD (Deviation from species mean)") +
-#   theme(legend.position = c(.18,.75),
-#         legend.text = element_text(size=13),
-#         legend.title = element_text(size=18),
-#         legend.background = element_blank()) +
-#   geom_hline(yintercept = 0, linetype = "dashed", size = 1)
-# 
-# 
-# transect_2 <- transect_dat %>% 
-#   filter(pet.q == -1) %>% 
-#   ggplot(aes(x = cwd.q, y = rwi_change, group = scenario, color = scenario)) +
-#   geom_line(size = 2) +
-#   theme_bw(base_size = 20)+
-#   ylim(c(-0.4, 0.4)) +
-#   xlim(c(-2, 2)) +
-#   scale_linetype_manual(values=c("solid", "dotted", "dotted"))+
-#   scale_color_manual(name = "Scenario",
-#                      labels = c("Full model", 
-#                                 "Constant shift in climate,\nvariable sensitivity",
-#                                 "Variable shift in climate,\nconstant sensitivity"), 
-#                      values = c("dark blue", "dark red", "dark green")) +
-#   ggtitle("Historic PET = 1 std below mean") +
-#   ylab("Predicted change in RWI") +
-#   xlab("Historic CWD (Deviation from species mean)") +
-#   theme(legend.position = c(.18,.75),
-#       legend.text = element_text(size=13),
-#       legend.title = element_text(size=18),
-#       legend.background = element_blank()) +
-#   geom_hline(yintercept = 0, linetype = "dashed", size = 1)
-# 
-# 
-# locator <- rwi_bin + 
-#   theme_bw(base_size = 20)+
-#   theme(legend.position = c(.18,.83),
-#         legend.text = element_text(size=13),
-#         legend.title = element_text(size=18),
-#         legend.background = element_blank())+
-#   geom_hline(yintercept = 1, size = 1) + 
-#   geom_hline(yintercept = -1, size = 1)
-# 
-# locator | transect_1 / transect_2
-
-
-
-
-# 
-# lgd_pos <- c(.2, .8)
-# cwd_sens_bin <- cwd_sens_bin +
-#   theme(
-#     legend.position = c(lgd_pos),
-#     legend.key = element_blank(),
-#     legend.background = element_blank(),
-#     plot.margin = margin(t=0, r=0, b=0, l=0, "cm"))
-# ggsave(paste0(wdir, "figures\\", "pres_cwd_sens.svg"), cwd_sens_bin, width = 9, height = 9)
-# 
-# pet_sens_bin <- pet_sens_bin +
-#   theme(
-#     plot.margin = margin(t=0, r=0, b=0, l=0, "cm"),
-#     legend.position = c(lgd_pos),
-#     legend.key = element_blank(),
-#     legend.background = element_blank(),
-#     axis.text.y = element_blank(),
-#     axis.title.y = element_blank(),
-#     axis.ticks.y = element_blank())
-# ggsave(paste0(wdir, "figures\\", "pres_pet_sens.svg"), pet_sens_bin, width = 9, height = 9)
-# 
-
-# cwd_change_bin <- cwd_change_bin +
-#   theme(
-#     legend.position = c(lgd_pos),
-#     legend.key = element_blank(),
-#     legend.background = element_blank(),
-#     plot.margin = margin(t=0, r=0, b=0, l=0, "cm"))
-# cwd_change_bin
-# ggsave(paste0(wdir, "figures\\", "pres_cwd_change.svg"), cwd_change_bin, width = 9, height = 9)
-
-# pet_change_bin <- pet_change_bin + 
-#   theme(
-#     legend.position = c(lgd_pos),
-#     legend.key = element_blank(),
-#     legend.background = element_blank(),
-#     plot.margin = margin(t=0, r=0, b=0, l=0, "cm"),
-#     axis.text.y = element_blank(),
-#     axis.title.y = element_blank(),
-#     axis.ticks.y = element_blank())
-# pet_change_bin
-# ggsave(paste0(wdir, "figures\\", "pres_pet_change.svg"), pet_change_bin, width = 9, height = 9)
-# 
-# change_plot <- cwd_change_bin / pet_change_bin
-# ggsave(paste0(wdir, "figures\\", "pred_full_b.svg"), change_plot, width = 9, height = 15)
-# 
-# 
-
