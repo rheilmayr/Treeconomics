@@ -59,6 +59,7 @@ site_smry <- site_smry %>%
 
 # 5. Prediction rasters
 rwi_list <- list.files(paste0(wdir, "out/predictions/sp_rwi_pred_10000/"), pattern = ".gz", full.names = TRUE)
+rwi_list <- rwi_list[-45]
 sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
 
 # 6. Dendro examples - note: currently just exporting two pipo sites in first stage script
@@ -311,7 +312,7 @@ partial_plot
 combined_plot <- (map_ex | both_fig) / (sens_niche | partial_plot)+ plot_layout(widths = c(1,4))
 combined_plot
 combined_plot <- (map_ex | high_ex / low_ex) / (sens_niche | partial_plot)
-ggsave(paste0(wdir, "figures\\", "sp_example.svg"), combined_plot, width = 15, height = 12)
+ggsave(paste0(wdir, "figures\\", "5_sp_example.svg"), combined_plot, width = 15, height = 12)
 
 #===============================================================================
 # 5) Predictions  ---------
