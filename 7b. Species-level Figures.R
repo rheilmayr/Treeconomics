@@ -368,6 +368,30 @@ cwd_map <- ggplot() +
   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
 cwd_map
 
+## Interactive map
+library(tmap)
+tmap_mode("view")
+cmip_end <- load(paste0(wdir, 'in\\CMIP5 CWD\\cmip5_cwdaet_end.Rdat'))
+cwd_cmip_end <- cwd_raster
+crs_template <- crs(cwd_cmip_end)
+cwd_df <- spp_predictions %>% 
+  drop_na() %>% 
+  select(x, y, cwd_hist)
+raster_template <- cwd_df %>% select(x,y)
+cwd_df <- cwd_df %>%
+  drop_na()
+cwd_df2 <- raster_template %>%
+  left_join(cwd_df, by = c("x", "y"))
+cwd_rast2 <- rasterFromXYZ(cwd_df2, crs = crs_template)
+tm_shape(cwd_rast2) +
+  tm_raster() +
+  tm_facets(as.layers = TRUE)
+
+tm_shape(cwd_raster$layer.1.1.1) +
+  tm_raster() +
+  tm_facets(as.layers = TRUE)
+
+
 ### Map of historic PET
 pet_map <- ggplot() +
   geom_sf(data = world) +
