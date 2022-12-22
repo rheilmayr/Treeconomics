@@ -1330,6 +1330,9 @@ plot_dat <- plot_dat %>%
             pet_sens = mean(pet_sens, na.rm = TRUE),
             cwd_change = mean(cwd_change, na.rm = TRUE),
             pet_change = mean(pet_change, na.rm = TRUE),
+            rwi_dif = mean(rwi_pred_pclim_change_dif_mean, na.rm = TRUE),
+            rwi_dif_ub = mean(rwi_pred_pclim_change_dif_025, na.rm = TRUE),
+            rwi_dif_lb = mean(rwi_pred_pclim_change_dif_975, na.rm = TRUE),
             n = n()) %>%
   filter(n>5)
 
@@ -1599,6 +1602,7 @@ transect_2
 locator | transect_1 / transect_2
 
 
+
 plot_dat %>% 
   filter(pet.q == 0) %>% 
   ggplot(aes(x = cwd.q, y = cwd_change)) +
@@ -1608,6 +1612,84 @@ plot_dat %>%
   #             alpha = 0.2) +
   geom_line(size = 2) +
   theme_bw(base_size = 20)
+
+
+## Alternate version that plots difference in two models
+transect_n1 <- plot_dat %>% 
+  filter(pet.q == -1) %>%
+  group_by(cwd.q) %>% 
+  summarise(rwi_change = mean(rwi_dif),
+            rwi_change_lb = mean(rwi_dif_lb),
+            rwi_change_ub = mean(rwi_dif_ub)) %>% 
+  ggplot(aes(x = cwd.q, y = rwi_change)) +
+  geom_ribbon(aes(ymin = rwi_change_lb,
+                  ymax = rwi_change_ub),
+              alpha = 0.2) +
+  geom_line(size = 2) +
+  theme_bw(base_size = 20)+
+  ylim(c(-0.4, 0.3)) +
+  xlim(c(-2, 2)) +
+  ggtitle("Historic PET = 1 std below mean") +
+  # ylab("Predicted difference in RWI change - neutral model vs ourse") +
+  xlab("Historic CWD (Deviation from species mean)") +
+  theme(legend.position = c(.18,.75),
+        legend.text = element_text(size=13),
+        legend.title = element_text(size=18),
+        legend.background = element_blank()) +
+  geom_hline(yintercept = 0, linetype = "dashed", size = 1)
+transect_n1
+
+
+transect_0 <- plot_dat %>% 
+  filter(pet.q == 0) %>%
+  group_by(cwd.q) %>% 
+  summarise(rwi_change = mean(rwi_dif),
+            rwi_change_lb = mean(rwi_dif_lb),
+            rwi_change_ub = mean(rwi_dif_ub)) %>% 
+  ggplot(aes(x = cwd.q, y = rwi_change)) +
+  geom_ribbon(aes(ymin = rwi_change_lb,
+                  ymax = rwi_change_ub),
+              alpha = 0.2) +
+  geom_line(size = 2) +
+  theme_bw(base_size = 20)+
+  ylim(c(-0.4, 0.3)) +
+  xlim(c(-2, 2)) +
+  ggtitle("Historic PET = historic species mean") +
+  # ylab("Predicted difference in RWI change - neutral model vs ourse") +
+  xlab("Historic CWD (Deviation from species mean)") +
+  theme(legend.position = c(.18,.75),
+        legend.text = element_text(size=13),
+        legend.title = element_text(size=18),
+        legend.background = element_blank()) +
+  geom_hline(yintercept = 0, linetype = "dashed", size = 1)
+transect_0
+
+transect_1 <- plot_dat %>% 
+  filter(pet.q == 1) %>%
+  group_by(cwd.q) %>% 
+  summarise(rwi_change = mean(rwi_dif),
+            rwi_change_lb = mean(rwi_dif_lb),
+            rwi_change_ub = mean(rwi_dif_ub)) %>% 
+  ggplot(aes(x = cwd.q, y = rwi_change)) +
+  geom_ribbon(aes(ymin = rwi_change_lb,
+                  ymax = rwi_change_ub),
+              alpha = 0.2) +
+  geom_line(size = 2) +
+  theme_bw(base_size = 20)+
+  ylim(c(-0.4, 0.3)) +
+  xlim(c(-2, 2)) +
+  ggtitle("Historic PET = 1 std above mean") +
+  # ylab("Predicted difference in RWI change - neutral model vs ours") +
+  xlab("Historic CWD (Deviation from species mean)") +
+  theme(legend.position = c(.18,.75),
+        legend.text = element_text(size=13),
+        legend.title = element_text(size=18),
+        legend.background = element_blank()) +
+  geom_hline(yintercept = 0, linetype = "dashed", size = 1)
+transect_1
+
+plot <- transect_1 / transect_0 / transect_n1
+plot
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Changes in CWD and PET  ------------------------------------
