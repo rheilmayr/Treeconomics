@@ -58,8 +58,7 @@ site_smry <- site_smry %>%
   left_join(sp_info, by = c("species_id"))
 
 # 5. Prediction rasters
-rwi_list <- list.files(paste0(wdir, "out/predictions/sp_rwi_pred_10000/"), pattern = ".gz", full.names = TRUE)
-rwi_list <- rwi_list[-45]
+rwi_list <- list.files(paste0(wdir, "out/predictions/pred_10000/sp_rwi/"), pattern = ".gz", full.names = TRUE)
 sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
 
 # 6. Dendro examples - note: currently just exporting two pipo sites in first stage script

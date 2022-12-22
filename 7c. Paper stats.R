@@ -76,10 +76,13 @@ trim_df <- flm_df %>%
   drop_na()
 
 # 5. Prediction rasters
-rwi_list <- list.files(paste0(wdir, "out/predictions/sp_rwi_pred_10000/"), pattern = ".gz", full.names = TRUE)
-rwi_list <- rwi_list[-45]
+rwi_list <- list.files(paste0(wdir, "out/predictions/pred_10000/sp_rwi/"), pattern = ".gz", full.names = TRUE)
 sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
 # sp_predictions <- readRDS(paste0(wdir, "out/predictions/sp_predictions.rds"))
+
+hot_cell_list <- list.files(paste0(wdir, "out/predictions/pred_10000/sp_hot_cells/"), pattern = ".gz", full.names = TRUE)
+hot_cells <- do.call('rbind', lapply(rwi_list, readRDS))
+
 
 
 # 6. Second stage model

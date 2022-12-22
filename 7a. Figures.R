@@ -102,10 +102,8 @@ dnlm_results <- read_rds(paste0(wdir, "out/first_stage/dnlm_lagged_effects"))
 # dnlm_results <- read_rds(paste0(wdir, "out/first_stage/dnlm_orig")) # Something has changed - old version creates positive pet effect, but gone after july tweaks to data...
 
 # 5. Prediction rasters
-rwi_list <- list.files(paste0(wdir, "out/predictions/sp_rwi_pred_10000/"), pattern = ".gz", full.names = TRUE)
-rwi_list <- rwi_list[-45]
+rwi_list <- list.files(paste0(wdir, "out/predictions/pred_10000/sp_rwi/"), pattern = ".gz", full.names = TRUE)
 sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
-# sp_predictions <- readRDS(paste0(wdir, "out/predictions/sp_predictions.rds"))
 
 ## 6. Second stage model
 mod_df <- read_rds(paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
