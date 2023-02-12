@@ -353,6 +353,7 @@ pivot_rw <- function(rw, ids){
 }
 
 clean_data$rwl_long <- map2(clean_data$rwl, clean_data$ids, pivot_rw)
+clean_data$rwi_long <- map2(clean_data$rwi, clean_data$ids, pivot_rw)
 clean_data <- clean_data %>% 
   select(collection_id, rwi_long, rwl_long) %>% 
   unnest(c(rwi_long, rwl_long), names_sep = '_') %>% 
@@ -386,8 +387,7 @@ data_smry <- clean_data %>%
   group_by(collection_id) %>% 
   summarise(obs_start_year = min(year),
             obs_end_year = max(year),
-            n_trees = n_distinct(tree),
-            )
+            n_trees = n_distinct(tree))
 
 site_smry <- site_smry %>% 
   left_join(data_smry, by = "collection_id")
@@ -447,7 +447,7 @@ test_that("Core ids have been assigned",{
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 write_csv(export_data, paste0(out_dir, "rwi_long.csv"))
 
-write_csv(site_summary, paste0(out_dir, "site_summary.csv"))
+write_csv(site_smry, paste0(out_dir, "site_summary.csv"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
