@@ -135,13 +135,6 @@ sum_sites <- early_sites[which(early_sites %in% late_sites)]
 keep_sites <- c(total_sites, sum_sites)
 
 
-site_summary <- site_data %>% 
-  select(collection_id, site_name, location, latitude, longitude, elevation, start_year, end_year, time_unit, sp_id, sp_scient, sp_common) %>% 
-  distinct() %>% 
-  filter(collection_id %in% keep_sites)
-write_csv(site_summary, paste0(out_dir, "site_summary.csv"))
-
-
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Process total rwl files --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -246,8 +239,7 @@ rwl_data <- rwl_data %>%
   mutate(ids = map(rwl_data$rwl, read_ids))
 rwl_data <-rwl_data %>% unnest(ids)
 rwl_results <- separate_errors(rwl_data)
-clean_data <- rwl_results$clean_data
-
+rwl_clean_data <- rwl_results$clean_data
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Process earlywood/latewood files ---------------------------------------
@@ -315,7 +307,8 @@ s_clean_data <- s_clean_data %>%
   filter(map_lgl(error, is.na)) %>% #currently all files are merging correctly
   select(collection_id, file, rwl, ids)
 
-clean_data <- rbind(clean_data, s_clean_data)
+clean_data <- rbind(rwl_clean_data, s_clean_data)
+
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Detrend rwl to create rwi --------------------------------------------------------
@@ -359,7 +352,6 @@ pivot_rw <- function(rw, ids){
   return(rw)
 }
 
-clean_data$rwi_long <- map2(clean_data$rwi, clean_data$ids, pivot_rw)
 clean_data$rwl_long <- map2(clean_data$rwl, clean_data$ids, pivot_rw)
 clean_data <- clean_data %>% 
   select(collection_id, rwi_long, rwl_long) %>% 
@@ -380,50 +372,48 @@ clean_data <- clean_data  %>%
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Add parsed data summary to site summary --------------------------------
+# Tabulate sites that are dropped from analysis  -------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-site_summary <- site_data %>%
-  select(collection_id, site_name, location, latitude, longitude, elevation, start_year, end_year, time_unit, sp_id, sp_scient, sp_common) %>%
-  distinct() %>%
-  filter(collection_id %in% keep_sites)
+site_smry <- site_data %>% 
+  select(collection_id, location, latitude, longitude, elevation, sp_id) %>% 
+  unique()
 
-data_summary <- clean_data %>% 
+l_parse_errors <- lrwl_results$errors %>% pull(collection_id)
+e_parse_errors <- erwl_results$errors %>% pull(collection_id)
+total_parse_errors <- rwl_results$errors %>% pull(collection_id)
+
+data_smry <- clean_data %>% 
   group_by(collection_id) %>% 
   summarise(obs_start_year = min(year),
             obs_end_year = max(year),
-            n_trees = n_distinct(tree))
+            n_trees = n_distinct(tree),
+            )
 
-site_summary <- site_summary %>% 
-  left_join(data_summary, by = "collection_id")
+site_smry <- site_smry %>% 
+  left_join(data_smry, by = "collection_id")
 
-error_log <- rbind(rwl_results$errors, erwl_results$errors, lrwl_results$errors)
-site_summary <- site_summary %>% 
-  left_join(error_log, by = "collection_id")
-#### Note: Currently dropping ~1000 sites due to parsing errors or warnings. 
-#### Could probably increase sample size by including less egregious warnings
-#### occurring in open_rwl function, especially from autoread.ids step.
-
-# write_csv(site_summary, paste0(out_dir, "site_summary.csv"))
-
-
-
+site_smry <- site_smry %>% 
+  mutate(valid_dates = obs_end_year >= 1901 | obs_end_year > 2020,
+         valid_rwl = collection_id %in% c(sum_sites, total_sites),
+         valid_parse = !(collection_id %in% c(l_parse_errors, e_parse_errors, total_parse_errors)))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Filter to usable data and run final checks --------------------------------
+# Filter to usable data  --------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-drop_sites <- clean_data %>% 
-  group_by(collection_id) %>% 
-  summarise(max_year = max(year)) %>% 
-  mutate(error_year = max_year>2020) %>% 
-  filter(error_year==TRUE) %>% 
+keep_sites <- site_smry %>% 
+  filter(valid_dates == TRUE) %>% 
   pull(collection_id)
 
-clean_data <- clean_data %>% 
-  filter(year>=1900,
-         !(collection_id %in% drop_sites))
+export_data <- clean_data %>% 
+  filter(collection_id %in% keep_sites,
+         year >= 1901)
 
-n_check <- clean_data %>% 
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Final data quality checks  --------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+n_check <- export_data %>% 
   group_by(collection_id, tree, core, year) %>% 
   summarise(n = n())
 errors <- n_check %>%
@@ -436,57 +426,80 @@ errors <- n_check %>%
 #   expect_equal(dim(errors)[1], 0)
 # })
 
-# Drop trees (n=17) that have multiple observations in a single year
+# Drop trees (n=22) that have multiple observations in a single year
 error_list <- errors %>%   
   mutate(temp_id = paste0(collection_id, "_", tree)) %>% 
   pull(temp_id)
 error_collections <- errors %>% select(collection_id) %>% unique()
 
-clean_data <- clean_data %>% 
+export_data <- export_data %>% 
   mutate(temp_id = paste0(collection_id, "_", tree)) %>%
   filter(!(temp_id %in% error_list)) %>% 
   select(-temp_id)
 
 test_that("Core ids have been assigned",{
-  expect_equal(is.na(clean_data$core_code) %>% sum(), 0)
+  expect_equal(is.na(export_data$core_code) %>% sum(), 0)
 })
 
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Export results and error log --------------------------------------------------------
+# Export data and site summary  ------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-write_csv(clean_data, paste0(out_dir, "rwi_long.csv"))
+write_csv(export_data, paste0(out_dir, "rwi_long.csv"))
+
+write_csv(site_summary, paste0(out_dir, "site_summary.csv"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Summarize number of observations ---------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-n_obs <- clean_data %>% dim()
-n_trees <- clean_data %>% 
-  select(collection_id, tree) %>% 
-  distinct() %>% 
-  dim()
-n_collections <- clean_data %>% 
-  select(collection_id) %>% 
-  distinct() %>% 
-  dim()
-n_usable_obs <- clean_data %>% 
-  filter(year>1900) %>% 
-  select(year, collection_id, tree) %>% 
-  distinct() %>% 
-  dim()
+# number of original files
+site_data$collection_id %>% unique() %>% length()
 
-# n = 2
-# errors[((n-1)*10+1):(n*10),]
-# warnings <- site_df %>% select(collection_id, warning) %>% drop_na()
-# site <- "ak006"
-# file <- paste0(site, ".rwl")
-# read.tucson(paste0(data_dir, file))
-# rwl <- open_rwl(file)
-# 
-# 
-# file <- "remote\\in\\itrdb\\cana008.rwl"
-# rwl <- read.tucson(file)
-# ids <- autoread.ids(rwl)
+# number of sites dropped due to "other" rwl files
+site_smry %>% 
+  filter(valid_rwl == FALSE) %>% 
+  pull(collection_id) %>% 
+  length()
+
+# number of sites dropped due to parsing errors
+site_smry %>% 
+  filter(valid_parse == FALSE) %>% 
+  pull(collection_id) %>% 
+  length()
+
+# number of sites dropped due to no data in period of interest
+site_smry %>% 
+  filter(valid_dates == FALSE) %>% 
+  pull(collection_id) %>% 
+  length()
+
+# number of sites dropped due to some error
+site_smry %>% 
+  filter(!valid_dates | !valid_parse | !valid_rwl) %>% 
+  pull(collection_id) %>% 
+  length()
+
+# number of observations
+clean_data %>% 
+  pull(collection_id) %>% 
+  length()
+
+# number of trees
+clean_data %>% 
+  select(collection_id, tree) %>% 
+  distinct() %>%
+  pull(collection_id) %>% 
+  length()
+
+# number of sites in final dataset
+clean_data %>% 
+  select(collection_id) %>% 
+  distinct() %>%
+  pull(collection_id) %>% 
+  length()
+  
+
 
 
 
@@ -518,6 +531,18 @@ n_usable_obs <- clean_data %>%
 #   CANA275: Corrected typos
 #   CANA521: Corrected typo
 #   
+# Collections with duplicate series IDs - removed one tree (when possible, tree that didn't overlap with period of interest)
+# Some have invalidly long ids - removed those
+#   AK027
+#   AK030
+#   AK048
+#   AK050
+
+## CAN BE USED TO DEBUG RWI FILES WITH ERRORS
+# i = 4
+# file = list[i]
+# file
+# read.tucson(paste0(data_dir, file, ".rwl"))
 
 # Updates over original dataset -
 #   Added data from more recent ITRDB uploads
