@@ -83,13 +83,13 @@ rm(cwd_raster)
 rm(aet_raster)
 
 
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Visually inspect data -----------------------------------------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-tmap_mode("view")
-tm_shape(cwd_cmip_end) +
-  tm_raster() +
-  tm_facets(as.layers = TRUE)
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# # Visually inspect data -----------------------------------------------
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# tmap_mode("view")
+# tm_shape(cwd_cmip_end) +
+#   tm_raster() +
+#   tm_facets(as.layers = TRUE)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Summarize species niches -----------------------------------------------
@@ -278,31 +278,31 @@ sp_cmip_clim <- sp_cmip_clim %>%
   select(-cmip_df)
 
 
-## Check final result as raster
-species = "acsh"
-test_clim <- (sp_cmip_clim %>% filter(sp_code == species) %>% pull(clim_cmip_sp))[[1]]
-crs_template <- crs(cwd_cmip_end)
-raster_template <- cwd_cmip_end %>% as.data.frame(xy = TRUE) %>% select(x,y)
-test_clim <- raster_template %>%
-  left_join(test_clim, by = c("x", "y"))
-test_clim <- rasterFromXYZ(test_clim, crs = crs_template)
-range <- range_sf %>% filter(sp_code == species)
-tmap_mode("view")
-
-tm_shape(test_clim$cwd_cmip_end1) +
-  tm_raster(palette = "-RdYlGn") +
-  tm_facets(as.layers = TRUE) +
-  tm_shape(range) + 
-  tm_fill(col = "lightblue")
-
-tm_shape(test_clim$cwd_cmip_end1) +
-  tm_raster(palette = "-RdYlGn") +
-  tm_facets(as.layers = TRUE) +
-  tm_shape(test_clim$cwd_cmip_start1) +
-  tm_raster(palette = "-RdYlGn") +
-  tm_facets(as.layers = TRUE) +
-  tm_shape(range) + 
-  tm_fill(col = "lightblue")
+# ## Check final result as raster
+# species = "acsh"
+# test_clim <- (sp_cmip_clim %>% filter(sp_code == species) %>% pull(clim_cmip_sp))[[1]]
+# crs_template <- crs(cwd_cmip_end)
+# raster_template <- cwd_cmip_end %>% as.data.frame(xy = TRUE) %>% select(x,y)
+# test_clim <- raster_template %>%
+#   left_join(test_clim, by = c("x", "y"))
+# test_clim <- rasterFromXYZ(test_clim, crs = crs_template)
+# range <- range_sf %>% filter(sp_code == species)
+# tmap_mode("view")
+# 
+# tm_shape(test_clim$cwd_cmip_end1) +
+#   tm_raster(palette = "-RdYlGn") +
+#   tm_facets(as.layers = TRUE) +
+#   tm_shape(range) + 
+#   tm_fill(col = "lightblue")
+# 
+# tm_shape(test_clim$cwd_cmip_end1) +
+#   tm_raster(palette = "-RdYlGn") +
+#   tm_facets(as.layers = TRUE) +
+#   tm_shape(test_clim$cwd_cmip_start1) +
+#   tm_raster(palette = "-RdYlGn") +
+#   tm_facets(as.layers = TRUE) +
+#   tm_shape(range) + 
+#   tm_fill(col = "lightblue")
 
 
 ## Export predictions
@@ -387,3 +387,11 @@ an_site_clim_df <- an_site_clim_df %>%
 write_rds(an_site_clim_df, 
           paste0(wdir, "out/climate/site_an_clim.", compress = "gz"))
 
+
+# ## Exploring source of dropped sites - seems to be entirely driven by sites for species with no range maps
+# an_site_clim_df %>% pull(collection_id) %>% unique() %>% length()
+# site_clim_df %>% pull(collection_id) %>% unique() %>% length()
+# # clim_sites <- clim_df %>% pull(collection_id) %>% unique()
+# test_sites <- test %>% pull(collection_id) %>% unique()
+# an_site_clim_df %>% unnest(cols = c(data)) %>% pull(collection_id) %>% unique() %>% length()
+# an_site_clim_df %>% unnest(cols = c(data)) %>% drop_na() %>% pull(collection_id) %>% unique() %>% length()
