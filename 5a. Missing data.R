@@ -137,8 +137,23 @@ miss_var_summary(data_inventory)
 data_inventory %>% complete.cases() %>% sum()
 
 #### NOTES
-# Missing climate???
 # Missing dendro: Largely due to strange format of ITRDB files, leading to parsing errors
 # Missing first stage: For ones with valid dendro, missing due to no variation in CWD / PET
 # Missing range: A few species dominate combined with sites that don't specify beyond genera
+# Missing standardized climate: Largely (entirely?) due to missing range maps
+
+
+## Summary
+## Dendro processing:
+# Lose 387 to parsing, and 21 to no rwl file
+# Once you factor in sites with no data in the time period, we increase to 662 missing
+
+## Clim standardization
+# 21 missing due to errors in raw CWD calculations
+# 604 more dropped due to no species range maps
+# Combined, this means ~623 sites don't have standardized climate data
+
+## FS estimation
+# another ~70 sites don't have any variation in their weather records so can't estimate fs model coefficients
+# altogether, lose ~1204 of 4905 sites
 
