@@ -21,6 +21,13 @@ library(naniar)
 library(stringr)
 
 
+# Convert site summary valid values to na/1
+replace_valids = function(value){
+  value = ifelse(value == TRUE, 1, NA)
+  value = as.double(value)
+  return(value)
+}
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Import data ------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -29,10 +36,7 @@ wdir <- 'remote\\'
 
 # Load list of ITRDB sites
 itrdb_sites <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv')) %>% 
-  select(collection_id, sp_id) %>% 
-  distinct() %>% 
-  mutate(sp_id = str_to_lower(sp_id)) %>% 
-  drop_na()
+  mutate(sp_id = str_to_lower(sp_id))
 
 # Load species ranges
 range_file <- paste0(wdir, 'in//species_ranges//merged_ranges.shp')
@@ -60,15 +64,23 @@ cwd_sites <- cwd_df %>%
   distinct() %>% 
   mutate(valid_clim = 1)
 
-# Load site annual past climate
+# Load site annual climate
 an_clim <- read_rds(paste0(wdir, "out\\climate\\site_an_clim.gz"))
+vary_clim <- an_clim %>% 
+  group_by(collection_id) %>% 
+  summarize(cwd_n = n_distinct(cwd.an.spstd),
+            pet_n = n_distinct(pet.an.spstd)) %>% 
+  mutate(valid_weather_vary = pet_n > 1 & cwd_n > 1,
+         valid_weather_vary = replace_valids(valid_weather_vary)) %>% 
+  select(collection_id, valid_weather_vary)
+
 an_clim <- an_clim %>% 
   select(collection_id) %>%
   distinct() %>% 
   mutate(valid_an_clim = 1)
 
 # Load site average past climate
-ave_clim <- read_rds(paste0(wdir, "out\\climate\\site_an_clim.gz"))
+ave_clim <- read_rds(paste0(wdir, "out\\climate\\site_ave_clim.gz"))
 ave_clim <- ave_clim %>% 
   select(collection_id) %>%
   distinct() %>% 
@@ -93,6 +105,12 @@ fut_clim <- fut_clim %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Merge different datasets ------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+itrdb_sites <- itrdb_sites %>% 
+  mutate(valid_dates = map_dbl(valid_dates, replace_valids),
+         valid_parse = map_dbl(valid_parse, replace_valids),
+         valid_rwl = map_dbl(valid_rwl, replace_valids)) %>% 
+  select(collection_id, valid_dates, valid_parse, valid_rwl, sp_id)
+
 # Merge datasets to index
 data_inventory <- itrdb_sites %>% 
   merge(cwd_sites, by = "collection_id", all = TRUE) %>% 
@@ -101,12 +119,16 @@ data_inventory <- itrdb_sites %>%
   merge(first_stage, by = "collection_id", all = TRUE) %>% 
   merge(ave_clim, by = "collection_id", all = TRUE) %>% 
   merge(an_clim, by = "collection_id", all = TRUE) %>% 
-  merge(fut_clim, by = "sp_id", all = TRUE)
+  merge(fut_clim, by = "sp_id", all = TRUE) %>% 
+  merge(vary_clim, by = "collection_id", all = TRUE)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Explore possible data problems ------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+data_inventory <- data_inventory %>% 
+  select(-valid_dates)
+
 dim(itrdb_sites)
 data_inventory %>% gg_miss_upset()
 miss_var_summary(data_inventory)
@@ -115,6 +137,7 @@ miss_var_summary(data_inventory)
 data_inventory %>% complete.cases() %>% sum()
 
 #### NOTES
+# Missing climate???
 # Missing dendro: Largely due to strange format of ITRDB files, leading to parsing errors
 # Missing first stage: For ones with valid dendro, missing due to no variation in CWD / PET
 # Missing range: A few species dominate combined with sites that don't specify beyond genera
