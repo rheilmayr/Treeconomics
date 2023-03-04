@@ -353,14 +353,6 @@ fs_mod <- function(site_data){
   return(tibble(mod = list(mod), nobs = nobs, ntrees = ntrees, rwl_mean = rwl_mean, rwl_sd = rwl_sd, error = reg_error))
 }
 
-site_df <- dendro_df %>% 
-  drop_na() %>% 
-  mutate(cwd.an = cwd.an.spstd,
-         pet.an = pet.an.spstd) %>% 
-  group_by(collection_id) %>%
-  add_tally(name = 'nobs') %>% 
-  filter(nobs>10) %>% 
-  nest()
 
 site_df <- site_df %>% 
   mutate(fs_result = map(data, .f = fs_mod))
@@ -381,6 +373,151 @@ site_df <- site_df %>%
 
 site_df %>% write.csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv'))
 
+
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Test for site-level concavity --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+site_df <- dendro_df %>% 
+  drop_na() %>% 
+  mutate(cwd.an = cwd.an.spstd,
+         pet.an = pet.an.spstd) %>% 
+  group_by(collection_id) %>%
+  add_tally(name = 'nobs') %>% 
+  filter(nobs>10) %>% 
+  nest()
+
+nonlinear_fs_mod <- function(site_data){
+  rwl_mean <- site_data$rwl %>% mean(na.rm = TRUE)
+  rwl_sd <- site_data$rwl %>% sd(na.rm = TRUE)
+  
+  failed <- F
+  reg_error <- NA
+  femod <- NA
+  pet_cwd_cov <- NA
+  nobs <- NA
+  ntrees <- site_data %>% select(tree) %>%  n_distinct()
+  # ncores <- site_data %>% select(tree, core) %>%  n_distinct()
+  no_cwd_var <- (site_data %>% select(cwd.an) %>% n_distinct() == 1)
+  no_pet_var <- (site_data %>% select(pet.an) %>% n_distinct() == 1)
+  
+  # TODO: Update to integrate lags over three years of cwd data?
+  # site_data <- site_data %>% 
+  #   arrange(tree, core, year) %>% 
+  #   group_by(tree, core) %>% 
+  #   mutate(lag1_cwd = lag(cwd.an, order_by = year),
+  #          lag2_cwd = lag(cwd.an, n = 2, order_by = year))
+  # femod <- feols(width ~ cwd.an + lag1_cwd + lag2_cwd + pet.an | tree, site_data)
+  # 
+  
+  if (no_cwd_var | no_pet_var) {
+    message("Site has no variation in CWD or PET")
+    failed <- T
+  } else{
+    # Try to run felm. Typically fails if missing cwd / aet data 
+    tryCatch(
+      expr = {
+        # TODO: 7-9-21; Should we switch back to tree-level FE model? Complicates intercepts...
+        mod <- lm(rwi ~ pet.an + I(pet.an**2) + cwd.an + I(cwd.an**2), data = site_data)
+        # if (ntrees==1){
+        #   mod <- lm(rwi ~ cwd.an + pet.an, site_data)
+        # } else{
+        #   mod <- lm(rwi ~ cwd.an + pet.an, site_data)
+        # }
+        mod <- tidy(mod) %>%
+          pivot_wider(names_from = "term", values_from = c("estimate", "std.error", "statistic", "p.value"))
+      },
+      error = function(e){ 
+        message("Returned regression error")
+        reg_error <<- e[1]
+        failed <<- T
+      }
+    )    
+  }
+  if (failed){
+    return(NA)
+  }
+  return(tibble(mod = list(mod), error = reg_error))
+}
+
+site_df <- dendro_df %>% 
+  drop_na() %>% 
+  mutate(cwd.an = cwd.an.spstd,
+         pet.an = pet.an.spstd) %>% 
+  group_by(collection_id) %>%
+  add_tally(name = 'nobs') %>% 
+  filter(nobs>10) %>% 
+  nest()
+
+
+library(marginaleffects)
+i = 2408
+test_data <- site_df[i,2][[1]][[1]]
+test_mod <- lm(rwi ~ pet.an + I(pet.an**2) + cwd.an + I(cwd.an**2), data = test_data)
+summary(test_mod)
+plot_cap(test_mod, condition = "cwd.an") + 
+  xlim(-2,2)
+test_mod <- nonlinear_fs_mod(test_data)
+test_mod$mod
+
+
+site_df <- site_df %>% 
+  mutate(fs_result = map(data, .f = nonlinear_fs_mod))
+
+pull_dist <- function(data){
+  cwd_stats = data$cwd.an.spstd %>% quantile(c(0.01, 0.1, 0.5, 0.9, .99)) %>% 
+    as_tibble() %>%
+    mutate(quantile = c('q0.01', 'q0.1', 'q0.5', 'q0.9', 'q0.99'))
+  cwd_stats = pivot_wider(cwd_stats, names_from = quantile, values_from = value)
+  return(tibble(cwd_stats))
+}
+
+site_df <- site_df %>%
+  mutate(cwd_dist = map(data, .f = pull_dist))
+
+site_df <- site_df %>% 
+  select(collection_id, fs_result, cwd_dist) %>% 
+  unnest(cwd_dist) %>%
+  unnest(fs_result)
+
+site_df <- site_df[which(!(site_df %>% pull(mod) %>% is.na())),]
+site_df <- site_df %>% 
+  unnest(mod)
+
+site_df <- site_df %>% 
+  select(-error)
+
+site_df <- site_df %>%
+  mutate(slope_median = estimate_cwd.an + 2 * `estimate_I(cwd.an^2)` * `q0.5`,
+         slope_extreme = estimate_cwd.an + 2 * `estimate_I(cwd.an^2)` * `q0.9`,
+         slope_difs = slope_extreme - slope_median)
+
+site_df %>%
+  select(slope_median, slope_extreme, slope_difs) %>%
+  summary()
+
+site_df %>%
+  filter(slope_median < 0) %>%
+  select(slope_median, slope_extreme, slope_difs) %>%
+  summary()
+
+
+
+site_df %>%
+  ggplot(aes(x = slope_median, y = slope_extreme)) +
+  geom_point() +
+  geom_abline(slope = 1, intercept = 0) +
+  xlim(-.3, .11) +
+  ylim(-.3, .1)
+
+site_df %>% 
+  mutate(neg = estimate_cwd.an < 0,
+         concave = `estimate_I(cwd.an^2)` < 0,
+         sig = `p.value_I(cwd.an^2)` < 0.05) %>%
+  group_by(neg, sig, concave) %>%
+  tally()
 
 
 # # test some results
