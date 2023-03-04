@@ -49,7 +49,7 @@ library(marginaleffects)
 library(tmap)
 library(fixest)
 library(forcats)
-
+librarian::shelf(ggplotify)
 
 loadfonts(device = "win")
 theme(family="Serif")
@@ -68,7 +68,7 @@ theme_set(
 # Load data ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ### Define path
-wdir <- 'remote/'
+wdir <- 'NewRemote/'
 
 # 1. Site-level regressions
 flm_df <- read_csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv"))
@@ -117,12 +117,12 @@ range_file <- paste0(wdir, 'in/species_ranges/merged_ranges.shp')
 range_sf <- st_read(range_file)
 
 # 8. Change in CWD
-cmip_end <- load(paste0(wdir, 'in\\CMIP5 CWD\\cmip5_cwdaet_end.Rdat'))
+cmip_end <- load(paste0(wdir, 'in/CMIP5 CWD/cmip5_cwdaet_end.Rdat'))
 cwd_cmip_end <- cwd_raster %>% mean()
 rm(cwd_raster)
 rm(aet_raster)
 
-cmip_start <- load(paste0(wdir, 'in\\CMIP5 CWD\\cmip5_cwdaet_start.Rdat'))
+cmip_start <- load(paste0(wdir, 'in/CMIP5 CWD/cmip5_cwdaet_start.Rdat'))
 cwd_cmip_start <- cwd_raster %>% mean()
 rm(cwd_raster)
 rm(aet_raster)
@@ -430,7 +430,7 @@ hypfig <- ggplot(newdat, aes(x=cwd,y=value, color=hyp))+
 hypfig
 
 f1 <- (map/range_map) | hex2 + hypfig
-ggsave(paste0(wdir, 'figures\\1_data_and_hypoth.svg'), plot = f1, width = 8, height = 5)
+#ggsave(paste0(wdir, 'figures\\1_data_and_hypoth.svg'), plot = f1, width = 8, height = 5)
 
 
 # figs1
@@ -607,7 +607,7 @@ pet_qqplot <- (itrdb_pet_hist / fullrange_pet_hist) | pet_qq_plot
 qqplot <- cwd_qqplot / pet_qqplot
 qqplot
 
-ggsave(paste0(wdir, 'figures\\a1_qqplots.svg'), plot = qqplot, width = 11, height = 7, units = "in")
+#ggsave(paste0(wdir, 'figures\\a1_qqplots.svg'), plot = qqplot, width = 11, height = 7, units = "in")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -715,8 +715,8 @@ pet_dynamic = pet_plot +
 
 first_stage_effects <- (cwd_est_plot / pet_est_plot) | (cwd_dynamic / pet_dynamic)
 first_stage_effects
-ggsave(paste0(wdir, 'figures\\a2_first_stage_effects.svg'), plot = first_stage_effects,
-       width = 15, height = 8, units = "in")
+#ggsave(paste0(wdir, 'figures\\a2_first_stage_effects.svg'), plot = first_stage_effects,
+       #width = 15, height = 8, units = "in")
 
 # plot_dnlm <- function(crosspredictions){
 #   nlags = 15
@@ -1120,7 +1120,7 @@ pet_full_margins
 
 margins_plot <- cwd_full_margins | pet_full_margins
 margins_plot
-ggsave(paste0(wdir, 'figures\\2_all_margins.svg'), plot = margins_plot, width = 15, height = 14, units = "in")
+#ggsave(paste0(wdir, 'figures\\2_all_margins.svg'), plot = margins_plot, width = 15, height = 14, units = "in")
 
 
 
@@ -1212,7 +1212,7 @@ gen_plot <- gen_plot +
 
   
 gen_plot
-ggsave(paste0(wdir, 'figures\\a3_genus_margins.svg'), gen_plot, width = 22, height = 12, units = "in")
+#ggsave(paste0(wdir, 'figures\\a3_genus_margins.svg'), gen_plot, width = 22, height = 12, units = "in")
 
 
 # margins_plot <- margins_plot +
@@ -1352,7 +1352,7 @@ cwd_sens_bin <- plot_dat %>%
   # scale_fill_distiller(type = "div") +
   # scale_fill_viridis_c(direction = -1, option = "viridis") +
   theme_bw(base_size = 35)+
-  theme(legend.position = c(.13,.83),
+  theme(legend.position = c(.21,.82),
         legend.text = element_text(size=18),
         legend.title = element_text(size=23),
         legend.background = element_blank())+
@@ -1373,7 +1373,7 @@ pet_sens_bin <- plot_dat %>%
   scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
   # scale_fill_viridis_c(direction = -1, option = "viridis") +
   theme_bw(base_size = 35)+
-  theme(legend.position = c(.13,.83),
+  theme(legend.position = c(.21,.82),
         legend.text = element_text(size=18),
         legend.title = element_text(size=23),
         legend.background = element_blank())+
@@ -1465,7 +1465,7 @@ sens_plot <- cwd_sens_bin / pet_sens_bin
 #ggsave(paste0(wdir, "figures\\", "pred_full_a.svg"), sens_plot, width = 9, height = 15)
 
 
-lgd_pos <- c(.15, .8)
+lgd_pos <- c(.23, .8)
 cwd_change_bin <- cwd_change_bin +
   theme(
     legend.position = c(lgd_pos),
@@ -1488,7 +1488,7 @@ pet_change_bin <- pet_change_bin +
     axis.ticks.y = element_blank())
 
 
-lgd_pos <- c(.23, .8)
+lgd_pos <- c(.15, .8)
 rwi_bin <- rwi_bin +
   theme(
     legend.position = c(lgd_pos),
@@ -1500,7 +1500,7 @@ rwi_bin
 
 pred_full <- cwd_sens_bin/ pet_sens_bin | cwd_change_bin/pet_change_bin | rwi_bin
 pred_full
-ggsave(paste0(wdir, "figures\\", "4_pred_full.svg"), pred_full, width = 40, height = 35)
+#ggsave(paste0(wdir, "figures\\", "4_pred_full.svg"), pred_full, width = 40, height = 35)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1716,7 +1716,7 @@ cwd_map <- ggplot() +
            aes(map_id = region),
            color = "lightgray", fill = "lightgray",size = 0.1) +
   geom_tile(data = cwd_cmip_df %>% filter(!is.na(layer)), aes(x = x, y = y, fill = layer)) +
-  scale_fill_viridis(name = "Change in CWD\n1970-2000 to 2091-2100\n(mm per year)") +
+  scale_fill_viridis(name = "Change in CWD\n(mm/year)") +
   coord_fixed() +
   theme(axis.text.x = element_blank(),
         axis.title.x = element_blank(),
@@ -1725,7 +1725,7 @@ cwd_map <- ggplot() +
         axis.title.y = element_blank(),
         axis.ticks.y = element_blank())
 cwd_map
-  
+#dim 7x5
   
   
   
@@ -1825,7 +1825,7 @@ change_plot
 cwd_change_fig <- cwd_map / change_plot / genus_cwd_change +
   plot_layout(heights = c(1.4, 1.7, 1))
 
-ggsave(paste0(wdir, "figures\\", "3_cwd_change.svg"), cwd_change_fig, width = 7.5, height = 11)
+#ggsave(paste0(wdir, "figures\\", "3_cwd_change.svg"), cwd_change_fig, width = 7.5, height = 11)
 
 cwd_change_fig
 
