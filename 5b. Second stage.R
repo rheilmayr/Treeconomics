@@ -137,6 +137,7 @@ site_points=st_as_sf(trim_df,coords=c("longitude","latitude"),crs="+init=epsg:43
 vg <-variogram(estimate_cwd.an~1, site_points, cutoff = 1500, width = 10)
 vg.fit <- fit.variogram(vg, model = vgm(1, "Sph", 900, 1))
 plot(vg, vg.fit)
+print(paste0("Range before hitting sill (km): "), vg.fit[2,3])
 
 vg.range = vg.fit[2,3] * 1000
 
