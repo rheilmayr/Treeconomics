@@ -24,6 +24,13 @@ library(prediction)
 library(tictoc)
 library(tmap)
 library(tidylog)
+library(broom)
+library(purrr)
+library(sf)
+library(gstat)
+library(units)
+
+
 
 
 
@@ -57,6 +64,22 @@ flm_df <- flm_df %>%
 load(file=paste0(wdir,"out/spatial_blocks.Rdat"))
 
 
+# Identify and trim extreme outliers
+cwd_est_bounds = quantile(flm_df$estimate_cwd.an, c(0.01, 0.99),na.rm=T)
+pet_est_bounds = quantile(flm_df$estimate_pet.an, c(0.01, 0.99),na.rm=T)
+cwd_spstd_bounds = quantile(flm_df$cwd.spstd, c(0.01, 0.99), na.rm = T)
+pet_spstd_bounds = quantile(flm_df$pet.spstd, c(0.01, 0.99), na.rm = T)
+
+flm_df <- flm_df %>% 
+  mutate(outlier = (estimate_cwd.an<cwd_est_bounds[1]) |
+           (estimate_cwd.an>cwd_est_bounds[2]) |
+           (estimate_pet.an<pet_est_bounds[1]) |
+           (estimate_pet.an>pet_est_bounds[2]))
+trim_df <- flm_df %>% 
+  filter(outlier==0) %>% 
+  drop_na()
+
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Plot sensitivity --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -81,3 +104,137 @@ plot_df <- plot_df %>%
 plot_df %>%
   ggplot(aes(y = estimate_cwd.an, x = cwd.spstd)) +
   geom_point()
+
+
+
+
+
+
+
+
+
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Identify spatially proximate blocks of sites ---------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+site_list <- trim_df %>%
+  pull(collection_id) %>%
+  unique()
+n_sites <- length(site_list)
+
+site_dist=st_distance(site_points)
+rownames(site_dist)=site_points$collection_id
+colnames(site_dist)=site_points$collection_id
+# save(site_dist,file=paste0(wdir,"out/site_distances.Rdat"))
+# load(paste0(wdir,"out/site_distances.Rdat"))
+
+dist_df <- as_tibble(site_dist) %>% 
+  drop_units() 
+
+
+threshold <- 900000
+dist_df <- dist_df %>%
+  lazy_dt() %>% 
+  mutate(collection_id = names(dist_df)) %>% 
+  # select(collection_id, site_list) %>% 
+  # filter(collection_id %in% site_list) %>% 
+  mutate(across(.cols = !collection_id, ~(.x < threshold))) %>% 
+  # mutate(across(.cols = !collection_id, ~ifelse((.x < range), collection_id, "DROP"))) %>% 
+  as_tibble()
+
+block_list <- c()
+for (site in site_list){
+  block_sites <- dist_df %>% 
+    filter(get(site) == TRUE) %>% 
+    pull(collection_id)
+  block_list[site] <- list(block_sites)
+}
+save(block_list,file=paste0(wdir,"out/spatial_blocks_", as.character(threshold/1000), ".Rdat"))
+# load(file=paste0(wdir,"out/spatial_blocks_100.Rdat"))
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Simulate regional studies --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+rand_order <- flm_df$collection_id %>%
+  sample()
+
+study_sites <- list()
+included_sites <- list()
+
+'%ni%' <- function(x,y)!('%in%'(x,y))
+
+for (id in rand_order) {
+  if (id %ni% included_sites) {
+    study_sites <- study_sites %>% append(id) %>% unlist()
+    proximate_ids <- block_list[id] %>% unlist(use.names = FALSE)
+    included_sites <- included_sites %>% append(proximate_ids) %>% unlist()
+  }
+}
+
+block_df <- tibble("collection_id" = study_sites)
+
+estimate_block_ss <- function(id) {
+  proximate_ids <- block_list[id] %>% unlist(use.names = FALSE)
+  
+  # sp_id <- flm_df %>%
+  #   filter(collection_id == id) %>%
+  #   pull(species_id)
+  # proximate_ids <- flm_df %>%
+  #   filter(species_id == sp_id,
+  #          collection_id %in% proximate_ids) %>%
+  #   pull(collection_id)
+  
+  
+  if (length(proximate_ids)<1) {
+    return(out = tibble(NaN))
+  } else {
+    reg_df <- flm_df %>%
+      filter(collection_id %in% proximate_ids)
+    
+    reg_mod <- lm(estimate_cwd.an ~ cwd.spstd, data = reg_df)
+    coef <- reg_mod %>% 
+      tidy() %>%
+      filter(term == "cwd.spstd")
+    return(out = tibble(coef))
+  }
+}
+
+block_df <- block_df %>%
+  mutate(cwd_spstd_coef = map(collection_id, .f = estimate_block_ss))
+
+block_df <- block_df %>%
+  unnest(cwd_spstd_coef) %>%
+  select(-`NaN`, -term) %>%
+  drop_na()
+
+block_df <- block_df %>%
+  left_join(flm_df, by = "collection_id")
+
+block_df %>%
+  mutate(sig = p.value < 0.05) %>%
+  filter(estimate >-100, estimate < 100) %>%
+  ggplot(aes(x = pet.spstd, y = estimate, color = sig)) +
+  geom_point() +
+  # geom_smooth() +
+  theme_bw()
+
+block_df <- block_df %>% 
+  # filter(p.value < 0.05) %>%
+  mutate(sig = p.value < 0.05,
+         effect = ifelse(sig & (estimate > 0), "spoiled", ifelse(sig & (estimate < 0), "range-edge", "neither")),
+         spoiled = estimate > 0)
+
+block_df %>%
+  group_by(effect) %>%
+  tally()
+
+
+block_df %>%
+  mutate(sig = p.value < 0.05) %>%
+  filter(estimate >-10, estimate < 10) %>%
+  ggplot(aes(x = pet.spstd, y = estimate, color = effect)) +
+  geom_point() +
+  # geom_smooth() +
+  theme_bw()
