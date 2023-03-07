@@ -151,13 +151,15 @@ for (site in site_list){
   block_list[site] <- list(block_sites)
 }
 save(block_list,file=paste0(wdir,"out/spatial_blocks_", as.character(threshold/1000), ".Rdat"))
-# load(file=paste0(wdir,"out/spatial_blocks_100.Rdat"))
+load(file=paste0(wdir,"out/spatial_blocks.Rdat"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Simulate regional studies --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-rand_order <- flm_df$collection_id %>%
+rand_order <- flm_df %>%
+  filter(species_id =="pipo") %>%
+  pull(collection_id) %>%
   sample()
 
 study_sites <- list()
@@ -178,13 +180,13 @@ block_df <- tibble("collection_id" = study_sites)
 estimate_block_ss <- function(id) {
   proximate_ids <- block_list[id] %>% unlist(use.names = FALSE)
   
-  # sp_id <- flm_df %>%
-  #   filter(collection_id == id) %>%
-  #   pull(species_id)
-  # proximate_ids <- flm_df %>%
-  #   filter(species_id == sp_id,
-  #          collection_id %in% proximate_ids) %>%
-  #   pull(collection_id)
+  sp_id <- flm_df %>%
+    filter(collection_id == id) %>%
+    pull(species_id)
+  proximate_ids <- flm_df %>%
+    filter(species_id == sp_id,
+           collection_id %in% proximate_ids) %>%
+    pull(collection_id)
   
   
   if (length(proximate_ids)<1) {
@@ -212,13 +214,13 @@ block_df <- block_df %>%
 block_df <- block_df %>%
   left_join(flm_df, by = "collection_id")
 
-block_df %>%
-  mutate(sig = p.value < 0.05) %>%
-  filter(estimate >-100, estimate < 100) %>%
-  ggplot(aes(x = pet.spstd, y = estimate, color = sig)) +
-  geom_point() +
-  # geom_smooth() +
-  theme_bw()
+# block_df %>%
+#   mutate(sig = p.value < 0.05) %>%
+#   filter(estimate >-100, estimate < 100) %>%
+#   ggplot(aes(x = pet.spstd, y = estimate, color = sig)) +
+#   geom_point() +
+#   # geom_smooth() +
+#   theme_bw()
 
 block_df <- block_df %>% 
   # filter(p.value < 0.05) %>%
@@ -234,7 +236,18 @@ block_df %>%
 block_df %>%
   mutate(sig = p.value < 0.05) %>%
   filter(estimate >-10, estimate < 10) %>%
-  ggplot(aes(x = pet.spstd, y = estimate, color = effect)) +
+  ggplot(aes(x = pet.spstd, y = estimate)) +
   geom_point() +
   # geom_smooth() +
-  theme_bw()
+  theme_bw() +
+  geom_hline(yintercept = 0)
+
+block_df %>%
+  filter(pet.spstd > -0.25, estimate < -0.5)
+
+lasi pisi
+mod_df <- flm_df %>% 
+  filter(species_id == "pisi") 
+
+mod <- lm(estimate_cwd.an ~ pet.spstd + cwd.spstd, data = mod_df)
+summary(mod)
