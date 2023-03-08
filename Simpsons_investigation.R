@@ -41,11 +41,11 @@ library(units)
 wdir <- 'remote/'
 
 # 1. Site-level regressions
-flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv')) %>%
+flm_df <- read_csv(paste0(wdir, 'out/first_stage/site_pet_cwd_std.csv')) %>%
   select(-X1)
 
 # 2. Historic site-level climate
-ave_site_clim <- read_rds(paste0(wdir, "out\\climate\\site_ave_clim.gz"))
+ave_site_clim <- read_rds(paste0(wdir, "out/climate/site_ave_clim.gz"))
 
 
 # 3. Site information
