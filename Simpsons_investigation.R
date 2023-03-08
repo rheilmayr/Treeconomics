@@ -37,7 +37,7 @@ select <- dplyr::select
 # Load data --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define path
-wdir <- 'NewRemote/'
+wdir <- 'remote/'
 
 # 1. Site-level regressions
 flm_df <- read_csv(paste0(wdir, 'out/first_stage/site_pet_cwd_std.csv')) 
@@ -53,7 +53,8 @@ site_df <- site_df %>%
   select(collection_id, sp_id, latitude, longitude)
 site_df <- site_df %>% 
   rename(species_id = sp_id) %>% 
-  mutate(species_id = str_to_lower(species_id))
+  mutate(species_id = str_to_lower(species_id)) %>%
+  mutate(geog = str_replace_all(collection_id, "[:digit:]", ""))
 
 flm_df <- flm_df %>% 
   left_join(ave_site_clim, by = c("collection_id")) %>%
@@ -77,7 +78,48 @@ flm_df <- flm_df %>%
 
 trim_df <- flm_df %>% 
   filter(outlier==0) %>% 
-  drop_na()
+  drop_na() %>%
+  mutate(cwd_errorweights = 1 / (std.error_cwd.an))
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Helper function to trim to geography --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+study_species <- c("psme", "pipo")
+study_geog <- c("UT", "NM", "AZ", "CO", "WY", "MT", "ID")
+
+
+study_df <- trim_df %>%
+  filter(geog %in% study_geog,
+         species_id %in% study_species)
+full_df <- trim_df %>%
+  filter(species_id %in% study_species)
+
+
+study_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, 
+                data = study_df, weights = cwd_errorweights)
+study_mod %>% summary()
+
+study_df %>% ggplot(aes(x = cwd.spstd, y = estimate_cwd.an)) + 
+  geom_point() +
+  geom_smooth(method = "loess", span = 1)
+
+
+full_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, 
+               data = full_df, weights = cwd_errorweights)
+full_mod %>% summary()
+
+full_df %>% ggplot(aes(x = cwd.spstd, y = estimate_cwd.an)) + geom_point()
+
+
+## Eventually should probably shift to our full second stage structure that includes squared terms
+study_mod <- lm(estimate_cwd.an ~ cwd.spstd + I(cwd.spstd**2) +  pet.spstd + I(pet.spstd**2), 
+                data = study_df, weights = cwd_errorweights)
+study_mod %>% summary()
+
+full_mod <- lm(estimate_cwd.an ~ cwd.spstd + I(cwd.spstd**2) +  pet.spstd + I(pet.spstd**2), 
+               data = full_df, weights = cwd_errorweights)
+full_mod %>% summary()
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
