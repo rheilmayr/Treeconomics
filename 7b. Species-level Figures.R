@@ -121,9 +121,10 @@ map <- ggplot() +
   geom_sf(data = world) +
   geom_sf(data = sp_range, fill = '#21908CFF', alpha = .5, colour = NA) +
   geom_sf(data = trim_df, color = '#440154FF', fill = 'red', alpha = .8) +
-  theme_bw(base_size = 22)+
+  theme_bw(base_size = 15)+
   ylab("Latitude")+
   xlab("Longitude")+
+  #ggtitle("ITRDB sites with PIPO")+
   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
 map
 

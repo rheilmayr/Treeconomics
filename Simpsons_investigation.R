@@ -29,6 +29,7 @@ library(purrr)
 library(sf)
 library(gstat)
 library(units)
+library(sjPlot)
 
 select <- dplyr::select
 
@@ -136,16 +137,25 @@ theme_set(
 ##             PONDEROSA PINE         
 ##==================================================================================================================
 
-# plot_df <- flm_df %>%
-#   filter(species_id == "pipo")
-# 
-# allpipo=plot_df %>%
-#   ggplot(aes(y = estimate_cwd.an, x = cwd.spstd)) +
-#   geom_point()+
-#   geom_smooth(method="loess", span=1)+
-#   labs(y="Marginal effect of CWD", x="Historic CWD (SD)")+
-#   ggtitle("Pinus ponderosa (PIPO)")
-# 
+plot_df <- flm_df %>%
+  filter(species_id == "pipo")
+
+allpipo=plot_df %>%
+  ggplot(aes(y = estimate_cwd.an, x = cwd.spstd, color="x", fill="y")) +
+  geom_point()+
+  geom_smooth(method="loess", span=1)+
+  labs(y="Marginal effect of CWD", x="Historic CWD (SD)")+
+  #ggtitle("Pinus ponderosa (PIPO)")+
+  scale_fill_manual(values='#21908CFF')+
+  scale_color_manual(values = '#440154FF')+
+  guides(fill=F, color=F)
+
+allpipo
+
+map+allpipo+plot_annotation(tag_levels="A") & theme(
+                plot.tag = element_text(face = 'bold', size=15, family ="Helvetica"),
+                text=element_text(family ="Helvetica"))
+
 # unique(plot_df$collection_id)
 # 
 # ## Look at specific site and its nearby sites
@@ -354,7 +364,7 @@ load(file=paste0(wdir,"out/spatial_blocks.Rdat"))
 # Simulate regional studies --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 rand_order <- flm_df %>%
-  #filter(species_id =="pied") %>%
+  filter(species_id =="pipo") %>%
   pull(collection_id) %>%
   sample()
 
@@ -454,5 +464,6 @@ block_df %>%
 mod_df <- flm_df %>% 
   filter(species_id == "pied") 
 
-mod <- lm(estimate_cwd.an ~ pet.spstd + cwd.spstd, data = mod_df)
+mod <- lm( ~ pet.spstd + cwd.spstd, data = mod_df)
 summary(mod)
+tab_model(mod, show.ci = F, show.se = T)
