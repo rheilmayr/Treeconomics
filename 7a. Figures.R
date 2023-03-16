@@ -230,7 +230,7 @@ map <-ggplot() +
   geom_map(data = world, map = world,
            aes(x=long, y=lat, map_id = region),
            color = "black", fill = "lightgray", size = 0.1,alpha=.7) +
-  theme_bw(base_size =20)+
+  theme_bw(base_size =25)+
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
   geom_point(data = site_loc, aes(y = latitude, x = longitude), color = "#443A83FF")+
   #geom_sf(data = flm_df, color = "#443A83FF", alpha = .2) +
@@ -240,6 +240,8 @@ map <-ggplot() +
   scale_y_continuous("Latitude", breaks = yr, labels = ylabels)
 
 map
+
+##exported dim 4x7
 
 
 # map <- ggplot() +
@@ -354,7 +356,7 @@ xmax <- 4
 ymin <- -4
 ymax = 3
 
-base_text_size = 18
+base_text_size = 25
 ### Summary plot of sample distribution
 # hex <- flm_df %>% ggplot(aes(x = cwd.spstd, y = pet.spstd, weight = nobs / 1000)) +
 hex <- flm_df %>% ggplot(aes(x = cwd.spstd, y = pet.spstd)) +
@@ -371,7 +373,7 @@ hex <- flm_df %>% ggplot(aes(x = cwd.spstd, y = pet.spstd)) +
   scale_fill_viridis_c() +
   # scale_color_viridis_c(name = bquote('Species')) +
   theme_bw(base_size = base_text_size)+
-  theme(legend.position = c(.2,.83),
+  theme(legend.position = c(.24,.83),
         legend.text = element_text(size=base_text_size - 6),
         legend.title = element_text(size=base_text_size - 4),
         legend.background = element_blank(),
@@ -381,8 +383,9 @@ hex
   
 hex2 <- ggMarginal(hex, type="histogram", fill ="#404788FF", alpha=.5)
 hex2 <- hex2 %>% as.ggplot()
+hex2
 
-figs1 <- map/range_map
+figs1 <- map/range_map+plot_layout(heights = c(1,1))
 figs1+
   plot_annotation(tag_levels = 'A') & theme(
     plot.tag = element_text(face = 'bold', size=12, family ="Helvetica"),
@@ -429,17 +432,17 @@ hypfig <- ggplot(newdat, aes(x=cwd,y=value, color=hyp))+
 
 hypfig
 
-f1 <- (map/range_map) | hex2 + hypfig
+f1 <- (map/range_map) | hex + hypfig
 #ggsave(paste0(wdir, 'figures\\1_data_and_hypoth.svg'), plot = f1, width = 8, height = 5)
 
 
-# figs1
-# 
-# figs1+plot_layout(widths = c(1,1,.5))+
-#   plot_annotation(tag_levels = 'A') & theme(
-#     plot.tag = element_text(face = 'bold', size=12, family ="Helvetica"),
-#     text=element_text(family ="Helvetica"))
-# figs1
+figs2 <- figs1|(hex + hypfig)
+
+figs2+plot_layout(widths = c(1,2,.5))+
+  plot_annotation(tag_levels = 'A') & theme(
+    plot.tag = element_text(face = 'bold', size=12, family ="Helvetica"),
+    text=element_text(family ="Helvetica"))
+figs2
 
 #ggsave(paste0(wdir, 'figures\\1b_obs_density.svg'), plot = hex, width = 12, height = 12)
 
@@ -1119,7 +1122,10 @@ pet_full_margins
 #ggsave(paste0(wdir, 'figures\\2_cwd_margins_only.svg'), plot = margins_plot, width = 15, height = 9, units = "in")
 
 margins_plot <- cwd_full_margins | pet_full_margins
-margins_plot
+margins_plot +
+  plot_annotation(tag_levels="A") & theme(plot.tag = element_text(face = 'bold', size=23)) &
+  plot_layout(guides = "collect")
+
 #ggsave(paste0(wdir, 'figures\\2_all_margins.svg'), plot = margins_plot, width = 15, height = 14, units = "in")
 
 
@@ -1822,8 +1828,11 @@ change_plot <- (cwd_change | pet_change) +
   plot_layout(guides = "collect")
 change_plot
 
-cwd_change_fig <- cwd_map / change_plot / genus_cwd_change +
-  plot_layout(heights = c(1.4, 1.7, 1))
+# cwd_change_fig <- cwd_map / change_plot / genus_cwd_change +
+#   plot_layout(heights = c(1.4, 1.7, 1))
+
+cwd_change_fig <- change_plot / genus_cwd_change 
+
 
 #ggsave(paste0(wdir, "figures\\", "3_cwd_change.svg"), cwd_change_fig, width = 7.5, height = 11)
 
