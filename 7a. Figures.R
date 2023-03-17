@@ -1129,24 +1129,8 @@ margins_plot
 # Marginal effects by genera ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ### Binned plot of cwd sensitivity
-gen_marg_fx_df <- function(mod_df, cwd_min, cwd_max){
-  cwd_inc <- 0.1
-  at_pet <- 0
-  
-  init_pull_marg_fx <- partial(.f = pull_marg_fx, 
-                               mod_df = mod_df)
-  cwd_me_df <- tibble(at_cwd = seq(cwd_min, cwd_max, seq_inc))
-  cwd_me_df <- cwd_me_df %>%
-    mutate(cwd_me = pmap(list(at_pet = at_pet,
-                              at_cwd = cwd_me_df$at_cwd),
-                         .f = init_pull_marg_fx)) %>% 
-    unnest(cwd_me)
-  return(cwd_me_df)
-}
-
-
 gen_marg_fx_df <- function(gen_mod, gen_data){
-  cwd_min = 
+  # cwd_min = 
   cwd_inc <- 0.1
   at_pet <- 0
   cwd_min <- gen_data %>% pull(cwd.spstd) %>% min()
@@ -1155,50 +1139,56 @@ gen_marg_fx_df <- function(gen_mod, gen_data){
   return(gen_pred)
 }
 
-pull_coefs <- function(gen_mod){
-  coef_table <- gen_mod %>% coeftable()
-  coef <- coef_table[2,1]  %>% round(digits = 3)
-  p <- coef_table[2, 4] %>% round(digits = 3)
+
+pull_coefs <- function(gen_mod, gen_dat){
+  median_cwd <- gen_dat %>% pull(cwd.spstd) %>% median()
+  lht <- linearHypothesis(gen_mod, c(paste0('cwd.spstd + ', as.character(median_cwd), ' * I(cwd.spstd^2) = 0')))
+  pvalue <- lht$`Pr(>Chisq)`[2] %>% round(digits = 3)
+  coefs = gen_mod$coefficients
+  me <- (coefs['cwd.spstd'] + median_cwd * 2 * coefs['I(cwd.spstd^2)']) %>% round(digits = 3)
+  
+  # coef_table <- gen_mod %>% coeftable()
+  # coef <- coef_table[2,1]  %>% round(digits = 3)
+  # p <- coef_table[2, 4] %>% round(digits = 3)
   n <- gen_mod$nobs
   
-  label <-  paste0("   n sites: ", n, ";\n   slope: ", coef, ";\n   p value: ", p, "\n")
+  label <-  paste0("   n sites: ", n, ";\n   slope: ", me, ";\n   p value: ", pvalue, "\n")
   return(label)
 }
 
 
-genus_info <- sp_info %>% 
-  group_by(genus) %>% 
-  summarise(gymno_angio = first(gymno_angio))
+# genus_info <- sp_info %>% 
+#   group_by(genus) %>% 
+#   summarise(gymno_angio = first(gymno_angio))
 
-coef_labels <- genus_models %>% 
-  mutate(labels = map(model_estimates, pull_coefs)) %>% 
-  select(genus, labels) %>% 
-  unnest(labels) %>% 
+coef_labels <- genus_df %>%
+  mutate(labels = map2(model_estimates, data, pull_coefs)) %>%
+  select(genus, labels) %>%
+  unnest(labels) %>%
   arrange(genus)
 
 
-genus_predictions <- genus_models %>% 
+genus_predictions <- genus_df %>% 
   mutate(predictions = map2(model_estimates, data, gen_marg_fx_df))
 
 genus_predictions <- genus_predictions %>% 
   unnest(predictions) %>% 
   select(-data, -model_estimates) %>% 
-  left_join(genus_info, by = "genus") %>% 
   arrange(genus)
 
 gen_plot <- genus_predictions %>% 
   # filter(genus %in% genus_keep) %>%
   ggplot(aes(x = cwd.spstd)) + 
   geom_line(aes(y = predicted)) +
-  geom_ribbon(aes(ymin=conf.low, ymax=conf.high, fill = gymno_angio), alpha=0.2) +
+  geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2) +
   # geom_ribbon(aes(ymin=cwd_ci_min, ymax=cwd_ci_max), alpha=0.2, fill = "darkblue") +
   theme_bw(base_size = 22) + 
   facet_wrap(~genus, scales = "free") +
   theme(
-        # panel.grid.major = element_blank(),
-        # panel.grid.minor = element_blank(),
-        strip.background = element_blank(),
-        panel.border = element_rect(colour = "black", fill = NA)) +
+    # panel.grid.major = element_blank(),
+    # panel.grid.minor = element_blank(),
+    strip.background = element_blank(),
+    panel.border = element_rect(colour = "black", fill = NA)) +
   geom_line(aes(y = conf.low), linetype = 3) +
   geom_line(aes(y = conf.high), linetype = 3) +
   geom_hline(yintercept = 0, linetype = 2) +
@@ -1206,13 +1196,14 @@ gen_plot <- genus_predictions %>%
   ylab("Predicted sensitivity to CWD") +
   xlim(c(-3, 3))
 
+
 gen_plot <- gen_plot +
   geom_text(data = coef_labels, aes(label = labels, x = -Inf, y = -Inf),
             hjust = 0, vjust = 0)
 
-  
+
 gen_plot
-#ggsave(paste0(wdir, 'figures\\a3_genus_margins.svg'), gen_plot, width = 22, height = 12, units = "in")
+ggsave(paste0(wdir, 'figures\\a3_genus_margins_nonlinear.svg'), gen_plot, width = 22, height = 12, units = "in")
 
 
 # margins_plot <- margins_plot +
