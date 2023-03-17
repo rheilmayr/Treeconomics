@@ -29,11 +29,10 @@ select <- dplyr::select
 # 2) Data imports  ---------
 #===============================================================================
 ### Define path
-wdir <- 'remote/'
+wdir <- 'NewRemote/'
 
 # 1. Site-level regressions
-flm_df <- read_csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv")) %>%
-  select(-X1)
+flm_df <- read_csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv")) 
 
 # 2. Species range maps
 range_file <- paste0(wdir, 'in/species_ranges/merged_ranges.shp')
@@ -121,6 +120,8 @@ map <- ggplot() +
   geom_sf(data = world) +
   geom_sf(data = sp_range, fill = '#21908CFF', alpha = .5, colour = NA) +
   geom_sf(data = trim_df, color = '#440154FF', fill = 'red', alpha = .8) +
+  annotate("text", x = high_coords[[1]][1], y = high_coords[[1]][2], label = "A", color = "orange", size = 12) +
+  annotate("text", x = low_coords[[1]][1], y = low_coords[[1]][2], label = "B", color = "orange", size = 12) +
   theme_bw(base_size = 15)+
   ylab("Latitude")+
   xlab("Longitude")+
@@ -128,14 +129,15 @@ map <- ggplot() +
   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
 map
 
-
+#4x7
 
 ### Plot of climatic range with ITRDB sites
 xmin <- -2
 xmax <- 2
 hex <- spp_predictions %>% ggplot(aes(x = cwd_hist, y = pet_hist)) +
-  geom_density_2d(colour = "black") +
-  geom_density_2d_filled(alpha = 0.5) +
+  geom_density_2d(color = '#21908CFF') +
+  # geom_density_2d(colour = "black") +
+  #geom_density_2d_filled(alpha = .6) +
   xlim(xmin, xmax) +
   ylim(xmin, xmax) +
   # labs(fill = "Number of cells") +
@@ -143,7 +145,8 @@ hex <- spp_predictions %>% ggplot(aes(x = cwd_hist, y = pet_hist)) +
   xlab("Historic CWD\n(Deviation from species mean)") + 
   theme_bw(base_size = 22) +
   coord_fixed() +
-  geom_point(data = trim_df, aes(x = cwd.spstd, y = pet.spstd), colour = "black", alpha = 0.5)
+  guides(fill=F, colour=F)+
+  geom_point(data = trim_df, aes(x = cwd.spstd, y = pet.spstd), colour = '#440154FF', alpha = 0.5)
 hex
 
 
@@ -170,8 +173,8 @@ low_val <- trim_df %>%
   pull(estimate_cwd.an) %>% 
   round(digits = 3)
 
-high_lab <- paste0("Sensitivity = ", as.character(high_val))
-low_lab <- paste0("Sensitivity = ", as.character(low_val))
+high_lab <- paste0("sensitivity = ", as.character(high_val))
+low_lab <- paste0("sensitivity = ", as.character(low_val))
 
 # ex_plots <- trim_df %>% 
 #   filter(collection_id == high_sens | collection_id == low_sens)
@@ -189,6 +192,7 @@ map_ex <- ggplot() +
   # xlab("Longitude")+
   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
 
+map_ex
 
 high_ex <- dendro_ex %>% 
   filter(collection_id == high_sens) %>% 
@@ -205,7 +209,7 @@ both_fig <- both_ex %>%
   geom_point( alpha=.1) +
   scale_fill_manual(values = c("#404788", "#efca2a")) +
   scale_color_manual(values = c("#404788", "#efca2a")) +
-  geom_smooth(method=lm) +
+  geom_smooth(method="lm") +
   theme_bw(base_size = 25) +
   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
         plot.title = element_text(hjust = 0.5))+
@@ -213,9 +217,11 @@ both_fig <- both_ex %>%
   xlab("Climatic water deficit") +
   ylim(c(0,3)) +
   xlim(c(-1.25, 0))+
-  guides(fill=F, color=F)
-#ggtitle("Site A") +
-#annotate("text", x = -0.85, y = 1.25, label = high_lab, size = 7)
+  guides(fill=F, color=F)+
+  annotate("text", x = -1, y = 2.75, label = paste("Site A"), size = 7)+
+  annotate("text", x = -0.4, y = 2.25, label = paste("Site B"), size = 7)
+
+
 both_fig
 
 # low_ex <- dendro_ex %>% 
@@ -312,7 +318,7 @@ partial_plot
 combined_plot <- (map_ex | both_fig) / (sens_niche | partial_plot)+ plot_layout(widths = c(1,4))
 combined_plot
 combined_plot <- (map_ex | high_ex / low_ex) / (sens_niche | partial_plot)
-ggsave(paste0(wdir, "figures\\", "5_sp_example.svg"), combined_plot, width = 15, height = 12)
+#ggsave(paste0(wdir, "figures\\", "5_sp_example.svg"), combined_plot, width = 15, height = 12)
 
 #===============================================================================
 # 5) Predictions  ---------
@@ -412,9 +418,12 @@ cwd_change_map <- ggplot() +
   geom_sf(data = world) +
   geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = cwd_change)) +
   theme_bw(base_size = 22)+
+  theme(legend.position = c(.23,.15),
+        legend.background = element_blank())+
   ylab("Latitude")+
   xlab("Longitude")+
-  scale_fill_viridis_c(direction = -1) +
+  #scale_fill_viridis_c(direction = -1) +
+  scale_fill_viridis(option="magma")+
   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
 cwd_change_map
 
@@ -436,9 +445,12 @@ cwd_sens_map <- ggplot() +
   geom_sf(data = world) +
   geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = cwd_sens)) +
   theme_bw(base_size = 22)+
+  theme(legend.position = c(.21,.15),
+        legend.background = element_blank())+
   ylab("Latitude")+
   xlab("Longitude")+
-  scale_fill_viridis_c(direction = -1) +
+  #scale_fill_viridis_c(direction = -1) +
+  scale_fill_viridis(option="mako", direction = -1)+
   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
 cwd_sens_map
 
@@ -460,10 +472,14 @@ rwi_map <- ggplot() +
   geom_sf(data = world) +
   geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = rwi_pred_change_mean)) +
   theme_bw(base_size = 22)+
+  theme(legend.position = c(.23,.15),
+        legend.background = element_blank())+
   ylab("Latitude")+
   xlab("Longitude")+
   scale_fill_viridis_c(direction = -1) +
+  #scale_fill_viridis(option="mako")+
+  guides(fill=guide_legend(title="RWI_change"))+
   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
 rwi_map
 
-
+cwd_change_map + rwi_map + plot_layout(guides = "collect")
