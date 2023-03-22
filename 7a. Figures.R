@@ -68,7 +68,7 @@ theme_set(
 # Load data ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ### Define path
-wdir <- 'NewRemote/'
+wdir <- 'remote/'
 
 # 1. Site-level regressions
 flm_df <- read_csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv"))
@@ -79,10 +79,10 @@ site_smry <- site_smry %>%
   select(collection_id, sp_id, latitude, longitude) %>% 
   mutate(species_id = tolower(sp_id)) %>% 
   select(-sp_id)
-# site_loc <- site_smry %>% 
-#   select(collection_id, latitude, longitude)
+site_loc <- site_smry %>%
+  select(collection_id, latitude, longitude)
 flm_df <- flm_df %>% 
-  # left_join(site_loc, by = "collection_id") %>% 
+  left_join(site_loc, by = "collection_id") %>%
   st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
 
 
@@ -610,7 +610,7 @@ pet_qqplot <- (itrdb_pet_hist / fullrange_pet_hist) | pet_qq_plot
 qqplot <- cwd_qqplot / pet_qqplot
 qqplot
 
-#ggsave(paste0(wdir, 'figures\\a1_qqplots.svg'), plot = qqplot, width = 11, height = 7, units = "in")
+ggsave(paste0(wdir, 'figures\\a1_qqplots.svg'), plot = qqplot, width = 11, height = 7, units = "in")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
