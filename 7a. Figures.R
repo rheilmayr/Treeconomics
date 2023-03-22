@@ -49,6 +49,7 @@ library(marginaleffects)
 library(tmap)
 library(fixest)
 library(forcats)
+library(car)
 librarian::shelf(ggplotify)
 
 loadfonts(device = "win")
@@ -617,11 +618,11 @@ ggsave(paste0(wdir, 'figures\\a1_qqplots.svg'), plot = qqplot, width = 11, heigh
 # Histogram of first stage coefficients --------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 cwd_trim_df <- trim_df %>% 
-  select(collection_id, genus, species_id, estimate = estimate_cwd.an, p = p.value_cwd.an) %>% 
+  select(collection_id, estimate = estimate_cwd.an, p = p.value_cwd.an) %>% 
   mutate(variable = "cwd")
 
 pet_trim_df <- trim_df %>% 
-  select(collection_id, genus, species_id, estimate = estimate_pet.an, p = p.value_pet.an) %>% 
+  select(collection_id, estimate = estimate_pet.an, p = p.value_pet.an) %>% 
   mutate(variable = "pet")
 
 long_trim_df <- rbind(cwd_trim_df, pet_trim_df) %>% 
@@ -718,8 +719,8 @@ pet_dynamic = pet_plot +
 
 first_stage_effects <- (cwd_est_plot / pet_est_plot) | (cwd_dynamic / pet_dynamic)
 first_stage_effects
-#ggsave(paste0(wdir, 'figures\\a2_first_stage_effects.svg'), plot = first_stage_effects,
-       #width = 15, height = 8, units = "in")
+ggsave(paste0(wdir, 'figures\\a2_first_stage_effects.svg'), plot = first_stage_effects,
+width = 15, height = 8, units = "in")
 
 # plot_dnlm <- function(crosspredictions){
 #   nlags = 15
@@ -855,10 +856,13 @@ cwd_binned_margins <- plot_dat_b %>%
   stat_summary_hex(fun = function(x) mean(x), bins=12)+
   scale_fill_gradient2(low = "#401552", mid = "grey93", high = "#82bead", midpoint = .98, 
                        na.value = NA, name="Mean RWI")+
+  
   # xlim(c(pred_min, pred_max)) +
   # ylim(c(pred_min, pred_max)) +
   #scale_fill_viridis_c(direction = -1) +
-  scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
+  scale_fill_continuous_diverging(rev = TRUE, mid = 0,
+                                  limits = c(-.33, .05),
+                                  oob = scales::squish) +
   ylab("Deviation from mean PET")+
   xlab("Deviation from mean CWD")+
   theme_bw(base_size = base_text_size)+
@@ -1126,7 +1130,7 @@ margins_plot +
   plot_annotation(tag_levels="A") & theme(plot.tag = element_text(face = 'bold', size=23)) &
   plot_layout(guides = "collect")
 
-#ggsave(paste0(wdir, 'figures\\2_all_margins.svg'), plot = margins_plot, width = 15, height = 14, units = "in")
+ggsave(paste0(wdir, 'figures\\2_all_margins.svg'), plot = margins_plot, width = 15, height = 14, units = "in")
 
 
 
@@ -1167,14 +1171,14 @@ pull_coefs <- function(gen_mod, gen_dat){
 #   group_by(genus) %>% 
 #   summarise(gymno_angio = first(gymno_angio))
 
-coef_labels <- genus_df %>%
+coef_labels <- genus_models %>%
   mutate(labels = map2(model_estimates, data, pull_coefs)) %>%
   select(genus, labels) %>%
   unnest(labels) %>%
   arrange(genus)
 
 
-genus_predictions <- genus_df %>% 
+genus_predictions <- genus_models %>% 
   mutate(predictions = map2(model_estimates, data, gen_marg_fx_df))
 
 genus_predictions <- genus_predictions %>% 
@@ -1185,7 +1189,7 @@ genus_predictions <- genus_predictions %>%
 gen_plot <- genus_predictions %>% 
   # filter(genus %in% genus_keep) %>%
   ggplot(aes(x = cwd.spstd)) + 
-  geom_line(aes(y = predicted)) +
+  geom_line(aes(y = estimate)) +
   geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2) +
   # geom_ribbon(aes(ymin=cwd_ci_min, ymax=cwd_ci_max), alpha=0.2, fill = "darkblue") +
   theme_bw(base_size = 22) + 
@@ -1497,144 +1501,108 @@ rwi_bin
 
 pred_full <- cwd_sens_bin/ pet_sens_bin | cwd_change_bin/pet_change_bin | rwi_bin
 pred_full
-#ggsave(paste0(wdir, "figures\\", "4_pred_full.svg"), pred_full, width = 40, height = 35)
+ggsave(paste0(wdir, "figures\\", "4_pred_full.svg"), pred_full, width = 40, height = 35)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Transect plots ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-pred_dat <- plot_dat %>% 
-  select(cwd.q, pet.q, 
-         rwi_change = rwi_change, 
-         rwi_change_lb = rwi_change_lb, 
-         rwi_change_ub = rwi_change_ub) %>% 
-  mutate(scenario = "rwi_change")
-
-pclim_dat <- plot_dat %>% 
-  select(cwd.q, pet.q, 
-         rwi_change = rwi_change_pclim, 
-         rwi_change_lb = rwi_change_pclim_lb, 
-         rwi_change_ub = rwi_change_pclim_ub) %>% 
-  mutate(scenario = "rwi_change_pclim")
-
-
-transect_dat <- pred_dat %>% 
-  rbind(pclim_dat) %>% 
-  mutate(scenario = fct_relevel(scenario, "rwi_change", "rwi_change_pclim"))
-
-transect_1 <- transect_dat %>% 
-  filter(pet.q == 0) %>%
-  group_by(cwd.q, scenario) %>% 
-  summarise(rwi_change = mean(rwi_change),
-            rwi_change_lb = mean(rwi_change_lb),
-            rwi_change_ub = mean(rwi_change_ub)) %>% 
-  ggplot(aes(x = cwd.q, y = rwi_change, group = scenario, color = scenario)) +
-  geom_ribbon(aes(ymin = rwi_change_lb,
-                  ymax = rwi_change_ub,
-                  fill = scenario),
-              alpha = 0.2) +
-  geom_line(size = 2) +
-  theme_bw(base_size = 20)+
-  ylim(c(-1, 0.2)) +
-  xlim(c(-2, 2)) +
-  scale_linetype_manual(values=c("solid", "dotted", "dotted")) +
-  scale_fill_manual(name = "Scenario",
-                    labels = c("Full model", 
-                               "Variable shift in climate,\nconstant sensitivity"), 
-                    values = c("dark blue", "dark red", "dark green")) +
-  scale_color_manual(name = "Scenario",
-                     labels = c("Full model", 
-                                "Variable shift in climate,\nconstant sensitivity"), 
-                     values = c("dark blue", "dark red", "dark green")) +
-  ggtitle("Historic PET = 1 std above mean") +
-  ylab("Predicted change in RWI") +
-  xlab("Historic CWD (Deviation from species mean)") +
-  theme(legend.position = c(.18,.75),
-        legend.text = element_text(size=13),
-        legend.title = element_text(size=18),
-        legend.background = element_blank()) +
-  geom_hline(yintercept = 0, linetype = "dashed", size = 1)
-transect_1
-
-
-transect_2 <- transect_dat %>% 
-  filter(pet.q == 2) %>% 
-  ggplot(aes(x = cwd.q, y = rwi_change, group = scenario, color = scenario)) +
-  geom_ribbon(aes(ymin = rwi_change_lb,
-                  ymax = rwi_change_ub,
-                  fill = scenario),
-              alpha = 0.2) +
-  geom_line(size = 2) +
-  theme_bw(base_size = 20)+
-  ylim(c(-1.1, 0.2)) +
-  xlim(c(-2, 2)) +
-  scale_linetype_manual(values=c("solid", "dotted", "dotted"))+
-  scale_fill_manual(name = "Scenario",
-                    labels = c("Full model", 
-                               "Variable shift in climate,\nconstant sensitivity"), 
-                    values = c("dark blue", "dark red", "dark green")) +
-  scale_color_manual(name = "Scenario",
-                     labels = c("Full model", 
-                                "Variable shift in climate,\nconstant sensitivity"), 
-                     values = c("dark blue", "dark red", "dark green")) +
-  ggtitle("Historic PET = 1 std below mean") +
-  ylab("Predicted change in RWI") +
-  xlab("Historic CWD (Deviation from species mean)") +
-  theme(legend.position = c(.18,.25),
-        legend.text = element_text(size=13),
-        legend.title = element_text(size=18),
-        legend.background = element_blank()) +
-  geom_hline(yintercept = 0, linetype = "dashed", size = 1)
-transect_2
-
-  locator <- rwi_bin + 
-  theme_bw(base_size = 20)+
-  theme(legend.position = c(.18,.83),
-        legend.text = element_text(size=13),
-        legend.title = element_text(size=18),
-        legend.background = element_blank())+
-  geom_hline(yintercept = 1, size = 1) + 
-  geom_hline(yintercept = -1, size = 1)
-
-locator | transect_1 / transect_2
-
-
-
-plot_dat %>% 
-  filter(pet.q == 0) %>% 
-  ggplot(aes(x = cwd.q, y = cwd_change)) +
-  # geom_ribbon(aes(ymin = rwi_change_lb,
-  #                 ymax = rwi_change_ub,
-  #                 fill = scenario),
-  #             alpha = 0.2) +
-  geom_line(size = 2) +
-  theme_bw(base_size = 20)
+# pred_dat <- plot_dat %>% 
+#   select(cwd.q, pet.q, 
+#          rwi_change = rwi_change, 
+#          rwi_change_lb = rwi_change_lb, 
+#          rwi_change_ub = rwi_change_ub) %>% 
+#   mutate(scenario = "rwi_change")
+# 
+# pclim_dat <- plot_dat %>% 
+#   select(cwd.q, pet.q, 
+#          rwi_change = rwi_change_pclim, 
+#          rwi_change_lb = rwi_change_pclim_lb, 
+#          rwi_change_ub = rwi_change_pclim_ub) %>% 
+#   mutate(scenario = "rwi_change_pclim")
+# 
+# 
+# transect_dat <- pred_dat %>% 
+#   rbind(pclim_dat) %>% 
+#   mutate(scenario = fct_relevel(scenario, "rwi_change", "rwi_change_pclim"))
+# 
+# transect_1 <- transect_dat %>% 
+#   filter(pet.q == 0) %>%
+#   group_by(cwd.q, scenario) %>% 
+#   summarise(rwi_change = mean(rwi_change),
+#             rwi_change_lb = mean(rwi_change_lb),
+#             rwi_change_ub = mean(rwi_change_ub)) %>% 
+#   ggplot(aes(x = cwd.q, y = rwi_change, group = scenario, color = scenario)) +
+#   geom_ribbon(aes(ymin = rwi_change_lb,
+#                   ymax = rwi_change_ub,
+#                   fill = scenario),
+#               alpha = 0.2) +
+#   geom_line(size = 2) +
+#   theme_bw(base_size = 20)+
+#   ylim(c(-1, 0.2)) +
+#   xlim(c(-2, 2)) +
+#   scale_linetype_manual(values=c("solid", "dotted", "dotted")) +
+#   scale_fill_manual(name = "Scenario",
+#                     labels = c("Full model", 
+#                                "Variable shift in climate,\nconstant sensitivity"), 
+#                     values = c("dark blue", "dark red", "dark green")) +
+#   scale_color_manual(name = "Scenario",
+#                      labels = c("Full model", 
+#                                 "Variable shift in climate,\nconstant sensitivity"), 
+#                      values = c("dark blue", "dark red", "dark green")) +
+#   ggtitle("Historic PET = 1 std above mean") +
+#   ylab("Predicted change in RWI") +
+#   xlab("Historic CWD (Deviation from species mean)") +
+#   theme(legend.position = c(.18,.75),
+#         legend.text = element_text(size=13),
+#         legend.title = element_text(size=18),
+#         legend.background = element_blank()) +
+#   geom_hline(yintercept = 0, linetype = "dashed", size = 1)
+# transect_1
+# 
+# 
+# transect_2 <- transect_dat %>% 
+#   filter(pet.q == 2) %>% 
+#   ggplot(aes(x = cwd.q, y = rwi_change, group = scenario, color = scenario)) +
+#   geom_ribbon(aes(ymin = rwi_change_lb,
+#                   ymax = rwi_change_ub,
+#                   fill = scenario),
+#               alpha = 0.2) +
+#   geom_line(size = 2) +
+#   theme_bw(base_size = 20)+
+#   ylim(c(-1.1, 0.2)) +
+#   xlim(c(-2, 2)) +
+#   scale_linetype_manual(values=c("solid", "dotted", "dotted"))+
+#   scale_fill_manual(name = "Scenario",
+#                     labels = c("Full model", 
+#                                "Variable shift in climate,\nconstant sensitivity"), 
+#                     values = c("dark blue", "dark red", "dark green")) +
+#   scale_color_manual(name = "Scenario",
+#                      labels = c("Full model", 
+#                                 "Variable shift in climate,\nconstant sensitivity"), 
+#                      values = c("dark blue", "dark red", "dark green")) +
+#   ggtitle("Historic PET = 1 std below mean") +
+#   ylab("Predicted change in RWI") +
+#   xlab("Historic CWD (Deviation from species mean)") +
+#   theme(legend.position = c(.18,.25),
+#         legend.text = element_text(size=13),
+#         legend.title = element_text(size=18),
+#         legend.background = element_blank()) +
+#   geom_hline(yintercept = 0, linetype = "dashed", size = 1)
+# transect_2
+# 
+#   locator <- rwi_bin + 
+#   theme_bw(base_size = 20)+
+#   theme(legend.position = c(.18,.83),
+#         legend.text = element_text(size=13),
+#         legend.title = element_text(size=18),
+#         legend.background = element_blank())+
+#   geom_hline(yintercept = 1, size = 1) + 
+#   geom_hline(yintercept = -1, size = 1)
+# 
+# locator | transect_1 / transect_2
 
 
-## Alternate version that plots difference in two models
-transect_n1 <- plot_dat %>% 
-  filter(pet.q == -1) %>%
-  group_by(cwd.q) %>% 
-  summarise(rwi_change = mean(rwi_dif),
-            rwi_change_lb = mean(rwi_dif_lb),
-            rwi_change_ub = mean(rwi_dif_ub)) %>% 
-  ggplot(aes(x = cwd.q, y = rwi_change)) +
-  geom_ribbon(aes(ymin = rwi_change_lb,
-                  ymax = rwi_change_ub),
-              alpha = 0.2) +
-  geom_line(size = 2) +
-  theme_bw(base_size = 20)+
-  ylim(c(-0.4, 0.3)) +
-  xlim(c(-2, 2)) +
-  ggtitle("Historic PET = 1 std below mean") +
-  # ylab("Predicted difference in RWI change - neutral model vs ourse") +
-  xlab("Historic CWD (Deviation from species mean)") +
-  theme(legend.position = c(.18,.75),
-        legend.text = element_text(size=13),
-        legend.title = element_text(size=18),
-        legend.background = element_blank()) +
-  geom_hline(yintercept = 0, linetype = "dashed", size = 1)
-transect_n1
 
 
 transect_0 <- plot_dat %>% 
@@ -1651,42 +1619,72 @@ transect_0 <- plot_dat %>%
   theme_bw(base_size = 20)+
   ylim(c(-0.4, 0.3)) +
   xlim(c(-2, 2)) +
-  ggtitle("Historic PET = historic species mean") +
+  # ggtitle("Historic PET = historic species mean") +
   # ylab("Predicted difference in RWI change - neutral model vs ourse") +
-  xlab("Historic CWD (Deviation from species mean)") +
+  xlab("Historic CWD\n(Deviation from species mean)") +
+  ylab("Difference in predicted\nRWI changes by 2100 ") +
   theme(legend.position = c(.18,.75),
         legend.text = element_text(size=13),
         legend.title = element_text(size=18),
         legend.background = element_blank()) +
   geom_hline(yintercept = 0, linetype = "dashed", size = 1)
 transect_0
+ggsave(paste0(wdir, "figures\\", "a5_dif_pred.svg"), transect_0, width = 4, height = 4)
 
-transect_1 <- plot_dat %>% 
-  filter(pet.q == 1) %>%
-  group_by(cwd.q) %>% 
-  summarise(rwi_change = mean(rwi_dif),
-            rwi_change_lb = mean(rwi_dif_lb),
-            rwi_change_ub = mean(rwi_dif_ub)) %>% 
-  ggplot(aes(x = cwd.q, y = rwi_change)) +
-  geom_ribbon(aes(ymin = rwi_change_lb,
-                  ymax = rwi_change_ub),
-              alpha = 0.2) +
-  geom_line(size = 2) +
-  theme_bw(base_size = 20)+
-  ylim(c(-0.4, 0.3)) +
-  xlim(c(-2, 2)) +
-  ggtitle("Historic PET = 1 std above mean") +
-  # ylab("Predicted difference in RWI change - neutral model vs ours") +
-  xlab("Historic CWD (Deviation from species mean)") +
-  theme(legend.position = c(.18,.75),
-        legend.text = element_text(size=13),
-        legend.title = element_text(size=18),
-        legend.background = element_blank()) +
-  geom_hline(yintercept = 0, linetype = "dashed", size = 1)
-transect_1
 
-plot <- transect_1 / transect_0 / transect_n1
-plot
+# ## Alternate version that plots difference in two models
+# transect_n1 <- plot_dat %>% 
+#   filter(pet.q == -1) %>%
+#   group_by(cwd.q) %>% 
+#   summarise(rwi_change = mean(rwi_dif),
+#             rwi_change_lb = mean(rwi_dif_lb),
+#             rwi_change_ub = mean(rwi_dif_ub)) %>% 
+#   ggplot(aes(x = cwd.q, y = rwi_change)) +
+#   geom_ribbon(aes(ymin = rwi_change_lb,
+#                   ymax = rwi_change_ub),
+#               alpha = 0.2) +
+#   geom_line(size = 2) +
+#   theme_bw(base_size = 20)+
+#   ylim(c(-0.4, 0.3)) +
+#   xlim(c(-2, 2)) +
+#   ggtitle("Historic PET = 1 std below mean") +
+#   # ylab("Predicted difference in RWI change - neutral model vs ourse") +
+#   xlab("Historic CWD (Deviation from species mean)") +
+#   theme(legend.position = c(.18,.75),
+#         legend.text = element_text(size=13),
+#         legend.title = element_text(size=18),
+#         legend.background = element_blank()) +
+#   geom_hline(yintercept = 0, linetype = "dashed", size = 1)
+# transect_n1
+# 
+# 
+# 
+# transect_1 <- plot_dat %>% 
+#   filter(pet.q == 1) %>%
+#   group_by(cwd.q) %>% 
+#   summarise(rwi_change = mean(rwi_dif),
+#             rwi_change_lb = mean(rwi_dif_lb),
+#             rwi_change_ub = mean(rwi_dif_ub)) %>% 
+#   ggplot(aes(x = cwd.q, y = rwi_change)) +
+#   geom_ribbon(aes(ymin = rwi_change_lb,
+#                   ymax = rwi_change_ub),
+#               alpha = 0.2) +
+#   geom_line(size = 2) +
+#   theme_bw(base_size = 20)+
+#   ylim(c(-0.4, 0.3)) +
+#   xlim(c(-2, 2)) +
+#   ggtitle("Historic PET = 1 std above mean") +
+#   # ylab("Predicted difference in RWI change - neutral model vs ours") +
+#   xlab("Historic CWD (Deviation from species mean)") +
+#   theme(legend.position = c(.18,.75),
+#         legend.text = element_text(size=13),
+#         legend.title = element_text(size=18),
+#         legend.background = element_blank()) +
+#   geom_hline(yintercept = 0, linetype = "dashed", size = 1)
+# transect_1
+# 
+# plot <- transect_1 / transect_0 / transect_n1
+# plot
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Changes in CWD and PET  ------------------------------------
