@@ -58,6 +58,8 @@ dendro_df <- dendro_df %>%
   group_by(collection_id, tree, year) %>% 
   summarise(rwi = mean(rwi),
             rwl = mean(rwl),
+            rwi_ar = mean(rwi_ar),
+            rwi_nb = mean(rwi_nb),
             .groups = "drop") %>% 
   as_tibble()
 
@@ -288,7 +290,7 @@ ihsTransform <- function(y) {log(y + (y ^ 2 + 1) ^ 0.5)}
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Run site-level regressions --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-fs_mod <- function(site_data){
+fs_mod <- function(site_data, outcome = "rwi"){
   rwl_mean <- site_data$rwl %>% mean(na.rm = TRUE)
   rwl_sd <- site_data$rwl %>% sd(na.rm = TRUE)
   
@@ -319,7 +321,10 @@ fs_mod <- function(site_data){
     tryCatch(
       expr = {
         # TODO: 7-9-21; Should we switch back to tree-level FE model? Complicates intercepts...
-        mod <- lm(rwi ~ pet.an + cwd.an, data = site_data)
+        formula <- as.formula(paste0(outcome, " ~ pet.an + cwd.an"))
+        mod <- lm(formula, data = site_data)
+
+        # mod <- lm(rwi ~ pet.an + cwd.an, data = site_data)
         # if (ntrees==1){
         #   mod <- lm(rwi ~ cwd.an + pet.an, site_data)
         # } else{
@@ -352,34 +357,6 @@ fs_mod <- function(site_data){
   }
   return(tibble(mod = list(mod), nobs = nobs, ntrees = ntrees, rwl_mean = rwl_mean, rwl_sd = rwl_sd, error = reg_error))
 }
-
-
-site_df <- site_df %>% 
-  mutate(fs_result = map(data, .f = fs_mod))
-
-data_df <- site_df %>% 
-  select(collection_id,data)
-
-site_df <- site_df %>% 
-  select(collection_id, fs_result) %>% 
-  unnest(fs_result)
-
-site_df <- site_df[which(!(site_df %>% pull(mod) %>% is.na())),]
-site_df <- site_df %>% 
-  unnest(mod)
-
-site_df <- site_df %>% 
-  select(-error)
-
-site_df %>% write.csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv'))
-
-
-
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Test for site-level concavity --------------------------------------------------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
 site_df <- dendro_df %>% 
   drop_na() %>% 
   mutate(cwd.an = cwd.an.spstd,
@@ -388,6 +365,62 @@ site_df <- dendro_df %>%
   add_tally(name = 'nobs') %>% 
   filter(nobs>10) %>% 
   nest()
+
+fs_mod_nb <- partial(fs_mod, outcome = "rwi_nb")
+fs_mod_ar <- partial(fs_mod, outcome = "rwi_ar")
+
+site_df <- site_df %>% 
+  mutate(fs_result = map(data, .f = fs_mod),
+         fs_result_nb = map(data, .f = fs_mod_nb),
+         fs_result_ar = map(data, .f = fs_mod_ar))
+
+
+data_df <- site_df %>% 
+  select(collection_id,data)
+
+fs_df <- site_df %>% 
+  select(collection_id, fs_result) %>% 
+  unnest(fs_result)
+
+fs_df <- fs_df[which(!(fs_df %>% pull(mod) %>% is.na())),]
+fs_df <- fs_df %>% 
+  unnest(mod)
+
+fs_df <- fs_df %>% 
+  select(-error)
+
+fs_df %>% write_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv'))
+
+
+## Repeat using results from nb detrended data
+fs_nb <- site_df %>% 
+  select(collection_id, fs_result_nb) %>% 
+  unnest(fs_result_nb)
+fs_nb <- fs_nb[which(!(fs_nb %>% pull(mod) %>% is.na())),]
+fs_nb <- fs_nb %>% 
+  unnest(mod) %>% 
+  select(-error)
+fs_nb %>% write_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std_nb.csv'))
+
+
+## Repeat using results from ar detrended data
+fs_ar <- site_df %>% 
+  select(collection_id, fs_result_ar) %>% 
+  unnest(fs_result_ar)
+fs_ar <- fs_ar[which(!(fs_ar %>% pull(mod) %>% is.na())),]
+fs_ar <- fs_ar %>% 
+  unnest(mod) %>% 
+  select(-error)
+fs_ar %>% write_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std_ar.csv'))
+
+
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Test for site-level concavity --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
 
 nonlinear_fs_mod <- function(site_data){
   rwl_mean <- site_data$rwl %>% mean(na.rm = TRUE)
