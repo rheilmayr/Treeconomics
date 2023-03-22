@@ -327,7 +327,6 @@ detrend_rwl <- function(rwl_dat, method) {
   return(rwi_dat)
 }
 
-clean_data <- clean_data[1:10,]
 clean_data$rwi <- map2(clean_data$rwl, "Spline", detrend_rwl)
 clean_data$rwi_nb <- map2(clean_data$rwl, "ModNegExp", detrend_rwl)
 clean_data$rwi_ar <- map2(clean_data$rwl, "Ar", detrend_rwl)
