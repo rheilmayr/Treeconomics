@@ -543,6 +543,7 @@ run_ss_conley <- function(data, outcome = "cwd_coef"){
   formula <- as.formula(paste(outcome, " ~ cwd.spstd + (cwd.spstd^2) + pet.spstd + (pet.spstd^2)"))
   mod <- feols(formula, data=data, weights = error_weights,
                vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
+  
   # formula <- as.formula(paste(outcome, " ~ cwd.spstd + I(cwd.spstd**2) + pet.spstd + I(pet.spstd**2)"))
   # mod <- lm(formula, data=data, weights = error_weights)
   return(mod)
