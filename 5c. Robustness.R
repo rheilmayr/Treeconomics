@@ -62,6 +62,8 @@ fs_spl <- read_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv'))
 fs_nb <- read_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std_nb.csv'))
 fs_ar <- read_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std_ar.csv'))
 
+fs_cum <- read_rds(paste0(wdir, 'out/first_stage/dnlm_cum_effects.rds'))
+
 # 2. Historic site-level climate
 ave_site_clim <- read_rds(paste0(wdir, "out\\climate\\site_ave_clim.gz"))
 
@@ -128,6 +130,15 @@ fs_nb <- fs_nb %>%
 fs_ar <- fs_ar %>% 
   process_fs()
 
+fs_cum <- fs_cum %>%  # Has already been trimmed and had weights calculated in dnlm script
+  # left_join(ave_site_clim, by = c("collection_id")) %>% 
+  left_join(site_df, by = "collection_id") %>% 
+  rename(estimate_cwd.an = cwd_cum, cwd_errorweights = errorweights)
+
+fs_cum <- fs_cum %>% 
+  mutate(trim_y = 1,
+         trim_x = 1)
+
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Spatial autocorrelation of trim_df ---------------------------------
@@ -184,6 +195,7 @@ specs <- data.frame(coef=NaN,
                     detrend_spline = NaN,
                     detrend_nb = NaN,
                     detrend_ar = NaN,
+                    cum_dnlm = NaN,
                     squared_term = NaN,
                     linear_mod = NaN,
                     species_control = NaN, 
@@ -209,6 +221,7 @@ new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         linear_mod = FALSE,
                         detrend_spline = TRUE, 
                         detrend_nb = FALSE,
+                        cum_dnlm = FALSE,
                         detrend_ar = FALSE)
 specs <- rbind(specs, new_row)
 
@@ -228,7 +241,8 @@ new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         species_control = FALSE,
                         squared_term = TRUE,
                       linear_mod = FALSE,
-                        detrend_spline = FALSE, 
+                      cum_dnlm = FALSE,
+                      detrend_spline = FALSE, 
                         detrend_nb = TRUE,
                         detrend_ar = FALSE)
 specs <- rbind(specs, new_row)
@@ -248,9 +262,32 @@ new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         species_control = FALSE,
                         squared_term = TRUE,
                       linear_mod = FALSE,
-                        detrend_spline = FALSE, 
+                      cum_dnlm = FALSE,
+                      detrend_spline = FALSE, 
                         detrend_nb = FALSE,
                         detrend_ar = TRUE)
+specs <- rbind(specs, new_row)
+
+
+## Cumulative impact from dynamic lag
+params <- list(despline_data = fs_cum,
+               formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2)"),
+               t_x = FALSE,
+               t_y = TRUE,
+               weights = "cwd_errorweights")
+mod_slopes <- robustness_test(params)
+new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
+                      se = mod_slopes %>% pull("std.error"),
+                      trim_x = params$t_x,
+                      trim_y = params$t_y,
+                      weight_se = params$weights == "cwd_errorweights",
+                      species_control = FALSE,
+                      squared_term = TRUE,
+                      linear_mod = FALSE,
+                      cum_dnlm = TRUE,
+                      detrend_spline = TRUE, 
+                      detrend_nb = FALSE,
+                      detrend_ar = FALSE)
 specs <- rbind(specs, new_row)
 
 
@@ -269,7 +306,8 @@ new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         species_control = FALSE,
                         squared_term = FALSE,
                         linear_mod = TRUE,
-                        detrend_spline = TRUE, 
+                      cum_dnlm = FALSE,
+                      detrend_spline = TRUE, 
                         detrend_nb = FALSE,
                         detrend_ar = FALSE)
 specs <- rbind(specs, new_row)
@@ -290,7 +328,8 @@ new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         species_control = TRUE,
                         squared_term = TRUE,
                       linear_mod = FALSE,
-                        detrend_spline = TRUE, 
+                      cum_dnlm = FALSE,
+                      detrend_spline = TRUE, 
                         detrend_nb = FALSE,
                         detrend_ar = FALSE)
 specs <- rbind(specs, new_row)
@@ -311,7 +350,8 @@ new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         species_control = FALSE,
                         squared_term = TRUE,
                       linear_mod = FALSE,
-                        detrend_spline = TRUE, 
+                      cum_dnlm = FALSE,
+                      detrend_spline = TRUE, 
                         detrend_nb = FALSE,
                         detrend_ar = FALSE)
 specs <- rbind(specs, new_row)
@@ -331,7 +371,8 @@ new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         species_control = FALSE,
                         squared_term = TRUE,
                       linear_mod = FALSE,
-                        detrend_spline = TRUE, 
+                      cum_dnlm = FALSE,
+                      detrend_spline = TRUE, 
                         detrend_nb = FALSE,
                         detrend_ar = FALSE)
 specs <- rbind(specs, new_row)
@@ -351,7 +392,8 @@ new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         species_control = FALSE,
                         squared_term = TRUE,
                       linear_mod = FALSE,
-                        detrend_spline = TRUE, 
+                      cum_dnlm = FALSE,
+                      detrend_spline = TRUE, 
                         detrend_nb = FALSE,
                         detrend_ar = FALSE)
 specs <- rbind(specs, new_row)
@@ -365,13 +407,15 @@ highlight_n <- which(specs$trim_y == TRUE &
                        specs$weight_se == TRUE &
                        specs$species_control == FALSE &
                        specs$squared_term == TRUE &
-                       specs$detrend_spline == TRUE)
+                       specs$detrend_spline == TRUE &
+                       specs$cum_dnlm == FALSE)
 
 
 # chart <- schart(specs, highlight=highlight_n, ci = c(.95), n=c(1, 3,2,2))
 
 
 labels <- list("Detrending" = c("Spline", "Negative binomial", "Autoregressive"),
+               "First stage" = "Cumulative\ndynamic lag",
                "Model structure" = c("Squared\nCWD and PET", "Linear\nCWD and PET", "Species\nfixed effects"),
                "Trimming and\nweighting" = c("Weight by\ninverse of s.e.", "Trim\noutliers in y", "Trim\noutliers in X"))
 
@@ -379,7 +423,7 @@ labels <- list("Detrending" = c("Spline", "Negative binomial", "Autoregressive")
 svg(paste0(wdir, 'figures\\a4_robustness.svg'), width = 7, height = 11)
 
 robustness_fig <- schart(specs, labels, highlight=highlight_n, order = "asis", 
-                         n=c(1, 2,2,3), ci = c(.95), 
+                         n=c(1, 2, 1, 2,3), ci = c(.95), 
                          ylab = "Slope of line relating sites' historic\nCWD to CWD's impact on growth\n(evaluated at median historic CWD)",
                          col.est=c("grey80", "dodgerblue4"),
                          col.dot=c("grey60","grey95","grey95","dodgerblue4"),
