@@ -359,36 +359,74 @@ sp_plot_dat %>%
   mean(na.rm = TRUE)
 
 
-# On average, PET is anticipated to increase by XX%, while CWD is anticipated 
-# to increase by XX%.
-pet_cmip_change %>% summary()
+# On average, the mean PET across a species’ range is anticipated to increase 
+# by 1.39 SD (0.48 – 3.04), while CWD is anticipated to increase by 1.41 SD 
+# (0.34 – 3.77). 
 
-cwd_cmip_change %>% summary()
+sp_clim <- read_rds(paste0(wdir, "out/climate/sp_clim_predictions.gz"))
+single_sp_clim <- (sp_clim[1, 8][1] %>% pull())[[1]]
 
-# When compared to a species’ historic climatic distribution, 84 percent of the 
-# area of species’ historic range is forecasted to have a higher average annual 
-# PET than the species’ historic mean PET, while 77 percent of the area is expected 
-# to by dryer than the historic mean CWD. 
+summarise_clim <- function(single_sp_clim){
+  single_sp_clim <- single_sp_clim %>% 
+    pivot_longer(cols = starts_with("pet_cmip") | starts_with("cwd_cmip"),
+                 names_to = c(".value", "mod_number"),
+                 names_pattern = "(.*?)(\\d{1,2})$")
+  
+  single_sp_change <- single_sp_clim %>% 
+    mutate(pet_change = pet_cmip_end - pet_cmip_start,
+           cwd_change = cwd_cmip_end - cwd_cmip_start) %>% 
+    group_by(mod_number) %>% 
+    summarise(cwd_change = mean(cwd_change),
+              pet_change = mean(pet_change))
+  return(single_sp_change)
+}
 
-sp_plot_dat %>%
-  ungroup() %>% 
-  group_by(pet_end_bin) %>% 
-  summarise(n = n()) %>%
-  mutate(freq = n / sum(n)) %>% 
-  filter(pet_end_bin != "Below prior mean") %>% 
-  pull(freq) %>% 
-  sum() %>% 
-  print()
+sp_clim <- sp_clim %>% 
+  mutate(clim_smry = map(clim_cmip_sp, .f = summarise_clim)) %>% 
+  select(sp_code, clim_smry) %>% 
+  unnest(clim_smry)
 
-sp_plot_dat %>%
-  ungroup() %>% 
-  group_by(cwd_end_bin) %>% 
-  summarise(n = n()) %>%
-  mutate(freq = n / sum(n)) %>% 
-  filter(cwd_end_bin != "Below prior mean") %>% 
-  pull(freq) %>% 
-  sum() %>% 
-  print()
+
+sp_clim %>% 
+  pull(cwd_change) %>% 
+  mean()
+
+sp_clim %>% 
+  pull(cwd_change) %>% 
+  quantile(c(0.025, 0.975))
+
+sp_clim %>% 
+  pull(pet_change) %>% 
+  mean()
+
+sp_clim %>% 
+  pull(pet_change) %>% 
+  quantile(c(0.025, 0.975))
+
+# # When compared to a species’ historic climatic distribution, 84 percent of the 
+# # area of species’ historic range is forecasted to have a higher average annual 
+# # PET than the species’ historic mean PET, while 77 percent of the area is expected 
+# # to by dryer than the historic mean CWD. 
+# 
+# sp_plot_dat %>%
+#   ungroup() %>% 
+#   group_by(pet_end_bin) %>% 
+#   summarise(n = n()) %>%
+#   mutate(freq = n / sum(n)) %>% 
+#   filter(pet_end_bin != "Below prior mean") %>% 
+#   pull(freq) %>% 
+#   sum() %>% 
+#   print()
+# 
+# sp_plot_dat %>%
+#   ungroup() %>% 
+#   group_by(cwd_end_bin) %>% 
+#   summarise(n = n()) %>%
+#   mutate(freq = n / sum(n)) %>% 
+#   filter(cwd_end_bin != "Below prior mean") %>% 
+#   pull(freq) %>% 
+#   sum() %>% 
+#   print()
 
 # One cause for concern is that 3.8 percent of range area is predicted to face 
 # a mean, annual CWD in 2100 that exceeds the mean CWD experienced anywhere in 
@@ -400,7 +438,14 @@ sp_plot_dat %>%
   mutate(freq = n / sum(n)) %>% 
   print()
 
-
+extreme_sp_change <- sp_plot_dat %>%
+  ungroup() %>% 
+  group_by(sp_code, cwd_end_bin) %>% 
+  summarise(n = n()) %>%
+  mutate(freq = n / sum(n)) %>% 
+  filter(cwd_end_bin == "Beyond prior max") %>% 
+  arrange(desc(freq)) %>% 
+  print()
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -488,6 +533,33 @@ hot_cell_comparison$dry %>% mean()
 hot_cell_comparison$dry %>% quantile(c(0.025, 0.975))
 
 t.test(hot_cell_comparison$wet, hot_cell_comparison)
+
+
+sp_predictions %>%
+  filter(cwd_hist<0, pet_hist >0) %>% 
+  summarise(mean(rwi_pred_change_mean),
+            mean(rwi_pred_change_025),
+            mean(rwi_pred_change_975))
+
+sp_predictions %>%
+  filter(cwd_hist>0, pet_hist<0) %>% 
+  summarise(mean(rwi_pred_change_mean),
+            mean(rwi_pred_change_025),
+            mean(rwi_pred_change_975))
+
+
+# sp_predictions %>%
+#   filter(cwd_hist<0, pet_hist<0) %>% 
+#   summarise(mean(rwi_pred_change_mean),
+#             mean(rwi_pred_change_025),
+#             mean(rwi_pred_change_975))
+# 
+# sp_predictions %>%
+#   filter(cwd_hist>0, pet_hist>0) %>% 
+#   summarise(mean(rwi_pred_change_mean),
+#             mean(rwi_pred_change_025),
+#             mean(rwi_pred_change_975))
+
 
 
 # In contrast to a neutral model in which predicted sensitivity to PET and CWD 
