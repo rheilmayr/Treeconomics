@@ -22,6 +22,7 @@
 # Package imports --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 library(MASS)
+library(car)
 library(tidyverse)
 library(broom)
 library(purrr)
@@ -45,6 +46,7 @@ library(gstat)
 library(sf)
 library(units)
 library(dtplyr)
+library(marginaleffects)
 
 set.seed(5597)
 
@@ -60,8 +62,7 @@ n_mc <- 10000
 wdir <- 'remote\\'
 
 # 1. Site-level regressions
-flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv')) %>%
-  select(-X1)
+flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv'))
 
 # 2. Historic site-level climate
 ave_site_clim <- read_rds(paste0(wdir, "out\\climate\\site_ave_clim.gz"))
@@ -176,8 +177,8 @@ for (site in site_list){
     pull(collection_id)
   block_list[site] <- list(block_sites)
 }
-# save(block_list,file=paste0(wdir,"out/spatial_blocks.Rdat"))
-# load(file=paste0(wdir,"out/spatial_blocks.Rdat"))
+save(block_list,file=paste0(wdir,"out/spatial_blocks.Rdat"))
+load(file=paste0(wdir,"out/spatial_blocks.Rdat"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -276,6 +277,12 @@ block_draw_df <- block_draw_df %>%
 block_draw_df <- block_draw_df %>% 
   left_join(mc_df, by = c("collection_id", "iter_idx"))
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Export first stage draws to pull summary stats -------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+block_draw_df %>% 
+  # select(boot_id, collection_id, cwd_coef, pet_coef, int_coef, cwd.spstd, pet.spstd) %>% 
+  write_rds(paste0(wdir, "out/second_stage/mc_sample.gz"), compress = "gz")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -404,128 +411,128 @@ write_rds(boot_df, paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
 
 
 
-## TODO: Should we be worried that bootstrap se very similar (but smaller?) than simple regression result?
-## Bootstrap is currently returning s.e. of 0.001849, compare to 0.002054 for simple regression:
-mod <- feols(estimate_cwd.an ~ cwd.spstd + pet.spstd, 
-             weights = trim_df$cwd_errorweights, data = trim_df)
-summary(mod) 
-
-library(marginaleffects)
-mod_df <- trim_df
-mod_df <- mod_df %>% 
-  mutate(int_coef = estimate_intercept,
-         pet_coef = estimate_pet.an, 
-         cwd_coef = estimate_cwd.an)
-
-run_ss(mod_df, outcome = "cwd_coef")
-mod <- feols(estimate_cwd.an ~ cwd.spstd + cwd.spstd**2 + pet.spstd + pet.spstd**2, 
-             weights = mod_df$cwd_errorweights, data = mod_df)
-summary(mod) 
-plot_cap(mod, condition = "pet.spstd") + xlim(-3,3) + ylim(-.2, 0)
-plot_cap(mod, condition = "cwd.spstd") + xlim(-3,3) + ylim(-.2, 0)
-
-newdata <- tibble("cwd.spstd" = 1, 
-                  "pet.spstd" = 0)
-predict(mod, newdata)
-
-
-mod <- feols(estimate_cwd.an ~ 1, 
-             weights = mod_df$cwd_errorweights, data = mod_df)
-mod_df %>% summarise(test = weighted.mean(estimate_cwd.an, cwd_errorweights))
-
-
-mod <- feols(estimate_pet.an ~ cwd.spstd + cwd.spstd**2 + pet.spstd + pet.spstd**2,
-             weights = mod_df$pet_errorweights, data = mod_df)
-summary(mod) 
-plot_cap(mod, condition = "pet.spstd") + xlim(-3,3) + ylim(-.1, .3)
-plot_cap(mod, condition = "cwd.spstd") + xlim(-3,3) + ylim(-.2, .2)
-
-newdata <- tibble("cwd.spstd" = 0, 
-                  "pet.spstd" = 0)
-predict(mod, newdata)
-
-
-
-mod <- feols(estimate_cwd.an ~ cwd.spstd + cwd.spstd**2 + pet.spstd + pet.spstd**2, 
-             data = mod_df)
-summary(mod) 
-plot_cap(mod, condition = "pet.spstd") + xlim(-3,3) + ylim(-.4, .1)
-plot_cap(mod, condition = "cwd.spstd") + xlim(-3,3) + ylim(-.4, .1)
-
-newdata <- tibble("cwd.spstd" = 0, 
-                  "pet.spstd" = 1)
-predict(mod, newdata)
-
-
-mod <- feols(estimate_pet.an ~ cwd.spstd + cwd.spstd**2 + pet.spstd + pet.spstd**2,
-             data = mod_df)
-summary(mod) 
-plot_cap(mod, condition = "pet.spstd") + xlim(-3,3) + ylim(-.4, .5)
-plot_cap(mod, condition = "cwd.spstd") + xlim(-3,3) + ylim(-.4, .5)
-
-newdata <- tibble("cwd.spstd" = -2, 
-                  "pet.spstd" = -2)
-predict(mod, newdata)
-
-
-
-mod <- feols(estimate_intercept ~ cwd.spstd + cwd.spstd**2 + pet.spstd + pet.spstd**2, 
-             weights = mod_df$int_errorweights, data = mod_df)
-summary(mod) 
-plot_cap(mod, condition = "pet.spstd") + xlim(-3,3) + ylim(.6,1.3)
-plot_cap(mod, condition = "cwd.spstd") + xlim(-3,3) + ylim(.6,1.3)
-mod_df %>% summarise(test = weighted.mean(estimate_intercept, int_errorweights))
-
-## OLD VERSION OF BOOTSTRAPPING USING BOOT PACKAGE
-# mod_df <- trim_df %>% filter(genus == "Araucaria")
-# mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data = mod_df)
+# ## TODO: Should we be worried that bootstrap se very similar (but smaller?) than simple regression result?
+# ## Bootstrap is currently returning s.e. of 0.001849, compare to 0.002054 for simple regression:
+# mod <- feols(estimate_cwd.an ~ cwd.spstd + pet.spstd, 
+#              weights = trim_df$cwd_errorweights, data = trim_df)
 # summary(mod) 
-mod <- feols(estimate_cwd.an ~ cwd.spstd + pet.spstd,
-             weights = trim_df$cwd_errorweights, data = trim_df,
-             vcov = conley(cutoff = 363, distance = "spherical"))
-summary(mod)
-
-mod <- feols(estimate_pet.an ~ cwd.spstd + pet.spstd,
-             weights = trim_df$cwd_errorweights, data = trim_df,
-             vcov = conley(cutoff = 363, distance = "spherical"))
-summary(mod)
-
-
+# 
+# library(marginaleffects)
+# mod_df <- trim_df
+# mod_df <- mod_df %>% 
+#   mutate(int_coef = estimate_intercept,
+#          pet_coef = estimate_pet.an, 
+#          cwd_coef = estimate_cwd.an)
+# 
+# run_ss(mod_df, outcome = "cwd_coef")
+# mod <- feols(estimate_cwd.an ~ cwd.spstd + cwd.spstd**2 + pet.spstd + pet.spstd**2, 
+#              weights = mod_df$cwd_errorweights, data = mod_df)
+# summary(mod) 
+# plot_cap(mod, condition = "pet.spstd") + xlim(-3,3) + ylim(-.2, 0)
+# plot_cap(mod, condition = "cwd.spstd") + xlim(-3,3) + ylim(-.2, 0)
+# 
+# newdata <- tibble("cwd.spstd" = 1, 
+#                   "pet.spstd" = 0)
+# predict(mod, newdata)
+# 
+# 
+# mod <- feols(estimate_cwd.an ~ 1, 
+#              weights = mod_df$cwd_errorweights, data = mod_df)
+# mod_df %>% summarise(test = weighted.mean(estimate_cwd.an, cwd_errorweights))
+# 
+# 
+# mod <- feols(estimate_pet.an ~ cwd.spstd + cwd.spstd**2 + pet.spstd + pet.spstd**2,
+#              weights = mod_df$pet_errorweights, data = mod_df)
+# summary(mod) 
+# plot_cap(mod, condition = "pet.spstd") + xlim(-3,3) + ylim(-.1, .3)
+# plot_cap(mod, condition = "cwd.spstd") + xlim(-3,3) + ylim(-.2, .2)
+# 
+# newdata <- tibble("cwd.spstd" = 0, 
+#                   "pet.spstd" = 0)
+# predict(mod, newdata)
 # 
 # 
 # 
-# mod <- feols(estimate_cwd.an ~ cwd.spstd + pet.spstd, data = trim_df,
-#           vcov = conley(distance = "spherical"))
-# summary(mod) ## TODO: Is bootstrap se too similar to simple regression result? Revisit...
+# mod <- feols(estimate_cwd.an ~ cwd.spstd + cwd.spstd**2 + pet.spstd + pet.spstd**2, 
+#              data = mod_df)
+# summary(mod) 
+# plot_cap(mod, condition = "pet.spstd") + xlim(-3,3) + ylim(-.4, .1)
+# plot_cap(mod, condition = "cwd.spstd") + xlim(-3,3) + ylim(-.4, .1)
+# 
+# newdata <- tibble("cwd.spstd" = 0, 
+#                   "pet.spstd" = 1)
+# predict(mod, newdata)
 # 
 # 
-# boot_df <- tibble(idx = seq(1, n_obs, 1), n_samples = n_sites) %>% 
-#   mutate(data = pmap(.l = list(tbl = mc_df, 
-#                                replace = TRUE, 
-#                                size = n_samples), 
-#                      .f = sample_n ))
+# mod <- feols(estimate_pet.an ~ cwd.spstd + cwd.spstd**2 + pet.spstd + pet.spstd**2,
+#              data = mod_df)
+# summary(mod) 
+# plot_cap(mod, condition = "pet.spstd") + xlim(-3,3) + ylim(-.4, .5)
+# plot_cap(mod, condition = "cwd.spstd") + xlim(-3,3) + ylim(-.4, .5)
 # 
-# apply_boot <- function(mc_df){
-#   n_obs <- dim(mc_df)[1]
-#   n_sites <- trim_df %>% pull(collection_id) %>% unique() %>% length()
-#   
-#   
-#   boot_ss_coefs <- boot(mc_df, bs_ss, R = n_mc,
-#                         sim = "parametric",  
-#                         ran.gen=function(d,p) d[sample(1:n_obs, n_sites), ])
-#   # boot_ss_coefs <- boot_ss_coefs$t
-#   # colnames(boot_ss_coefs) <- c("int_int", "int_cwd", "int_pet",
-#   #                              "cwd_int", "cwd_cwd", "cwd_pet",
-#   #                              "pet_int", "pet_cwd", "pet_pet")
-#   # boot_ss_coefs <- boot_ss_coefs %>% 
-#   #   as_tibble() %>% 
-#   #   mutate(iter_idx = seq(1:n_mc))%>% 
-#   #   relocate(iter_idx)
-#   
-#   return(boot_ss_coefs)
-# }
+# newdata <- tibble("cwd.spstd" = -2, 
+#                   "pet.spstd" = -2)
+# predict(mod, newdata)
 # 
-# boot_ss_coefs <- apply_boot(mc_df)
+# 
+# 
+# mod <- feols(estimate_intercept ~ cwd.spstd + cwd.spstd**2 + pet.spstd + pet.spstd**2, 
+#              weights = mod_df$int_errorweights, data = mod_df)
+# summary(mod) 
+# plot_cap(mod, condition = "pet.spstd") + xlim(-3,3) + ylim(.6,1.3)
+# plot_cap(mod, condition = "cwd.spstd") + xlim(-3,3) + ylim(.6,1.3)
+# mod_df %>% summarise(test = weighted.mean(estimate_intercept, int_errorweights))
+# 
+# ## OLD VERSION OF BOOTSTRAPPING USING BOOT PACKAGE
+# # mod_df <- trim_df %>% filter(genus == "Araucaria")
+# # mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, weights = errorweights, data = mod_df)
+# # summary(mod) 
+# mod <- feols(estimate_cwd.an ~ cwd.spstd + pet.spstd,
+#              weights = trim_df$cwd_errorweights, data = trim_df,
+#              vcov = conley(cutoff = 363, distance = "spherical"))
+# summary(mod)
+# 
+# mod <- feols(estimate_pet.an ~ cwd.spstd + pet.spstd,
+#              weights = trim_df$cwd_errorweights, data = trim_df,
+#              vcov = conley(cutoff = 363, distance = "spherical"))
+# summary(mod)
+# 
+# 
+# # 
+# # 
+# # 
+# # mod <- feols(estimate_cwd.an ~ cwd.spstd + pet.spstd, data = trim_df,
+# #           vcov = conley(distance = "spherical"))
+# # summary(mod) ## TODO: Is bootstrap se too similar to simple regression result? Revisit...
+# # 
+# # 
+# # boot_df <- tibble(idx = seq(1, n_obs, 1), n_samples = n_sites) %>% 
+# #   mutate(data = pmap(.l = list(tbl = mc_df, 
+# #                                replace = TRUE, 
+# #                                size = n_samples), 
+# #                      .f = sample_n ))
+# # 
+# # apply_boot <- function(mc_df){
+# #   n_obs <- dim(mc_df)[1]
+# #   n_sites <- trim_df %>% pull(collection_id) %>% unique() %>% length()
+# #   
+# #   
+# #   boot_ss_coefs <- boot(mc_df, bs_ss, R = n_mc,
+# #                         sim = "parametric",  
+# #                         ran.gen=function(d,p) d[sample(1:n_obs, n_sites), ])
+# #   # boot_ss_coefs <- boot_ss_coefs$t
+# #   # colnames(boot_ss_coefs) <- c("int_int", "int_cwd", "int_pet",
+# #   #                              "cwd_int", "cwd_cwd", "cwd_pet",
+# #   #                              "pet_int", "pet_cwd", "pet_pet")
+# #   # boot_ss_coefs <- boot_ss_coefs %>% 
+# #   #   as_tibble() %>% 
+# #   #   mutate(iter_idx = seq(1:n_mc))%>% 
+# #   #   relocate(iter_idx)
+# #   
+# #   return(boot_ss_coefs)
+# # }
+# # 
+# # boot_ss_coefs <- apply_boot(mc_df)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Investigate variation by genus  ----------------------------------------
@@ -539,17 +546,20 @@ run_ss_conley <- function(data, outcome = "cwd_coef"){
     error_weights = data$int_errorweights
   }
   formula <- as.formula(paste(outcome, " ~ cwd.spstd + (cwd.spstd^2) + pet.spstd + (pet.spstd^2)"))
-  mod <- feols(formula, data=data, weights = error_weights, 
+  mod <- feols(formula, data=data, weights = error_weights,
                vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
+  
+  # formula <- as.formula(paste(outcome, " ~ cwd.spstd + I(cwd.spstd**2) + pet.spstd + I(pet.spstd**2)"))
+  # mod <- lm(formula, data=data, weights = error_weights)
   return(mod)
 }
 
-run_ss_conley <- function(data, outcome = "estimate_cwd.an"){
-  formula <- as.formula(paste(outcome, " ~ cwd.spstd + pet.spstd")) ## ADD BACK WEIGHTING HERE?
-  mod <- feols(formula, data = data, weights = data$cwd_errorweights, 
-        vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
-  return(mod)
-}
+# run_ss_conley <- function(data, outcome = "estimate_cwd.an"){
+#   formula <- as.formula(paste(outcome, " ~ cwd.spstd + pet.spstd")) ## ADD BACK WEIGHTING HERE?
+#   mod <- feols(formula, data = data, weights = data$cwd_errorweights, 
+#         vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
+#   return(mod)
+# }
 
 genus_lookup <- trim_df %>% select(collection_id, genus)
 genus_freq <- trim_df %>% 
@@ -568,7 +578,7 @@ gymno_key <- sp_info %>%
 
 # N = 10: 16 genera; 26: 12 genera; 50: 9 genera
 genus_keep <- genus_freq %>% 
-  filter(n_collections>26) %>%
+  filter(n_collections>50) %>%
   pull(genus)
 
 genus_df <- trim_df %>% 
@@ -582,11 +592,63 @@ genus_df <- trim_df %>%
 
 genus_df$model_estimates
 
-genus_df$model_estimates[10][[1]] %>% 
-  plot_cap(condition = "cwd.spstd") + xlim(-3,3) + ylim(-1, 1)
-
-
 write_rds(genus_df, paste0(wdir, "out/second_stage/ss_conley_genus.rds"))
+
+
+
+# summarize_models <- function(mod, dat) {
+#   median_cwd <- dat %>% pull(cwd.spstd) %>% median()
+#   lht <- linearHypothesis(mod, c(paste0('cwd.spstd + ', as.character(median_cwd), ' * I(cwd.spstd^2) = 0')))
+#   pvalue <- lht$`Pr(>Chisq)`[2]
+#   coefs = mod$coefficients
+#   me <- coefs['cwd.spstd'] + median_cwd * 2 * coefs['I(cwd.spstd^2)']
+#   return(tibble("median_cwd" = median_cwd, "pvalue" = pvalue, "me" = me))
+# }
+# 
+# genus_df <- genus_df %>% 
+#   mutate(test_stats = map2(model_estimates, data, .f = summarize_models))
+# genus_df <- genus_df %>% 
+#   unnest(test_stats)
+
+
+
+
+
+# 
+# genus_id = "Juniperus"
+# plot_df <- genus_df %>% 
+#   filter(genus == genus_id) %>% 
+#   pull(data)
+# 
+# plot_df = plot_df[[1]] %>% 
+#   mutate(predicted = estimate_cwd.an)
+# # plot_df %>% 
+# #   ggplot() +
+# #   geom_point(data = plot_df %>% filter(genus == genus_id), aes(x = cwd.spstd, y = estimate_cwd.an) +
+# #   xlim(-2.5, 2.5)
+# # 
+# 
+# 
+# gen_plot <- ggplot() +
+#   geom_line(data = genus_predictions %>% filter(genus == genus_id), aes(x = cwd.spstd, y = predicted)) +
+#   geom_ribbon(data = genus_predictions  %>% filter(genus == genus_id), aes(x = cwd.spstd, ymin=conf.low, ymax=conf.high), alpha=0.2) +
+#   geom_point(data = plot_df, aes(x = cwd.spstd, y = predicted)) +
+#   # geom_ribbon(aes(ymin=cwd_ci_min, ymax=cwd_ci_max), alpha=0.2, fill = "darkblue") +
+#   theme_bw(base_size = 22) + 
+#   # theme(
+#   #   # panel.grid.major = element_blank(),
+#   #   # panel.grid.minor = element_blank(),
+#   #   strip.background = element_blank(),
+#   #   panel.border = element_rect(colour = "black", fill = NA)) +
+#   # geom_line(aes(y = conf.low), linetype = 3) +
+#   # geom_line(aes(y = conf.high), linetype = 3) +
+#   geom_hline(yintercept = 0, linetype = 2) +
+#   xlab("Historic CWD\n(Deviation from species mean)") + 
+#   ylab("Predicted sensitivity to CWD") +
+#   xlim(c(-3, 3))
+# 
+# 
+# gen_plot
 
 
 # mc_df <- mc_df %>% 

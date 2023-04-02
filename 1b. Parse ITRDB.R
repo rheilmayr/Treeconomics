@@ -313,7 +313,7 @@ clean_data <- rbind(rwl_clean_data, s_clean_data)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Detrend rwl to create rwi --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-detrend_rwl <- function(rwl_dat) {
+detrend_rwl <- function(rwl_dat, method) {
   # Purpose:
   #   Apply dplR to convert ring widths (RWL) to ring width index (RWI)
   # Inputs:
@@ -323,11 +323,13 @@ detrend_rwl <- function(rwl_dat) {
   #   rwi_dat: data.table
   #     Table of de-trended ring width indices
   rwi_dat <- rwl_dat %>%
-    detrend(method = "Spline", make.plot = FALSE, verbose = FALSE) # uses a spline that is 0.67 the series length
+    detrend(method = method, make.plot = FALSE, verbose = FALSE) # uses a spline that is 0.67 the series length
   return(rwi_dat)
 }
 
-clean_data$rwi <- map(clean_data$rwl, detrend_rwl)
+clean_data$rwi <- map2(clean_data$rwl, "Spline", detrend_rwl)
+clean_data$rwi_nb <- map2(clean_data$rwl, "ModNegExp", detrend_rwl)
+clean_data$rwi_ar <- map2(clean_data$rwl, "Ar", detrend_rwl)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -354,22 +356,38 @@ pivot_rw <- function(rw, ids){
 
 clean_data$rwl_long <- map2(clean_data$rwl, clean_data$ids, pivot_rw)
 clean_data$rwi_long <- map2(clean_data$rwi, clean_data$ids, pivot_rw)
-clean_data <- clean_data %>% 
-  select(collection_id, rwi_long, rwl_long) %>% 
-  unnest(c(rwi_long, rwl_long), names_sep = '_') %>% 
-  select(collection_id, year = rwi_long_year, tree = rwi_long_tree, core = rwi_long_core, 
-         core_id = rwi_long_core_id, site = rwi_long_site, rwi = rwi_long_width, rwl = rwl_long_width) %>% 
-  mutate(site = replace_na(1))
+clean_data$rwi_nb_long <- map2(clean_data$rwi_nb, clean_data$ids, pivot_rw)
+clean_data$rwi_ar_long <- map2(clean_data$rwi_ar, clean_data$ids, pivot_rw)
 
-test_that("No collections contain multiple sites",{
-  expect_equal(clean_data %>% select(site) %>% unique() %>% pull(), 1)
-})
+clean_data_ar <- clean_data %>% 
+  select(collection_id, rwi_ar_long) %>% 
+  unnest(c(rwi_ar_long), names_sep = '_') %>% 
+  select(collection_id, year = rwi_ar_long_year, tree = rwi_ar_long_tree, core = rwi_ar_long_core, 
+         core_id = rwi_ar_long_core_id, rwi_ar = rwi_ar_long_width)
+# %>% 
+#   mutate(site = replace_na(1))
+
+clean_data <- clean_data %>% 
+  select(collection_id, rwi_long, rwl_long, rwi_nb_long) %>% 
+  unnest(c(rwi_long, rwl_long, rwi_nb_long), names_sep = '_') %>% 
+  select(collection_id, year = rwi_long_year, tree = rwi_long_tree, core = rwi_long_core, 
+         core_id = rwi_long_core_id, rwi = rwi_long_width, rwl = rwl_long_width, 
+         rwi_nb = rwi_nb_long_width) 
+# %>% 
+#   mutate(site = replace_na(1))
+
+clean_data <- clean_data %>% 
+  left_join(clean_data_ar, by = c("collection_id", "year", "tree", "core", 'core_id'))
+
+# test_that("No collections contain multiple sites",{
+#   expect_equal(clean_data %>% select(site) %>% unique() %>% pull(), 1)
+# })
 
 clean_data <- clean_data  %>% 
   mutate(tree = vctrs::vec_group_id(tree),
          core = vctrs::vec_group_id(core),
          year = as.integer(year)) %>% 
-  select(collection_id, core_id, tree, core, year, rwi, rwl)
+  select(collection_id, core_id, tree, core, year, rwi, rwl, rwi_ar, rwi_nb)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
