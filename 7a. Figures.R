@@ -339,6 +339,8 @@ range_map
 
 map/range_map + plot_layout(heights=c(1.3,2))
 
+mapsplot <- map/range_map + plot_layout(heights=c(1.3,2))
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Observation frequency plot --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -390,6 +392,15 @@ figs1+
   plot_annotation(tag_levels = 'A') & theme(
     plot.tag = element_text(face = 'bold', size=12, family ="Helvetica"),
     text=element_text(family ="Helvetica"))
+
+figs_maps <- mapsplot | hex2 
+figs_maps
+
+figs_maps + plot_layout(heights = c(1,2))+
+  plot_annotation(tag_levels = 'A') & theme(
+    plot.tag = element_text(face = 'bold', size=12, family ="Helvetica"),
+    text=element_text(family ="Helvetica"))
+
 
 
 ##hypothesis figure
