@@ -129,6 +129,11 @@ pet_cmip_change <- (pet_cmip_end - cwd_cmip_start) %>% as.data.frame() %>% drop_
 
 agg_stats <- read_rds(file = paste0(wdir, "out/predictions/sp_rwi_pred_10000/mc_agg_stats.gz"))
 
+
+
+
+block_draw_df <- read_rds(paste0(wdir, "out/second_stage/mc_sample.gz"))
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Abstract and intro --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -230,6 +235,65 @@ pet_te_count_pos <- flm_df %>%
 # average historic CWD value experienced across a species’ range experienced an
 # 2.1+/-3.1 percent percent decline in growth in years with in response to a
 # one standard deviation increase in CWD (Figure 3, Panel A). 
+cwd_high_fs_bs <- block_draw_df %>% 
+  filter(cwd.spstd > 0) %>% 
+  group_by(boot_id) %>% 
+  summarise(cwd_coef = mean(cwd_coef))
+
+cwd_high_fs_bs %>%
+  pull(cwd_coef) %>% 
+  median()
+
+cwd_high_fs_bs %>%
+  pull(cwd_coef) %>% 
+  quantile(c(0.025, 0.975))
+
+cwd_low_fs_bs <- block_draw_df %>% 
+  filter(cwd.spstd < 0) %>% 
+  group_by(boot_id) %>% 
+  summarise(cwd_coef = mean(cwd_coef))
+
+cwd_low_fs_bs %>%
+  pull(cwd_coef) %>% 
+  mean() 
+
+cwd_low_fs_bs %>%
+  pull(cwd_coef) %>% 
+  quantile(c(0.025, 0.975))
+
+
+
+
+# pet_high_fs_bs <- block_draw_df %>% 
+#   filter(pet.spstd > 0) %>% 
+#   group_by(boot_id) %>% 
+#   summarise(pet_coef = mean(pet_coef))
+# 
+# pet_high_fs_bs %>%
+#   pull(pet_coef) %>% 
+#   mean()
+# 
+# pet_high_fs_bs %>%
+#   pull(pet_coef) %>% 
+#   quantile(c(0.025, 0.975))
+# 
+# pet_low_fs_bs <- block_draw_df %>% 
+#   filter(pet.spstd <= 0) %>% 
+#   group_by(boot_id) %>% 
+#   summarise(pet_coef = mean(pet_coef))
+# 
+# pet_low_fs_bs %>%
+#   pull(pet_coef) %>% 
+#   mean() 
+# 
+# pet_low_fs_bs %>%
+#   pull(pet_coef) %>% 
+#   quantile(c(0.025, 0.975))
+
+
+
+
+
 mod_df <- trim_df %>% 
   filter(cwd.spstd > 0)
 cwd_high_mod <- feols(estimate_cwd.an ~ 1,

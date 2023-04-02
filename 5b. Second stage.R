@@ -62,8 +62,7 @@ n_mc <- 10000
 wdir <- 'remote\\'
 
 # 1. Site-level regressions
-flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv')) %>%
-  select(-X1)
+flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv'))
 
 # 2. Historic site-level climate
 ave_site_clim <- read_rds(paste0(wdir, "out\\climate\\site_ave_clim.gz"))
@@ -178,8 +177,8 @@ for (site in site_list){
     pull(collection_id)
   block_list[site] <- list(block_sites)
 }
-# save(block_list,file=paste0(wdir,"out/spatial_blocks.Rdat"))
-# load(file=paste0(wdir,"out/spatial_blocks.Rdat"))
+save(block_list,file=paste0(wdir,"out/spatial_blocks.Rdat"))
+load(file=paste0(wdir,"out/spatial_blocks.Rdat"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -278,6 +277,12 @@ block_draw_df <- block_draw_df %>%
 block_draw_df <- block_draw_df %>% 
   left_join(mc_df, by = c("collection_id", "iter_idx"))
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Export first stage draws to pull summary stats -------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+block_draw_df %>% 
+  # select(boot_id, collection_id, cwd_coef, pet_coef, int_coef, cwd.spstd, pet.spstd) %>% 
+  write_rds(paste0(wdir, "out/second_stage/mc_sample.gz"), compress = "gz")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
