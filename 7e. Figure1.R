@@ -16,6 +16,8 @@
 # Package imports --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 library(tidyverse)
+library(patchwork)
+library(viridis)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -95,7 +97,7 @@ panel1 <- sens_df %>%
   guides(fill="none", color="none")+
   ggtitle("Sensitivity")
 
-
+panel1
 
 panel2 <- exp_df %>% 
   ggplot(aes(x = labels, y = cwd_change)) +
@@ -105,20 +107,22 @@ panel2 <- exp_df %>%
   ggtitle("Exposure")+
   theme(plot.title = element_text(hjust = 0.5))
 
-
+discrete_pal <- c("#1e9c89","#472e7c","darkgrey")
 
 panel3 <- vuln_df %>%
   ggplot(aes(x = labels, y = rwi_change, fill = name, group = name)) +
   geom_col(position = "dodge", width =.2, alpha=.4)+
   geom_smooth(aes(color=name), se=F, method="gam")+
-  scale_fill_manual(values = discrete_pal,labels=c("Drought-naive","Consistent", "Range-edge"))+
-  scale_color_manual(values = discrete_pal, labels=c("Drought-naive","Consistent", "Range-edge"))+
+  scale_fill_manual(values = discrete_pal_sens,labels=c("Consistent","Drought-naive", "Range-edge"))+
+  scale_color_manual(values = discrete_pal_sens, labels=c("Consistent","Drought-naive", "Range-edge"))+
   theme(legend.title = element_blank(),plot.title = element_text(hjust = 0.5), legend.position = "bottom")+
   ylab("Change in RWI")+
   xlab("Standardized aridity")+
   ggtitle("Vulnerability")
+panel3
+
   
 
-panel1 + panel2 + panel3 + plot_layout(guides = "collect") &  theme(legend.position = 'bottom')
+panel1 + panel2 + panel3 + plot_layout(guides = "collect") &  theme(legend.position = 'bottom') & plot_annotation(tag_levels="A") & theme(plot.tag = element_text(face = 'bold', size=19))
 
 #dims 15x6
