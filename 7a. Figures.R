@@ -69,7 +69,7 @@ theme_set(
 # Load data ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ### Define path
-wdir <- 'remote/'
+wdir <- 'NewRemote/'
 
 # 1. Site-level regressions
 flm_df <- read_csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv"))

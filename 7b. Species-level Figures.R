@@ -23,7 +23,14 @@ library(patchwork)
 library(effects)
 select <- dplyr::select
 
-
+theme_set(
+  theme_bw(base_size = 25)+
+    theme(panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          text=element_text(family ="Helvetica"),
+          panel.background = element_rect(fill='transparent'), 
+          plot.background = element_rect(fill='transparent', color=NA), 
+          legend.background = element_rect(fill='transparent')))
 
 #===============================================================================
 # 2) Data imports  ---------
@@ -122,7 +129,7 @@ map <- ggplot() +
   geom_sf(data = trim_df, color = '#440154FF', fill = 'red', alpha = .8) +
   annotate("text", x = high_coords[[1]][1], y = high_coords[[1]][2], label = "A", color = "orange", size = 12) +
   annotate("text", x = low_coords[[1]][1], y = low_coords[[1]][2], label = "B", color = "orange", size = 12) +
-  theme_bw(base_size = 15)+
+  #theme_bw(base_size = 15)+
   ylab("Latitude")+
   xlab("Longitude")+
   #ggtitle("ITRDB sites with PIPO")+
@@ -143,11 +150,13 @@ hex <- spp_predictions %>% ggplot(aes(x = cwd_hist, y = pet_hist)) +
   # labs(fill = "Number of cells") +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") + 
-  theme_bw(base_size = 22) +
   coord_fixed() +
   guides(fill=F, colour=F)+
   geom_point(data = trim_df, aes(x = cwd.spstd, y = pet.spstd), colour = '#440154FF', alpha = 0.5)
 hex
+
+ggsave(paste0(wdir, 'figures/Figures_JD/Methods figure/TransparentFigs/hex.png'), plot = hex, bg= 'transparent', width = 8, height = 6)
+
 
 
 #===============================================================================
@@ -180,19 +189,24 @@ low_lab <- paste0("sensitivity = ", as.character(low_val))
 #   filter(collection_id == high_sens | collection_id == low_sens)
 map_ex <- ggplot() +
   geom_sf(data = world) +
-  geom_sf(data = sp_range, fill = 'lightgrey', alpha = 1, colour = NA) +
+  geom_sf(data = sp_range, fill = '#21908CFF', alpha = .5, colour = NA) +
   geom_sf(data = trim_df, color = 'darkblue', alpha = 1) +
   annotate("text", x = high_coords[[1]][1], y = high_coords[[1]][2], label = "A", color = "darkred", size = 12) +
   annotate("text", x = low_coords[[1]][1], y = low_coords[[1]][2], label = "B", color = "darkred", size = 12) +
   # geom_sf(data = ex_plots, color = 'red', fill = 'red', alpha = .8) +
-  theme_bw(base_size = 20)+
-  theme(axis.title.x=element_blank(),
-        axis.title.y=element_blank()) +
-  # ylab("Latitude")+
-  # xlab("Longitude")+
+  #theme_bw(base_size = 20)+
+  #theme(axis.title.x=element_blank(),
+        #axis.title.y=element_blank()) +
+  ylab("Latitude")+
+  xlab("Longitude")+
   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
 
 map_ex
+
+ggsave(paste0(wdir, 'figures/Figures_JD/Methods figure/TransparentFigs/map_ex.png'), plot = map_ex, bg= 'transparent', width = 7, height = 10)
+
+
+
 
 high_ex <- dendro_ex %>% 
   filter(collection_id == high_sens) %>% 
@@ -210,9 +224,9 @@ both_fig <- both_ex %>%
   scale_fill_manual(values = c("#404788", "#efca2a")) +
   scale_color_manual(values = c("#404788", "#efca2a")) +
   geom_smooth(method="lm") +
-  theme_bw(base_size = 25) +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        plot.title = element_text(hjust = 0.5))+
+  #theme_bw(base_size = 25) +
+  #theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        #plot.title = element_text(hjust = 0.5))+
   ylab("Ring width index")+
   xlab("Climatic water deficit") +
   ylim(c(0,3)) +
@@ -223,6 +237,10 @@ both_fig <- both_ex %>%
 
 
 both_fig
+
+ggsave(paste0(wdir, 'figures/Figures_JD/Methods figure/TransparentFigs/both_fig.png'), plot = both_fig, bg= 'transparent', width = 8, height = 6)
+
+#ggsave(paste0(wdir, 'figures\\1_data_and_hypoth.svg'), plot = f1, width = 8, height = 5)
 
 # low_ex <- dendro_ex %>% 
 #   filter(collection_id == low_sens) %>% 
@@ -251,7 +269,7 @@ sens_map <- ggplot() +
   geom_sf(data = world) +
   geom_sf(data = sp_range, fill = 'gray', alpha = .9, colour = NA) +
   geom_sf(data = trim_df, aes(color = estimate_cwd.an)) +
-  theme_bw(base_size = 22)+
+  #theme_bw(base_size = 22)+
   ylab("Latitude")+
   xlab("Longitude")+
   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE) +
@@ -297,23 +315,24 @@ trans <- I
 x <- data.frame(lower = eff$lower, upper = eff$upper, fit = eff$fit, cwd = eff$x$cwd.spstd)
 xy <- data.frame(x = x.fit, y = x$fit[closest(trans(x.fit), x$cwd)] + eff$residuals)
 
-partial_plot <- ggplot(filter(x,cwd <=1&fit<=1), aes(x = cwd, y = fit)) +
-  theme_bw(base_size = 20)+
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        plot.title = element_text(hjust = 0.5))+
+partial_plot <- ggplot(filter(x,cwd <=1&fit<=1), aes(x = cwd, y = fit, color="black")) +
+  #theme_bw(base_size = 20)+
+  #theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
+        #plot.title = element_text(hjust = 0.5))+
   geom_line(size = 1,color="#21908CFF", fill="#21908CFF") +
   #scale_color_gradient()+
   #geom_smooth(method="lm", color="#21908CFF", fill="#21908CFF")+
-  geom_point(data = filter(xy, x<=1&y<=1), aes(x = x, y = y, color=y), alpha=.5) +
-  scale_colour_viridis(direction = -1)+
+  geom_point(data = filter(xy, x<=1&y<=1), aes(x = x, y = y, color= "black"), alpha=.5) +
+  scale_colour_manual(values = "#21908CFF")+
   geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.3, fill = "#21908CFF") +
   xlab("Historic CWD\n(Deviation from species mean)") +
-  ylab("Partial effect of historical CWD\non CWD sensitivity")+
+  ylab("Partial effect of CWD\non CWD sensitivity")+
   guides(scale = "none", color=F)
 # geom_smooth(data = xy, aes(x = trans(x), y = y), 
 #             method = "loess", span = 2/3, linetype = "dashed", se = FALSE)
 partial_plot
 
+ggsave(paste0(wdir, 'figures/Figures_JD/Methods figure/TransparentFigs/partial_plot.png'), plot = partial_plot, bg= 'transparent', width = 8, height = 7)
 
 combined_plot <- (map_ex | both_fig) / (sens_niche | partial_plot)+ plot_layout(widths = c(1,4))
 combined_plot
@@ -363,51 +382,51 @@ spp_predictions %>%
   theme_bw() 
 
 
-### Map of historic CWD
-cwd_map <- ggplot() +
-  geom_sf(data = world) +
-  geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = cwd_hist)) +
-  theme_bw(base_size = 22)+
-  ylab("Latitude")+
-  xlab("Longitude")+
-  scale_fill_viridis_c(direction = -1) +
-  coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
-cwd_map
+# ### Map of historic CWD
+# cwd_map <- ggplot() +
+#   geom_sf(data = world) +
+#   geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = cwd_hist)) +
+#   theme_bw(base_size = 22)+
+#   ylab("Latitude")+
+#   xlab("Longitude")+
+#   scale_fill_viridis_c(direction = -1) +
+#   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
+# cwd_map
 
-## Interactive map
-library(tmap)
-tmap_mode("view")
-cmip_end <- load(paste0(wdir, 'in\\CMIP5 CWD\\cmip5_cwdaet_end.Rdat'))
-cwd_cmip_end <- cwd_raster
-crs_template <- crs(cwd_cmip_end)
-cwd_df <- spp_predictions %>% 
-  drop_na() %>% 
-  select(x, y, cwd_hist)
-raster_template <- cwd_df %>% select(x,y)
-cwd_df <- cwd_df %>%
-  drop_na()
-cwd_df2 <- raster_template %>%
-  left_join(cwd_df, by = c("x", "y"))
-cwd_rast2 <- rasterFromXYZ(cwd_df2, crs = crs_template)
-tm_shape(cwd_rast2) +
-  tm_raster() +
-  tm_facets(as.layers = TRUE)
-
-tm_shape(cwd_raster$layer.1.1.1) +
-  tm_raster() +
-  tm_facets(as.layers = TRUE)
+# ## Interactive map
+# library(tmap)
+# tmap_mode("view")
+# cmip_end <- load(paste0(wdir, 'in\\CMIP5 CWD\\cmip5_cwdaet_end.Rdat'))
+# cwd_cmip_end <- cwd_raster
+# crs_template <- crs(cwd_cmip_end)
+# cwd_df <- spp_predictions %>% 
+#   drop_na() %>% 
+#   select(x, y, cwd_hist)
+# raster_template <- cwd_df %>% select(x,y)
+# cwd_df <- cwd_df %>%
+#   drop_na()
+# cwd_df2 <- raster_template %>%
+#   left_join(cwd_df, by = c("x", "y"))
+# cwd_rast2 <- rasterFromXYZ(cwd_df2, crs = crs_template)
+# tm_shape(cwd_rast2) +
+#   tm_raster() +
+#   tm_facets(as.layers = TRUE)
+# 
+# tm_shape(cwd_raster$layer.1.1.1) +
+#   tm_raster() +
+#   tm_facets(as.layers = TRUE)
 
 
 ### Map of historic PET
-pet_map <- ggplot() +
-  geom_sf(data = world) +
-  geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = pet_hist)) +
-  theme_bw(base_size = 22)+
-  ylab("Latitude")+
-  xlab("Longitude")+
-  scale_fill_viridis_c(direction = -1) +
-  coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
-pet_map
+# pet_map <- ggplot() +
+#   geom_sf(data = world) +
+#   geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = pet_hist)) +
+#   theme_bw(base_size = 22)+
+#   ylab("Latitude")+
+#   xlab("Longitude")+
+#   scale_fill_viridis_c(direction = -1) +
+#   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
+# pet_map
 
 ### Map of CWD change
 spp_predictions <- spp_predictions %>% 
@@ -417,9 +436,9 @@ spp_predictions <- spp_predictions %>%
 cwd_change_map <- ggplot() +
   geom_sf(data = world) +
   geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = cwd_change)) +
-  theme_bw(base_size = 22)+
-  theme(legend.position = c(.23,.15),
-        legend.background = element_blank())+
+  #theme_bw(base_size = 22)+
+  guides(fill=guide_legend("Δ CWD"))+
+  theme(legend.position = c(.2,.15))+
   ylab("Latitude")+
   xlab("Longitude")+
   #scale_fill_viridis_c(direction = -1) +
@@ -427,6 +446,7 @@ cwd_change_map <- ggplot() +
   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
 cwd_change_map
 
+ggsave(paste0(wdir, 'figures/Figures_JD/Methods figure/TransparentFigs/cwd_change_map.png'), plot = cwd_change_map, bg= 'transparent', width = 10, height = 8)
 
 ### Map of PET change
 pet_change_map <- ggplot() +
@@ -444,42 +464,46 @@ pet_change_map
 cwd_sens_map <- ggplot() +
   geom_sf(data = world) +
   geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = cwd_sens)) +
-  theme_bw(base_size = 22)+
-  theme(legend.position = c(.21,.15),
-        legend.background = element_blank())+
+  #theme_bw(base_size = 22)+
+  theme(legend.position = c(.21,.15))+
   ylab("Latitude")+
   xlab("Longitude")+
+  guides(fill=guide_legend("Sens."))+
   #scale_fill_viridis_c(direction = -1) +
   scale_fill_viridis(option="mako", direction = -1)+
   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
 cwd_sens_map
 
+ggsave(paste0(wdir, 'figures/Figures_JD/Methods figure/TransparentFigs/cwd_sens_map.png'), plot = cwd_sens_map, bg= 'transparent', width = 10, height = 8)
 
-### Map of PET sensitivity
-pet_sens_map <- ggplot() +
-  geom_sf(data = world) +
-  geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = pet_sens)) +
-  theme_bw(base_size = 22)+
-  ylab("Latitude")+
-  xlab("Longitude")+
-  scale_fill_viridis_c(direction = -1) +
-  coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
-pet_sens_map
+
+# ### Map of PET sensitivity
+# pet_sens_map <- ggplot() +
+#   geom_sf(data = world) +
+#   geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = pet_sens)) +
+#   theme_bw(base_size = 22)+
+#   ylab("Latitude")+
+#   xlab("Longitude")+
+#   scale_fill_viridis_c(direction = -1) +
+#   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
+# pet_sens_map
 
 
 ### Map of predicted RWI
 rwi_map <- ggplot() +
   geom_sf(data = world) +
   geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = rwi_pred_change_mean)) +
-  theme_bw(base_size = 22)+
-  theme(legend.position = c(.23,.15),
-        legend.background = element_blank())+
+  #theme_bw(base_size = 22)+
+  theme(legend.position = c(.23,.15))+
   ylab("Latitude")+
   xlab("Longitude")+
   scale_fill_viridis_c(direction = -1) +
   #scale_fill_viridis(option="mako")+
-  guides(fill=guide_legend(title="RWI_change"))+
+  guides(fill=guide_legend(title="Δ RWI"))+
   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
 rwi_map
 
-cwd_change_map + rwi_map + plot_layout(guides = "collect")
+
+ggsave(paste0(wdir, 'figures/Figures_JD/Methods figure/TransparentFigs/rwi_map.png'), plot = rwi_map, bg= 'transparent', width = 10, height = 8)
+
+#cwd_change_map + rwi_map + plot_layout(guides = "collect")
