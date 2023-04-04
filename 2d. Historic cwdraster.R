@@ -13,7 +13,7 @@ library(geosphere)
 library(dplyr)
 library(tidyr)
 
-source("cwd_function.R")
+source("f_cwd_function.R")
 
 wdir <- "remote\\"
 # franspath="C:/Users/fmoore/Box/Davis Stuff/Treeconomics"

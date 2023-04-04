@@ -47,7 +47,7 @@ library(sf)
 library(units)
 library(dtplyr)
 library(marginaleffects)
-source("spec_chart_function.R")
+source("f_spec_chart_function.R")
 
 select <- dplyr::select
 
