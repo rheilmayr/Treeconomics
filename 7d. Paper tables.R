@@ -92,14 +92,16 @@ species_df <- species_df %>%
 ## Number of missing species
 sp_included = species_df %>%
   group_by(missing_range) %>% 
-  summarise(n_sites = n())
+  summarise(n_sites = n()) %>% 
+  print()
 sp_included[1,2] / sum(sp_included$n_sites)
 
 
 ## Share of sites from species with missing ranges
 n_included = species_df %>%
   group_by(missing_range) %>% 
-  summarise(n_sites = sum(n_sites))
+  summarise(n_sites = sum(n_sites)) %>% 
+  print()
   
 n_included[1,2] / sum(n_included$n_sites)
 
