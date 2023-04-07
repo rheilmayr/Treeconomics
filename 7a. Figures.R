@@ -1633,14 +1633,14 @@ transect_0 <- plot_dat %>%
   # ggtitle("Historic PET = historic species mean") +
   # ylab("Predicted difference in RWI change - neutral model vs ourse") +
   xlab("Historic CWD\n(Deviation from species mean)") +
-  ylab("Difference in predicted\nRWI changes by 2100 ") +
+  ylab("Difference in predicted RWI changes by 2100\n(Heterogeneous sensitivity model - Neutral model)") +
   theme(legend.position = c(.18,.75),
         legend.text = element_text(size=13),
         legend.title = element_text(size=18),
         legend.background = element_blank()) +
   geom_hline(yintercept = 0, linetype = "dashed", size = 1)
 transect_0
-ggsave(paste0(wdir, "figures\\", "a5_dif_pred.svg"), transect_0, width = 4, height = 4)
+ggsave(paste0(wdir, "figures\\", "a5_dif_pred.svg"), transect_0, width = 8, height = 8)
 
 
 # ## Alternate version that plots difference in two models
