@@ -28,7 +28,7 @@ select <- dplyr::select
 
 
 library(furrr)
-n_cores <- 6
+n_cores <- 8
 future::plan(multisession, workers = n_cores)
 
 
@@ -326,20 +326,25 @@ site_clim_df = site_clim_df %>%
 
 
 ### Calculate site-level, average, historic, relative climate (for second stage)
+## TODO: Note - dropping CANA323 because it has null climate data for a few months each year. might want to dig into this
+site_clim_df <- site_clim_df %>% 
+  filter(collection_id != "CANA323")
+
 ave_site_clim_df <- site_clim_df %>% 
   filter(year < 1980) %>% 
   group_by(collection_id) %>% 
-  summarise(cwd.ave = mean(cwd.an, na.rm = TRUE), ## TODO: Shouldn't have to include na.rm here. Why do some sites have incomplete climate data?
-            pet.ave = mean(pet.an, na.rm = TRUE)) %>% 
-  drop_na() %>% 
+  summarise(cwd.ave = mean(cwd.an),
+            pet.ave = mean(pet.an),
+            cwd.sd = sd(cwd.an),
+            pet.sd = sd(pet.an)) %>% 
   ungroup()
 
 ave_site_clim_df <- ave_site_clim_df %>% 
   left_join(site_smry, by = "collection_id") %>% 
   group_by(sp_code) %>% 
-  nest() %>% 
-  left_join(niche_df, by = ("sp_code")) %>% 
-  drop_na()
+  nest(data = c(collection_id, cwd.ave, pet.ave)) %>% 
+  left_join(niche_df, by = ("sp_code")) %>%
+  drop_na() # Dropping some species due to NA niche data
 
 ave_site_clim_df <- ave_site_clim_df %>% 
   mutate(site_clim = future_pmap(list(hist_clim_vals = data,
@@ -354,7 +359,7 @@ ave_site_clim_df <- ave_site_clim_df %>%
   unnest(site_clim) %>% 
   rename(cwd.spstd = cwd.ave, pet.spstd = pet.ave) %>% 
   ungroup() %>% 
-  select(-pet_mean, -pet_sd, -cwd_mean, -cwd_sd, -data, -sp_code)
+  select(collection_id, cwd.spstd, pet.spstd, cwd.sd, pet.sd)
 
 write_rds(ave_site_clim_df, 
           paste0(wdir, "out/climate/site_ave_clim.", compress = "gz"))
