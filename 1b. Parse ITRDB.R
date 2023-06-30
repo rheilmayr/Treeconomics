@@ -31,8 +31,14 @@ library(testthat)
 # Define path
 wdir <- 'remote\\'
 
-data_dir <- paste0(wdir, 'in\\itrdb\\rwi\\')
-header_files <- list.files(data_dir, pattern = 'noaa.rwl')
+### Original ITRDB data
+# data_dir <- paste0(wdir, 'in\\itrdb\\rwi\\')
+# header_files <- list.files(data_dir, pattern = 'noaa.rwl')
+
+## Cleaned ITRDB
+data_dir <- paste0(wdir, 'in/itrdb_zhao_corrected/AppendixS1/Cleaned datasets/itrdb-v713-cleaned-rwl/')
+itrdb_meta <- read_csv(paste0(data_dir, "rwl_metadata.csv"))
+
 
 out_dir <- paste0(wdir, 'out\\dendro\\')
 
