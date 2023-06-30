@@ -83,6 +83,9 @@ site_df <- site_df %>%
   left_join(sp_info, by = "species_id")
 
 
+niche_df <- read.csv(paste0(wdir, "out//climate//clim_niche.csv")) %>%
+  select(-X)
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Prep and trim data -----------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -398,8 +401,41 @@ new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         detrend_ar = FALSE)
 specs <- rbind(specs, new_row)
 
-specs <- specs %>% 
-  drop_na()
+
+
+## Test model controlling for site-level SD of cwd and pet
+params <- list(despline_data = fs_spl,
+               formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2) + pet.sd + cwd.sd"),
+               t_x = FALSE,
+               t_y = TRUE,
+               weights = "cwd_errorweights")
+mod_slopes <- robustness_test(params)
+new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
+                      se = mod_slopes %>% pull("std.error"),
+                      trim_x = params$t_x,
+                      trim_y = params$t_y,
+                      weight_se = params$weights == "cwd_errorweights",
+                      species_control = FALSE,
+                      squared_term = TRUE,
+                      linear_mod = FALSE,
+                      detrend_spline = TRUE, 
+                      detrend_nb = FALSE,
+                      cum_dnlm = FALSE,
+                      detrend_ar = FALSE)
+specs <- rbind(specs, new_row)
+
+
+formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2) + cwd.sd + pet.sd")
+data <- fs_spl %>% filter(outlier == 0)
+mod <- feols(formula, weights = data$cwd_errorweights, data = data,
+             vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
+summary(mod)
+
+fs_spl %>% ggplot(aes(x = cwd.spstd, y = cwd.sd)) +
+  geom_point() +
+  geom_smooth() +
+  xlim(-10,10)
+
 
 ## Create figure
 highlight_n <- which(specs$trim_y == TRUE &
@@ -435,6 +471,143 @@ dev.off()
 
 
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Investigate variation by genus  ----------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+trim_df <- fs_spl %>% 
+  filter(outlier==0) %>% 
+  drop_na()
+
+run_ss_conley <- function(data, outcome = "cwd_coef"){
+  if (outcome == "cwd_coef") {
+    error_weights = data$cwd_errorweights
+  } else if (outcome == "pet_coef") {
+    error_weights = data$pet_errorweights
+  } else if (outcome == "int_coef") {
+    error_weights = data$int_errorweights
+  }
+  formula <- as.formula(paste(outcome, " ~ cwd.spstd + (cwd.spstd^2) + pet.spstd + (pet.spstd^2)"))
+  mod <- feols(formula, data=data, weights = error_weights,
+               vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
+  
+  # formula <- as.formula(paste(outcome, " ~ cwd.spstd + I(cwd.spstd**2) + pet.spstd + I(pet.spstd**2)"))
+  # mod <- lm(formula, data=data, weights = error_weights)
+  return(mod)
+}
+
+# run_ss_conley <- function(data, outcome = "estimate_cwd.an"){
+#   formula <- as.formula(paste(outcome, " ~ cwd.spstd + pet.spstd")) ## ADD BACK WEIGHTING HERE?
+#   mod <- feols(formula, data = data, weights = data$cwd_errorweights, 
+#         vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
+#   return(mod)
+# }
+
+genus_lookup <- trim_df %>% select(collection_id, genus)
+genus_freq <- trim_df %>% 
+  group_by(genus) %>% 
+  summarise(n_collections = n_distinct(collection_id),
+            min_cwd = min(cwd.spstd),
+            max_cwd = max(cwd.spstd),
+            range_cwd = max_cwd - min_cwd) %>% 
+  arrange(desc(n_collections))
+
+gymno_key <- sp_info %>% 
+  select(genus, gymno_angio) %>% 
+  unique()
+
+
+
+# N = 10: 16 genera; 26: 12 genera; 50: 9 genera
+genus_keep <- genus_freq %>% 
+  filter(n_collections>50) %>%
+  pull(genus)
+
+genus_df <- trim_df %>% 
+  mutate(int_coef = estimate_intercept,
+         pet_coef = estimate_pet.an, 
+         cwd_coef = estimate_cwd.an) %>% 
+  filter(genus %in% genus_keep) %>% 
+  group_by(genus) %>% 
+  nest() %>% 
+  mutate(model_estimates = map(data, run_ss_conley))
+
+genus_df$model_estimates
+
+write_rds(genus_df, paste0(wdir, "out/second_stage/ss_conley_genus.rds"))
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Investigate variation by species  ----------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+sp_lookup <- trim_df %>% select(collection_id, species_id)
+sp_freq <- trim_df %>% 
+  group_by(species_id) %>% 
+  summarise(n_collections = n_distinct(collection_id),
+            min_cwd = min(cwd.spstd),
+            max_cwd = max(cwd.spstd),
+            range_cwd = max_cwd - min_cwd) %>% 
+  arrange(desc(n_collections))
+
+gymno_key <- sp_info %>% 
+  select(species_id, gymno_angio) %>% 
+  unique()
+
+sp_keep <- sp_freq %>% 
+  filter(n_collections>50) %>%
+  pull(species_id)
+
+sp_df <- trim_df %>% 
+  mutate(int_coef = estimate_intercept,
+         pet_coef = estimate_pet.an, 
+         cwd_coef = estimate_cwd.an) %>% 
+  filter(species_id %in% sp_keep) %>% 
+  group_by(species_id) %>% 
+  nest() %>% 
+  mutate(model_estimates = map(data, run_ss_conley))
+
+sp_df$model_estimates
+
+write_rds(sp_df, paste0(wdir, "out/second_stage/ss_conley_species.rds"))
+
+
+
+
+## REVIEW COMMENT 1.7 - assess association between gamma and species climate niche
+## Seems like species in high PET 
+pull_me_median <- function(gen_mod, gen_dat){
+  median_cwd <- gen_dat %>% pull(cwd.spstd) %>% median()
+  lht <- linearHypothesis(gen_mod, c(paste0('cwd.spstd + ', as.character(median_cwd), ' * I(cwd.spstd^2) = 0')))
+  pvalue <- lht$`Pr(>Chisq)`[2] %>% round(digits = 3)
+  coefs = gen_mod$coefficients
+  me <- (coefs['cwd.spstd'] + median_cwd * 2 * coefs['I(cwd.spstd^2)']) %>% round(digits = 3)
+  return(me)
+}
+
+pull_sig <- function(gen_mod, gen_dat){
+  median_cwd <- gen_dat %>% pull(cwd.spstd) %>% median()
+  lht <- linearHypothesis(gen_mod, c(paste0('cwd.spstd + ', as.character(median_cwd), ' * I(cwd.spstd^2) = 0')))
+  pvalue <- lht$`Pr(>Chisq)`[2] %>% round(digits = 3)
+  return(pvalue)
+}
+
+me_median <- sp_df %>%
+  mutate(me_median = map2(model_estimates, data, pull_coefs)) %>%
+  mutate(me_sig = map2(model_estimates, data, pull_sig)) %>%
+  select(species_id, me_median, me_sig) %>%
+  unnest(me_median) %>%
+  unnest(me_sig) %>% 
+  arrange(species_id)
+
+me_median <- me_median %>%
+  filter(me_sig < 0.05) %>%
+  left_join(niche_df, by = c("species_id" = "sp_code"))
+
+
+me_median %>% ggplot(aes(x = pet_mean, y = me_median)) + geom_point()
+me_median %>% ggplot(aes(x = cwd_mean, y = me_median)) + geom_point()
+
+mod <- lm(me_median ~ cwd_mean + pet_mean, data = me_median)
+summary(mod)
 
 # #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # # Old version --------------------------------------------------------
