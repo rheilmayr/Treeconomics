@@ -174,6 +174,10 @@ load(clim_file)
 cwd_historic <- sum(cwd_historic)
 names(cwd_historic) = "cwd"
 
+
+# Average site conditions
+ave_site_clim_df <- read_rds(paste0(wdir, "out/climate/site_ave_clim.gz"))
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define palettes ------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -388,6 +392,38 @@ hex2 <- ggMarginal(hex, type="histogram", fill ="#404788FF", alpha=.5)
 hex2 <- hex2 %>% as.ggplot()
 hex2
 
+### REVIEW COMMENT 1.6 - add summary plot of sample distribution based on raw CWD/PET
+flm_df <- flm_df %>% 
+  left_join(ave_site_clim_df %>% select(collection_id, cwd.ave, pet.ave), by = "collection_id")
+hex_raw <- flm_df %>% ggplot(aes(x = cwd.ave, y = pet.ave)) +
+  geom_hline(yintercept = 0, size = 1, linetype = 2) +
+  geom_vline(xintercept = 0, size = 1, linetype = 2) +
+  geom_point(alpha=.0)+
+  geom_hex() +
+  xlim(-100, 2500) +
+  ylim(-100, 2500) +
+  labs(fill = "Number of sites") +
+  ylab(bquote("Historic PET (mm"*H[2]*"O)")) +
+  xlab(bquote("Historic CWD (mm"*H[2]*"O)")) +
+  coord_fixed() +
+  scale_fill_viridis_c() +
+  # scale_color_viridis_c(name = bquote('Species')) +
+  theme_bw(base_size = base_text_size)+
+  theme(legend.position = c(.27, .84),
+        legend.text = element_text(size=base_text_size - 6),
+        legend.title = element_text(size=base_text_size - 4),
+        legend.background = element_blank(),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+hex_raw
+
+
+hex2_raw <- ggMarginal(hex_raw, type="histogram", fill ="#404788FF", alpha=.5)
+hex2_raw <- hex2_raw %>% as.ggplot()
+hex2_raw
+
+
+
+## Combine figures
 figs1 <- map/range_map+plot_layout(heights = c(1,1))
 figs1+
   plot_annotation(tag_levels = 'A') & theme(
