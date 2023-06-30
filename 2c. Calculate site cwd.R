@@ -99,4 +99,12 @@ miss_var_summary(data)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 cwd_data <- cwd_data %>%
   select(site, year, month, aet, cwd)
+
+precip_temp_data <- data %>% 
+  select(site = site_id, month, year, precip = pre_corrected, tmean)
+
+cwd_data <- cwd_data %>% 
+  left_join(precip_temp_data, by = c("site", "month", "year"))
+
 fwrite(cwd_data,file=paste0(wdir,"out/climate/essentialcwd_data.csv"))
+
