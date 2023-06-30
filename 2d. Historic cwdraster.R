@@ -36,7 +36,9 @@ for(j in 2:12){
   print(j)
 }
 
-save(tas_months,pr_months,file=paste0(wdir,"in/CRUData/monthlycrubaseline.Rdat"))
+# save(tas_months,pr_months,file=paste0(wdir,"in/CRUData/monthlycrubaseline.Rdat"))
+writeRaster(tas_months, file=paste0(wdir,"in/CRUData/monthlycrubaseline_tas"))
+writeRaster(pr_months, file=paste0(wdir,"in/CRUData/monthlycrubaseline_pr"))
 
 #get soil, slope, latitude, elevation for cwd calculation
 
