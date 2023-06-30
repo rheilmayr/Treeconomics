@@ -1227,6 +1227,55 @@ gen_plot
 ggsave(paste0(wdir, 'figures\\a3_genus_margins_nonlinear.svg'), gen_plot, width = 22, height = 12, units = "in")
 
 
+## Repeat with species
+coef_labels <- sp_models %>%
+  mutate(labels = map2(model_estimates, data, pull_coefs)) %>%
+  select(species_id, labels) %>%
+  unnest(labels) %>%
+  arrange(species_id)
+
+
+sp_predictions <- sp_models %>% 
+  mutate(predictions = map2(model_estimates, data, gen_marg_fx_df))
+
+sp_predictions <- sp_predictions %>% 
+  unnest(predictions) %>% 
+  select(-data, -model_estimates) %>% 
+  arrange(species_id)
+
+sp_plot <- sp_predictions %>% 
+  # filter(genus %in% genus_keep) %>%
+  ggplot(aes(x = cwd.spstd)) + 
+  geom_line(aes(y = estimate)) +
+  geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2) +
+  # geom_ribbon(aes(ymin=cwd_ci_min, ymax=cwd_ci_max), alpha=0.2, fill = "darkblue") +
+  theme_bw(base_size = 22) + 
+  facet_wrap(~species_id, scales = "free") +
+  theme(
+    # panel.grid.major = element_blank(),
+    # panel.grid.minor = element_blank(),
+    strip.background = element_blank(),
+    panel.border = element_rect(colour = "black", fill = NA)) +
+  geom_line(aes(y = conf.low), linetype = 3) +
+  geom_line(aes(y = conf.high), linetype = 3) +
+  geom_hline(yintercept = 0, linetype = 2) +
+  xlab("Historic CWD\n(Deviation from species mean)") + 
+  ylab("Predicted sensitivity to CWD") +
+  xlim(c(-3, 3))
+
+
+sp_plot <- sp_plot +
+  geom_text(data = coef_labels, aes(label = labels, x = -Inf, y = -Inf),
+            hjust = 0, vjust = 0)
+
+
+sp_plot
+ggsave(paste0(wdir, 'figures\\a6_species_margins_nonlinear.svg'), sp_plot, width = 22, height = 12, units = "in")
+
+
+
+
+
 # margins_plot <- margins_plot +
 #   geom_text(data = genus_coefs, aes(x = -1.8, y = 0, label = lab))
 # 
