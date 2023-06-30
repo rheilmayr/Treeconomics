@@ -339,14 +339,14 @@ ave_site_clim_df <- site_clim_df %>%
             pet.sd = sd(pet.an)) %>% 
   ungroup()
 
-ave_site_clim_df <- ave_site_clim_df %>% 
+spstd_site_clim_df <- ave_site_clim_df %>% 
   left_join(site_smry, by = "collection_id") %>% 
   group_by(sp_code) %>% 
   nest(data = c(collection_id, cwd.ave, pet.ave)) %>% 
   left_join(niche_df, by = ("sp_code")) %>%
   drop_na() # Dropping some species due to NA niche data
 
-ave_site_clim_df <- ave_site_clim_df %>% 
+spstd_site_clim_df <- spstd_site_clim_df %>% 
   mutate(site_clim = future_pmap(list(hist_clim_vals = data,
                                       pet_mean = pet_mean,
                                       pet_sd = pet_sd,
@@ -355,14 +355,21 @@ ave_site_clim_df <- ave_site_clim_df %>%
                                  .f = sp_std_historic_df,
                                  .options = furrr_options(packages = c( "dplyr"))))
 
-ave_site_clim_df <- ave_site_clim_df %>% 
+spstd_site_clim_df <- spstd_site_clim_df %>% 
   unnest(site_clim) %>% 
   rename(cwd.spstd = cwd.ave, pet.spstd = pet.ave) %>% 
+  mutate(cwd.sd = cwd.sd / cwd_sd,
+         pet.sd = pet.sd / pet_sd) %>% 
   ungroup() %>% 
   select(collection_id, cwd.spstd, pet.spstd, cwd.sd, pet.sd)
 
-write_rds(ave_site_clim_df, 
+spstd_site_clim_df <- spstd_site_clim_df %>% 
+  left_join(ave_site_clim_df %>% select(collection_id, cwd.ave, pet.ave), by = "collection_id")
+
+write_rds(spstd_site_clim_df, 
           paste0(wdir, "out/climate/site_ave_clim.", compress = "gz"))
+
+
 
 
 
