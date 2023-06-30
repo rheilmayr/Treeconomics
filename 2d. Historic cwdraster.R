@@ -36,15 +36,15 @@ for(j in 2:12){
   print(j)
 }
 
-save(tas_months,pr_months,file=paste0(franspath,"/Data/CRUData/monthlycrubaseline.Rdat"))
+save(tas_months,pr_months,file=paste0(wdir,"in/CRUData/monthlycrubaseline.Rdat"))
 
 #get soil, slope, latitude, elevation for cwd calculation
 
-swc=raster(paste0(franspath,"/Data/CMIP5 Data/other data for cwd/sr_cru_max.asc"))
+swc=raster(paste0(wdir,"in/CMIP5 Data/other data for cwd/sr_cru_max.asc"))
 #convert swc from mm to cm
 swc=swc/10
 
-load(paste0(franspath,"/Data/CMIP5 Data/other data for cwd/slopeaspectraster.Rdat"))
+load(paste0(wdir,"in/CMIP5 Data/other data for cwd/slopeaspectraster.Rdat"))
 
 terrainraster=crop(terrainraster,extent(swc))
 #convert slope and aspect to degrees
@@ -76,7 +76,7 @@ dat=merge(sitedata,climatedata)
 dat=dat[complete.cases(dat),]
 
 test=cwd_function(site=as.factor(dat$site),slope=dat$slope,latitude=dat$lat,foldedaspect=dat$aspect,ppt=dat$precip,tmean=dat$temp,month=dat$month,soilawc=dat$swc,year=NULL,type="normal")
-fwrite(test,file=paste0(franspath,"/Data/griddedbaselinecwddata.csv"))
+fwrite(test,file=paste0(wdir,"/Data/griddedbaselinecwddata.csv"))
 
 #merge in lat longs from site data
 sitecrosswalk=data.frame(site_grid=unique(dat$site),site=1:length(unique(dat$site)))
@@ -101,7 +101,7 @@ for(j in 2:12){
   cwd_historic=stack(cwd_historic,cwdtemp);aet_historic=stack(aet_historic,aettemp)
 }
 
-save(cwd_historic,aet_historic,file=paste0(franspath,"/Data/HistoricCWD_AETGrids.Rdat"))
+save(cwd_historic,aet_historic,file=paste0(wdir,"in/CRUData/historic_raster/HistoricCWD_AETGrids.Rdat"))
 
 
 tasdata=melt(tasdata,id.vars=c("site","year"));prdata=melt(prdata,id.vars=c("site","year"))
@@ -126,12 +126,12 @@ sitegroups=1:61
 for(y in 1:length(sitegroups)){
   groupdat=dat%>%filter(sitegroup==sitegroups[y])
   test=cwd_function(site=as.factor(groupdat$site),slope=groupdat$slope,latitude=groupdat$lat,foldedaspect=groupdat$aspect,ppt=groupdat$precip,tmean=groupdat$temp,month=groupdat$month,soilawc=groupdat$swc,year=groupdat$year,type="annual")
-  fwrite(test,file=paste0(franspath,"/Data/Baseline CWD/cwd_group",sitegroups[y],".csv"))
+  fwrite(test,file=paste0(wdir,"in/CRUData/historic_raster/cwd_group",sitegroups[y],".csv"))
   print(y)
 }
 
 for(i in 1:length(sitegroups)){
-  temp=fread(paste0(franspath,"/Data/Baseline CWD/cwd_group",sitegroups[i],".csv"))
+  temp=fread(paste0(wdir,"in/CRUData/historic_raster/cwd_group",sitegroups[i],".csv"))
   #annual totals
   temp=temp%>%group_by(site,year)%>%summarize(aet=sum(aet),cwd=sum(cwd))
   temp=left_join(temp,sitedata%>%select(lon,lat,site))
@@ -163,6 +163,6 @@ for(i in 2:length(baseyears)){
   aet_historic=addLayer(aet_historic,aettemp)
   print(i)
 }
-save(cwd_historic,aet_historic,file=paste0(franspath,"/Data/HistoricCWD_AETGrids_Annual.Rdat"))
+save(cwd_historic,aet_historic,file=paste0(wdir,"in/CRUData/historic_raster/HistoricCWD_AETGrids_Annual.Rdat"))
 
 
