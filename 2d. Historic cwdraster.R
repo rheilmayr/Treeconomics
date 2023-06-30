@@ -20,8 +20,8 @@ wdir <- "remote\\"
 
 cruyears=rep(1901:2019,each=12);crumonths=rep(1:12,length(1901:2019))
 
-tas=stack(paste0(wdir, "Raster Data for CWD/CRUData/cru_ts4.04.1901.2019.tmp.dat.nc"))
-pr=stack(paste0(wdir,"Raster Data for CWD/CRUData/cru_ts4.04.1901.2019.pre.dat.nc"))
+tas=stack(paste0(wdir, "in/CRUData/cru_ts4.04.1901.2019.tmp.dat.nc"))
+pr=stack(paste0(wdir,"in/CRUData/cru_ts4.04.1901.2019.pre.dat.nc"))
 
 baseyears=1901:1980
 basemonths=rep(1:12,length(baseyears))
