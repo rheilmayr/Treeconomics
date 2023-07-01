@@ -24,27 +24,109 @@ library(dplR)
 library(stringi)
 library(varhandle)
 library(testthat)
+library(readxl)
+library(tidylog)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define path
-wdir <- 'remote\\'
+wdir <- 'remote/'
 
-### Original ITRDB data
-# data_dir <- paste0(wdir, 'in\\itrdb\\rwi\\')
-# header_files <- list.files(data_dir, pattern = 'noaa.rwl')
+## ITRDB metadata (v8)
+itrdb_meta <- read_excel(paste0(wdir, 'in/itrdb/ITRDBmetadata12January2022.xlsx'))
 
-## Cleaned ITRDB
-data_dir <- paste0(wdir, 'in/itrdb_zhao_corrected/AppendixS1/Cleaned datasets/itrdb-v713-cleaned-rwl/')
-itrdb_meta <- read_csv(paste0(data_dir, "rwl_metadata.csv"))
+## Revisited ITRDB (v7.13)
+ritrdb_data_dir <- paste0(wdir, 'in/itrdb_zhao_corrected/AppendixS1/Cleaned datasets/itrdb-v713-cleaned-rwl/')
+ritrdb_meta <- read_csv(paste0(ritrdb_data_dir, "rwl_metadata.csv"))
 
+## Original ITRDB data (v7.22)
+itrdb_data_dir <- paste0(wdir, 'in\\itrdb\\rwi\\')
+header_files <- list.files(itrdb_data_dir, pattern = 'noaa.rwl')
 
+## Define output directory
 out_dir <- paste0(wdir, 'out\\dendro\\')
 
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Parse headers --------------------------------------------------------
+# Narrow based on metadata --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+itrdb_df <- itrdb_meta %>% 
+  filter(LastYear > 1901,
+         !is.na(Species)) %>% 
+  select(collection_id = ITRDB_Code, latitude = Latitude, longitude = Longitude, species_id = Species) %>% 
+  drop_na()
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# ID sites in revisited ITRDB --------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ritrdb_df <- ritrdb_meta %>% 
+  filter(type %in% c("Ring Width","Earlywood Width", "Latewood Width")) 
+
+ritrdb_df <- ritrdb_df %>% 
+  mutate(collection_id = gsub('e$|l$|w$', '', id),
+         collection_id = str_to_upper(collection_id)) %>% 
+  select(collection_id, region, id, type) %>% 
+  mutate(filepath = paste0(ritrdb_data_dir, region, "/", id, ".rwl"))
+
+total_sites <- ritrdb_df %>% 
+  filter(type == "Ring Width") %>% 
+  pull(collection_id)
+
+early_sites <- ritrdb_df %>% 
+  filter(type == "Earlywood Width") %>% 
+  pull(collection_id)
+
+late_sites <- ritrdb_df %>% 
+  filter(type == "Latewood Width") %>% 
+  pull(collection_id)
+
+early_sites <- early_sites[which(!early_sites %in% total_sites)]
+late_sites <- late_sites[which(!late_sites %in% total_sites)]
+sum_sites <- early_sites[which(early_sites %in% late_sites)]
+keep_sites <- c(total_sites, sum_sites)
+
+problem_ritrdb_ids <- c()
+
+total_sites_ritrdb <- ritrdb_df %>% 
+  filter(collection_id %in% total_sites,
+         type == "Ring Width") 
+
+## Drop some duplicated and incorrect files
+total_sites_ritrdb <- total_sites_ritrdb %>% 
+  filter(!((collection_id %in% c("GEOR002", "GEOR003", "GEOR004", "GEOR005", "GEOR006", "GEOR007", "GEOR008", "GEOR009", "GEOR010")) & (region == "europe"))) %>% 
+  filter(!(id %in% c("ausl038w", "ausl039w", "ausl043w" )))
+
+total_sites_ritrdb <- total_sites_ritrdb %>% 
+  select(collection_id, t_rwl = filepath) %>% 
+  mutate(e_rwl = NaN,
+         l_rwl = NaN)
+
+sum_sites_ritrdb <- ritrdb_df %>% 
+  filter(collection_id %in% sum_sites,
+         type %in% c("Earlywood Width", "Latewood Width"))
+
+sum_sites_ritrdb <- sum_sites_ritrdb %>% 
+  mutate(type = ifelse(type == "Earlywood Width", "e_rwl", "l_rwl")) %>% 
+  pivot_wider(id_cols = collection_id, names_from = type, values_from = filepath) %>% 
+  mutate(t_rwl = NaN) %>% 
+  select(collection_id, t_rwl, e_rwl, l_rwl)
+
+ritrdb_df <- total_sites_ritrdb %>% 
+  rbind(sum_sites_ritrdb) %>% 
+  mutate(datasource = 'ritrdb_7.13')
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Look for remaining sites in ITRDB download  ----------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+ritrdb_sites <- ritrdb_df %>% pull(collection_id)
+itrdb_sites <- itrdb_df %>% pull(collection_id)
+missing_collections <- itrdb_sites[which(!(itrdb_sites %in% ritrdb_sites))]
+  
+header_files <- list.files(itrdb_data_dir, pattern = 'noaa.rwl')
+
 findVar <- function (header, search_string){
   row_id <- which(startsWith(header, search_string))
   row <- header[row_id]
@@ -70,12 +152,11 @@ idMetric <- function(data_id){
   return(metric)
 }
 
-
 site_list <- list()
 
 for (file in header_files) {
   print(file)
-  txt <- readLines(paste0(data_dir, file))
+  txt <- readLines(paste0(itrdb_data_dir, file))
   last_row <- which(txt == "# Variables ")
   header <- txt[1:(last_row-1)]
   search_list <- list(nLat = "# Northernmost_Latitude:",
@@ -118,10 +199,9 @@ site_data <- site_data %>%
          filename = str_remove(filename, "-noaa.rwl"),
          metric = idMetric(filename))
 
-### Pre-remove sites with spans outside of study period?
-# site_data <- site_data %>% 
-#   filter((end_year<1900) | (end_year>3000))
-
+## Focus on sites that still need data
+site_data <- site_data %>% 
+  filter(collection_id %in% missing_collections)
 
 total_sites <- site_data %>% 
   filter(metric == "total_ring_width") %>% 
@@ -138,16 +218,46 @@ late_sites <- site_data %>%
 early_sites <- early_sites[which(!early_sites %in% total_sites)]
 late_sites <- late_sites[which(!late_sites %in% total_sites)]
 sum_sites <- early_sites[which(early_sites %in% late_sites)]
-keep_sites <- c(total_sites, sum_sites)
+test_that("No sum sites are left after total sites are already accounted for",
+          expect_equal(length(sum_sites),0))
+keep_sites <- total_sites
+
+site_data <- site_data %>% 
+  filter(collection_id %in% keep_sites,
+         metric == "total_ring_width") %>% 
+  select(collection_id, metric, filename)
+
+site_data <- site_data %>% 
+  mutate(datasource = "itrdb_7.22")
+
+site_data <- site_data %>% 
+  mutate(e_rwl = NaN, l_rwl = NaN) %>% 
+  mutate(t_rwl = paste0(itrdb_data_dir, filename, ".rwl")) %>% 
+  select(collection_id, t_rwl, e_rwl, l_rwl, datasource)
+
+site_data[site_data$collection_id %>% duplicated(),]
+
+itrdb722_sites <- site_data %>% pull(collection_id)
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Combine datasets --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+test_that("No duplicates across two data sources",
+          expect_equal(itrdb722_sites[which((itrdb722_sites %in% ritrdb_sites))] %>% length(), 0))
+site_files <- site_data %>% 
+  rbind(ritrdb_df)
+
+itrdb_df <- itrdb_df %>% 
+  left_join(site_files, by = "collection_id")  ## Note - dropping some sites since they don't have series spanning into study period 
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Process total rwl files --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-site_to_filename <- function(site, suffix){
-  site <- str_to_lower(site)
-  site <- paste0(site, suffix, '.rwl')
-}
+# site_to_filename <- function(site, suffix){
+#   site <- str_to_lower(site)
+#   site <- paste0(site, suffix, '.rwl')
+# }
 
 open_rwl <- function(file){
   caught_error <- NA
@@ -155,7 +265,7 @@ open_rwl <- function(file){
   rwl <- NA
   tryCatch(
     expr = {
-      rwl <- read.tucson(paste0(data_dir, file)) # NOTE: Any way to extract RWL units at this point?
+      rwl <- read.tucson(file)
     },
     error = function(e){
       tryCatch(
@@ -237,8 +347,9 @@ separate_errors <- function(rwl_data){
   return(list(clean_data = clean_data, errors = errors))
 }
 
-rwl_files <- sapply(total_sites, site_to_filename, suffix = '')
-rwl_data <- tibble::enframe(rwl_files, name = "collection_id", value = "file")
+rwl_data <- itrdb_df %>% select(collection_id, file = t_rwl) %>% drop_na()
+# rwl_files <- sapply(total_sites, site_to_filename, suffix = '')
+# rwl_data <- tibble::enframe(rwl_files, name = "collection_id", value = "file")
 rwl_data$rwl <- map(rwl_data$file, open_rwl) 
 rwl_data <- rwl_data %>% unnest(rwl)
 rwl_data <- rwl_data %>% 
