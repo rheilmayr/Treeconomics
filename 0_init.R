@@ -3,6 +3,8 @@
 # Project: Treeconomics
 # Date: 4/29/19
 # Purpose: Creates a symlink from code directory to a directory storing project data
+# Note: Should be run with administrator priviledges
+#
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 library(R.utils)
 
