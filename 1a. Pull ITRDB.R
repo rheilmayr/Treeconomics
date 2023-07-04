@@ -12,7 +12,7 @@ library(RCurl)
 wdir <- 'remote\\'
 
 
-
+## Note - Downloaded on July 5, 2020; ITRDB v.7.22
 continents <- list('northamerica/mexico', 'northamerica/canada', 'northamerica/usa')
 for (continent in continents) {
   url = "ftp://ftp.ncdc.noaa.gov/pub/data/paleo/treering/measurements/"
