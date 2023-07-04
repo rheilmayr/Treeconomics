@@ -21,6 +21,8 @@ library(reshape2)
 library(seegSDM)
 library(data.table)
 library(ncdf4)
+library(data.table)
+library(seegSDM)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -32,8 +34,7 @@ wdir <- 'remote\\'
 # 1. Load site topography 
 sites=fread(paste0(wdir, 'out//dendro//site_summary_slopeaspect.csv'))
 sites <- sites %>% 
-  dplyr::rename(elevation_itrdb = elevation,
-                elevation = demelevation)
+  dplyr::rename(elevation = demelevation)
 plots=unique(data.frame(latitude=sites$latitude,longitude=sites$longitude,site_id=sites$collection_id))
 plots=SpatialPointsDataFrame(coords=plots[,c(2,1)],data=as.data.frame(plots[,3]))
 
