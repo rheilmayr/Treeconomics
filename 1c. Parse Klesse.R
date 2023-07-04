@@ -108,8 +108,8 @@ rwl_nested <- rwl_nested %>%
 
 
 
-# PLT_CN = "3036494010690", species_id = "PSME"
-
-test <- rwl_nested %>% filter(PLT_CN == "3036494010690") %>% pull(data)
-test <- test[[1]]
-format_rwl(test)
+# # PLT_CN = "3036494010690", species_id = "PSME"
+# 
+# test <- rwl_nested %>% filter(PLT_CN == "3036494010690") %>% pull(data)
+# test <- test[[1]]
+# format_rwl(test)
