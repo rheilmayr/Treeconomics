@@ -2,12 +2,26 @@
 # Authors: Robert Heilmayr, Frances Moore, Joan Dudney
 # Project: Treeconomics
 # Date: 5/1/20
-# Purpose: Characterize climate niche for different species
+# Purpose: 1) Characterize climate niche for different species. 
+#          2) Standardize annual site data, baseline raster, and CMIP predictions for each species
 #
 # Input files:
-# - HistoricCWD_AETGrids.Rdat: Rasters describing historic CWD and AET
+#   merged_ranges.shp:
+#   HistoricCWD_AETGrids.Rdat: Rasters describing historic CWD and AET
 #     Generated using historic_cwdraster.R
-#
+#   monthlycrubaseline_tas:
+#   cmip5_cwdaet_start.Rdat:
+#   cmip5_cwdaet_end.Rdat:
+#   essentialcwd_data.csv:
+#   site_summary.csv:
+# 
+# Output files:
+#   clim_niche.csv: Tabulation of each species' historic climate niche. Paramters used for standardization.
+#   sp_clim_predictions.gz: Rasters describing species' standardized historic climate, and their predicted climate under CMIP
+#   site_ave_clim.gz: Tables describing each site's species-standardized average historic climate
+#   site_an_clim.gz: Tables describing each site's annual species-standardized weather
+# 
+# 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -39,7 +53,7 @@ future::plan(multisession, workers = n_cores)
 wdir <- 'remote\\'
 
 # 1. Historic climate raster
-clim_file <- paste0(wdir, 'in//CRUData//historic_raster//HistoricCWD_AETGrids_Annual.Rdat')
+clim_file <- paste0(wdir, 'in/CRUData/historic_raster/HistoricCWD_AETGrids_Annual.Rdat')
 load(clim_file)
 cwd_historic <- mean(cwd_historic)
 aet_historic <- mean(aet_historic)
@@ -48,20 +62,20 @@ names(cwd_historic) = "cwd"
 names(pet_historic) = "pet"
 
 # XX. Data on historic baseline temp and precip
-temps_historic <- raster(paste0(wdir, "in\\CRUData\\monthlycrubaseline_tas"))
+temps_historic <- raster(paste0(wdir, "in/CRUData/monthlycrubaseline_tas"))
 names(temps_historic) = "temp"
 temps_historic <- resample(temps_historic, cwd_historic)
 clim_historic <- raster::brick(list(cwd_historic, pet_historic, temps_historic))
 
 # 2. Site-specific historic climate data
-site_clim_csv <- paste0(wdir, 'out\\climate\\essentialcwd_data.csv')
+site_clim_csv <- paste0(wdir, 'out/climate/essentialcwd_data.csv')
 site_clim_df <- read_csv(site_clim_csv)
 site_clim_df <- site_clim_df %>% 
   mutate("site_id" = as.character(site)) %>% 
   rename(collection_id = site_id)
 
 # 3. Load species information for sites
-site_smry <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
+site_smry <- read_csv(paste0(wdir, 'out/dendro/site_summary.csv'))
 site_smry <- site_smry %>% 
   select(collection_id, sp_id) %>% 
   mutate(sp_code = tolower(sp_id)) %>% 
@@ -69,18 +83,18 @@ site_smry <- site_smry %>%
 
 
 # 4. Species range maps
-range_file <- paste0(wdir, 'in//species_ranges//merged_ranges.shp')
+range_file <- paste0(wdir, 'in/species_ranges/merged_ranges.shp')
 range_sf <- st_read(range_file)
 
 # 5. Climate projections from CMIP5
-cmip_end <- load(paste0(wdir, 'in\\CMIP5 CWD\\cmip5_cwdaet_end.Rdat'))
+cmip_end <- load(paste0(wdir, 'in/CMIP5 CWD/cmip5_cwdaet_end.Rdat'))
 pet_cmip_end <- aet_raster + cwd_raster
 cwd_cmip_end <- cwd_raster
 names(cwd_cmip_end) <- NULL # Resetting this due to strange names in file from CMIP processing
 rm(cwd_raster)
 rm(aet_raster)
 
-cmip_start <- load(paste0(wdir, 'in\\CMIP5 CWD\\cmip5_cwdaet_start.Rdat'))
+cmip_start <- load(paste0(wdir, 'in/CMIP5 CWD/cmip5_cwdaet_start.Rdat'))
 pet_cmip_start <- aet_raster + cwd_raster
 cwd_cmip_start <- cwd_raster
 names(cwd_cmip_start) <- NULL # Resetting this due to strange names in file from CMIP processing
@@ -220,6 +234,8 @@ clim_df <- clim_df %>%
                                              temp_sd = temp_sd),
                                         .f = sp_std_historic_df,
                                         .options = furrr_options(packages = c( "dplyr"))))
+# NOTE: May no longer need this dataframe???
+
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Pull CMIP projections -----------------------------------------------
