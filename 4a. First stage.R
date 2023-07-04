@@ -286,7 +286,7 @@ ihsTransform <- function(y) {log(y + (y ^ 2 + 1) ^ 0.5)}
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Run site-level regressions --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-fs_mod <- function(site_data, outcome = "rwi"){
+fs_mod <- function(site_data, outcome = "rwi", energy_var = "pet.an"){
   rwl_mean <- site_data$rwl %>% mean(na.rm = TRUE)
   rwl_sd <- site_data$rwl %>% sd(na.rm = TRUE)
   
@@ -296,49 +296,36 @@ fs_mod <- function(site_data, outcome = "rwi"){
   pet_cwd_cov <- NA
   nobs <- NA
   ntrees <- site_data %>% select(tree) %>%  n_distinct()
-  # ncores <- site_data %>% select(tree, core) %>%  n_distinct()
   no_cwd_var <- (site_data %>% select(cwd.an) %>% n_distinct() == 1)
-  no_pet_var <- (site_data %>% select(pet.an) %>% n_distinct() == 1)
-  
-  # TODO: Update to integrate lags over three years of cwd data?
-  # site_data <- site_data %>% 
-  #   arrange(tree, core, year) %>% 
-  #   group_by(tree, core) %>% 
-  #   mutate(lag1_cwd = lag(cwd.an, order_by = year),
-  #          lag2_cwd = lag(cwd.an, n = 2, order_by = year))
-  # femod <- feols(width ~ cwd.an + lag1_cwd + lag2_cwd + pet.an | tree, site_data)
-  # 
+  no_pet_var <- (site_data %>% select(energy_var) %>% n_distinct() == 1)
   
   if (no_cwd_var | no_pet_var) {
-    message("Site has no variation in CWD or PET")
+    message(paste0("Site has no variation in cwd.an or ", energy_var))
     failed <- T
   } else{
-    # Try to run felm. Typically fails if missing cwd / aet data 
+    # Try to run felm. Typically fails if missing cwd / pet data 
     tryCatch(
       expr = {
-        # TODO: 7-9-21; Should we switch back to tree-level FE model? Complicates intercepts...
-        formula <- as.formula(paste0(outcome, " ~ temp.an + cwd.an"))
+        formula <- as.formula(paste0(outcome, " ~ ", energy_var, " + cwd.an"))
         mod <- lm(formula, data = site_data)
 
-        # mod <- lm(rwi ~ pet.an + cwd.an, data = site_data)
-        # if (ntrees==1){
-        #   mod <- lm(rwi ~ cwd.an + pet.an, site_data)
-        # } else{
-        #   mod <- lm(rwi ~ cwd.an + pet.an, site_data)
-        # }
         mod_sum <- summary(mod)
         mod_vcov <- vcov(mod)
-        cov <- list(int_cwd = mod_vcov[1, 2], 
-                    int_pet = mod_vcov[1, 3], 
-                    pet_cwd = mod_vcov[2, 3])
+        # cov <- list(int_cwd = mod_vcov[1, 2], 
+        #             int_pet = mod_vcov[1, 3], 
+        #             pet_cwd = mod_vcov[2, 3])
         nobs <- nobs(mod)
         mod <- tidy(mod) %>%
           mutate(term = term %>% str_replace("\\(Intercept\\)", "intercept")) %>% 
-          filter(term %in% c('intercept', 'cwd.an', 'temp.an')) %>% 
+          filter(term %in% c('intercept', 'cwd.an', energy_var)) %>% 
           pivot_wider(names_from = "term", values_from = c("estimate", "std.error", "statistic", "p.value"))
+        # mod <- mod %>% 
+        #   rename_all(funs(stringr::str_replace_all(., energy_var, 'energy.an')))
         mod$cov_int_cwd = mod_vcov[c("(Intercept)"), c("cwd.an")]
-        mod$cov_int_pet = mod_vcov[c("(Intercept)"), c("temp.an")]
-        mod$cov_cwd_pet = mod_vcov[c("cwd.an"), c("temp.an")]
+        cov_var_name <- paste0("cov_int_", energy_var %>% str_replace(".an", ""))
+        mod[[cov_var_name]] = mod_vcov[c("(Intercept)"), c(energy_var)]
+        cov_var_name <- paste0("cov_cwd_", energy_var %>% str_replace(".an", ""))
+        mod[[cov_var_name]] = mod_vcov[c("cwd.an"), c(energy_var)]
         mod$r2 = mod_sum$r.squared
       },
       error = function(e){ 
@@ -356,7 +343,7 @@ fs_mod <- function(site_data, outcome = "rwi"){
 
 site_df <- dendro_df %>% 
   drop_na() %>% 
-  mutate(cwd.an = cwd.an.spstd,
+  rename(cwd.an = cwd.an.spstd,
          pet.an = pet.an.spstd,
          temp.an = temp.an.spstd) %>% 
   group_by(collection_id) %>%
@@ -367,6 +354,13 @@ site_df <- dendro_df %>%
 
 # i = 200
 # test_data <- site_df[i,2][[1]][[1]]
+# test_data
+# site_data = test_data
+# outcome = "rwi"
+# energy_var = "pet.an"
+# mod <- fs_mod(test_data, outcome = outcome, energy_var = energy_var)
+
+
 # comb_mod <- lm(rwi ~ cwd.an.spstd + pet.an.spstd + temp.an.spstd, data = test_data)
 # summary(comb_mod)
 # temp_mod <- lm(rwi ~ cwd.an.spstd + temp.an.spstd, data = test_data)
@@ -375,68 +369,71 @@ site_df <- dendro_df %>%
 # summary(pet_mod)
 
 
-#### REVIEWER COMMENTS - TESTING ALTERNATE MODELS
-i = 3500
-data_df <- site_df[i, 2]
-data_df <- data_df[[1]][[1]]
-mod <- lm(rwi ~ cwd.an + pet.an, data_df)
-summary(mod)
+# #### REVIEWER COMMENTS - TESTING ALTERNATE MODELS
+# i = 3500
+# data_df <- site_df[i, 2]
+# data_df <- data_df[[1]][[1]]
+# mod <- lm(rwi ~ cwd.an + pet.an, data_df)
+# summary(mod)
+# 
+# data_df <- data_df %>%
+#   mutate(tree_id = as.factor(tree))
+# data_df$tree %>% unique() %>% length()
+# mod_re <- lmer(rwi ~ 1 + cwd.an + pet.an + (1 | tree_id), data_df)
+# summary(mod_re)
+# ## Identical coefficients to main specification, but singular / boundary warnings
+# 
+# data_df <- data_df %>%
+#   mutate(tree_id = as.factor(tree))
+# data_df$tree %>% unique() %>% length()
+# mod_fe <- feols(rwi ~ cwd.an + pet.an | tree_id, data_df)
+# summary(mod_fe)
+# ## Very similar coefficients to main specification. Could include this in robustness plot, but doing predictions with this would be a huge headache
+# 
+# mod_bayes <- stan_lmer(rwi ~ cwd.an + pet.an + (1 | tree_id), data_df)
+# summary(mod_bayes)
+# 
+# ave_site_clim <- read_rds(paste0(wdir, "out\\climate\\site_ave_clim.gz"))
+# dendro_df <- dendro_df %>%
+#   left_join(ave_site_clim, by = "collection_id")
+# 
+# mod_full_fe <- lm(rwi ~ cwd.an.spstd * cwd.spstd * I(cwd.spstd**2)  + cwd.an.spstd * pet.spstd * I(pet.spstd**2) + pet.an.spstd * cwd.spstd * I(cwd.spstd**2) + pet.an.spstd * pet.spstd * I(pet.spstd**2), data = dendro_df)
+# summary(mod_full_fe)
+# 
+# library(lme4)
+# mod_full_re <- lmer(rwi ~ cwd.an.spstd * cwd.spstd * I(cwd.spstd**2)  + cwd.an.spstd * pet.spstd * I(pet.spstd**2) + pet.an.spstd * cwd.spstd * I(cwd.spstd**2) + pet.an.spstd * pet.spstd * I(pet.spstd**2) + (1 | collection_id), data = dendro_df)
+# summary(mod_full_fe)
+# ## Yields fairly similar coefficient estimate to two-stage model. Generate ME plot?
+# 
+# #### REVIEWER COMMENTS - TESTING ALTERNATE MODELS
+# 
+# 
+# #### REVIEWER COMMENTS - DRIVEN BY VARIABILITY?
+# sd_df <- dendro_df %>% 
+#   group_by(collection_id) %>% 
+#   summarise(cwd_sd = sd(cwd.an.spstd, na.rm = TRUE),
+#             cwd_mean = mean(cwd.an.spstd, na.rm = TRUE))
+# 
+# mod <- lm(cwd_mean ~ cwd_sd, sd_df)
+# summary(mod)
+# sd_df %>% ggplot(aes(x = cwd_mean, y = cwd_sd)) +
+#   geom_point()
+# 
+# 
+# #### REVIEWER COMMENTS - DRIVEN BY VARIABILITY?
 
-data_df <- data_df %>%
-  mutate(tree_id = as.factor(tree))
-data_df$tree %>% unique() %>% length()
-mod_re <- lmer(rwi ~ 1 + cwd.an + pet.an + (1 | tree_id), data_df)
-summary(mod_re)
-## Identical coefficients to main specification, but singular / boundary warnings
-
-data_df <- data_df %>%
-  mutate(tree_id = as.factor(tree))
-data_df$tree %>% unique() %>% length()
-mod_fe <- feols(rwi ~ cwd.an + pet.an | tree_id, data_df)
-summary(mod_fe)
-## Very similar coefficients to main specification. Could include this in robustness plot, but doing predictions with this would be a huge headache
-
-mod_bayes <- stan_lmer(rwi ~ cwd.an + pet.an + (1 | tree_id), data_df)
-summary(mod_bayes)
-
-ave_site_clim <- read_rds(paste0(wdir, "out\\climate\\site_ave_clim.gz"))
-dendro_df <- dendro_df %>%
-  left_join(ave_site_clim, by = "collection_id")
-
-mod_full_fe <- lm(rwi ~ cwd.an.spstd * cwd.spstd * I(cwd.spstd**2)  + cwd.an.spstd * pet.spstd * I(pet.spstd**2) + pet.an.spstd * cwd.spstd * I(cwd.spstd**2) + pet.an.spstd * pet.spstd * I(pet.spstd**2), data = dendro_df)
-summary(mod_full_fe)
-
-library(lme4)
-mod_full_re <- lmer(rwi ~ cwd.an.spstd * cwd.spstd * I(cwd.spstd**2)  + cwd.an.spstd * pet.spstd * I(pet.spstd**2) + pet.an.spstd * cwd.spstd * I(cwd.spstd**2) + pet.an.spstd * pet.spstd * I(pet.spstd**2) + (1 | collection_id), data = dendro_df)
-summary(mod_full_fe)
-## Yields fairly similar coefficient estimate to two-stage model. Generate ME plot?
-
-#### REVIEWER COMMENTS - TESTING ALTERNATE MODELS
 
 
-#### REVIEWER COMMENTS - DRIVEN BY VARIABILITY?
-sd_df <- dendro_df %>% 
-  group_by(collection_id) %>% 
-  summarise(cwd_sd = sd(cwd.an.spstd, na.rm = TRUE),
-            cwd_mean = mean(cwd.an.spstd, na.rm = TRUE))
-
-mod <- lm(cwd_mean ~ cwd_sd, sd_df)
-summary(mod)
-sd_df %>% ggplot(aes(x = cwd_mean, y = cwd_sd)) +
-  geom_point()
-
-
-#### REVIEWER COMMENTS - DRIVEN BY VARIABILITY?
-
-
-
-fs_mod_nb <- partial(fs_mod, outcome = "rwi_nb")
-fs_mod_ar <- partial(fs_mod, outcome = "rwi_ar")
+fs_mod_bl <- partial(fs_mod, outcome = "rwi", energy_var = "pet.an")
+fs_mod_nb <- partial(fs_mod, outcome = "rwi_nb", energy_var = "pet.an")
+fs_mod_ar <- partial(fs_mod, outcome = "rwi_ar", energy_var = "pet.an")
+fs_mod_temp <- partial(fs_mod, outcome = "rwi", energy_var = "temp.an")
 
 site_df <- site_df %>% 
-  mutate(fs_result = map(data, .f = fs_mod),
+  mutate(fs_result = map(data, .f = fs_mod_bl),
          fs_result_nb = map(data, .f = fs_mod_nb),
-         fs_result_ar = map(data, .f = fs_mod_ar))
+         fs_result_ar = map(data, .f = fs_mod_ar),
+         fs_results_temp = map(data, .f = fs_mod_temp))
 
 
 data_df <- site_df %>% 
@@ -474,7 +471,7 @@ fs_df <- fs_df %>%
 #   summary()
 
 # fs_df %>% write_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv'))
-fs_df %>% write_csv(paste0(wdir, 'out\\first_stage\\site_temp_cwd_std.csv'))
+fs_df %>% write_csv(paste0(wdir, 'out/first_stage/site_pet_cwd_std.csv'))
 
 
 ## Repeat using results from nb detrended data
@@ -499,6 +496,15 @@ fs_ar <- fs_ar %>%
 fs_ar %>% write_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std_ar.csv'))
 
 
+## Repeat using results from temp model
+fs_temp <- site_df %>% 
+  select(collection_id, fs_result_temp) %>% 
+  unnest(fs_result_temp)
+fs_temp <- fs_temp[which(!(fs_temp %>% pull(mod) %>% is.na())),]
+fs_temp <- fs_temp %>% 
+  unnest(mod) %>% 
+  select(-error)
+fs_temp %>% write_csv(paste0(wdir, 'out\\first_stage\\site_temp_cwd_std.csv'))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
