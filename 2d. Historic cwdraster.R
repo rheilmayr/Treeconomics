@@ -1,4 +1,32 @@
-#get gridded 0.5 degree cwd and aet based on 1901-1980 climatolgoical baseline (CRU Data)
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Author: Robert Heilmayr, Joan Dudney, Frances Moore
+# Project: Treeconomics
+# Date: 7/10/20
+# Purpose: Create gridded 0.5 degree cwd, pet and aet based on 1901-1980 climatological baseline (CRU Data)
+#
+# Input files:
+#   cru_ts4.04.1901.2019.tmp.dat.nc: Monthly mean temp data from CRU. ASK FRAN WHERE THIS GETS CALCULATED.
+#   cru_ts4.04.1901.2019.pre.dat.nc: Monthly precip data from CRU. Accessed from https://crudata.uea.ac.uk/cru/data/hrg/.
+#   sr_cru_max.asc: Soil water capacity raster. Accessed from Wang-Erlandsson et al., 2016.
+#   slopeaspectraster.Rdat: ASK FRAN WHERE THIS GETS CALCULATED.
+# 
+# Output files:
+#   monthlycrubaseline_tas:
+#   monthlycrubaseline_pr:
+#   griddedbaselinecwddata.csv:
+#   HistoricCWD_AETGrids.Rdat: 
+#   HistoricCWD_AETGrids_Annual.Rdat: 
+#
+# TODO:
+#   FRAN: Would be great if you could annotate a bit more. Why are some datasets labeled test?
+#   Should we clean up outputs? At least move into a single directory?
+#
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Load packages --------------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 library(plyr)
 library(raster)
 library(sp)
@@ -12,17 +40,36 @@ library(data.table)
 library(geosphere)
 library(dplyr)
 library(tidyr)
-
 source("f_cwd_function.R")
 
-wdir <- "remote\\"
+max_clusters = 20
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Load data --------------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+wdir <- "remote/"
 # franspath="C:/Users/fmoore/Box/Davis Stuff/Treeconomics"
 
+## Load CRU temp and precip data
 cruyears=rep(1901:2019,each=12);crumonths=rep(1:12,length(1901:2019))
-
 tas=stack(paste0(wdir, "in/CRUData/cru_ts4.04.1901.2019.tmp.dat.nc"))
 pr=stack(paste0(wdir,"in/CRUData/cru_ts4.04.1901.2019.pre.dat.nc"))
 
+## Load soil water capacity raster
+swc=raster(paste0(wdir,"in/CMIP5 Data/other data for cwd/sr_cru_max.asc"))
+#convert swc from mm to cm
+swc=swc/10
+
+## Load topography raster
+load(paste0(wdir,"in/CMIP5 Data/other data for cwd/slopeaspectraster.Rdat"))
+terrainraster=crop(terrainraster,extent(swc))
+#convert slope and aspect to degrees
+terrainraster=terrainraster*180/pi
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Calculate precip / temp baselines --------------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 baseyears=1901:1980
 basemonths=rep(1:12,length(baseyears))
 years=rep(baseyears,each=12)
@@ -36,33 +83,25 @@ for(j in 2:12){
   print(j)
 }
 
+
 # save(tas_months,pr_months,file=paste0(wdir,"in/CRUData/monthlycrubaseline.Rdat"))
 writeRaster(tas_months, file=paste0(wdir,"in/CRUData/monthlycrubaseline_tas"))
 writeRaster(pr_months, file=paste0(wdir,"in/CRUData/monthlycrubaseline_pr"))
 
-#get soil, slope, latitude, elevation for cwd calculation
 
-swc=raster(paste0(wdir,"in/CMIP5 Data/other data for cwd/sr_cru_max.asc"))
-#convert swc from mm to cm
-swc=swc/10
-
-load(paste0(wdir,"in/CMIP5 Data/other data for cwd/slopeaspectraster.Rdat"))
-
-terrainraster=crop(terrainraster,extent(swc))
-#convert slope and aspect to degrees
-terrainraster=terrainraster*180/pi
-
-#melt permanent site data down into a long data frame for cwd function
+# melt permanent site data down into a long data frame for cwd function
 sitedata=cbind(as.data.frame(terrainraster),as.data.frame(swc))
 sitedata=cbind(sitedata,coordinates(swc))
 colnames(sitedata)=c("slope","aspect","swc","lon","lat")
 sitedata$site=1:dim(sitedata)[1]
 
-sitedata$slope[which(sitedata$slope<0)]=0 # fix a few suprious slope values
+# fix a few spurious slope values
+sitedata$slope[which(sitedata$slope<0)]=0 
 
-#crop temp and precip data to swc extent
+# crop temp and precip data to swc extent
 tas_months=crop(tas_months,extent(swc));pr_months=crop(pr_months,extent(swc))
 
+# set up parallel processing
 cl=makeCluster(4)
 clusterExport(cl,c("data","setorder"))
 registerDoParallel(cl)
@@ -115,7 +154,7 @@ climatedata=as.tbl(climatedata);sitedata=as.tbl(sitedata)
 dat=inner_join(climatedata,sitedata,by="site")
 dat=dat[complete.cases(dat),]
 
-cl=makeCluster(20)
+cl=makeCluster(max_clusters)
 clusterExport(cl,c("data","setorder"))
 registerDoParallel(cl)
 
