@@ -5,7 +5,14 @@
 # Purpose: Calculate CWD / PET based on CMIP5 data
 #
 # Input files:
+#   /CMIP5 Data/tas/: Directory of temperature data from CMIP5 model output. Accessed from XX.
+#   /CMIP5 Data/pr/: Directory of precip data from CMIP5 model output. Accessed from XX.
+# 
+# 
+# TODO:
+#   FRAN: Could you add more annotation and clean up imports / exports? Seems like some files are read in multiple times (e.g. SWC?)
 #
+# 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -127,7 +134,7 @@ period=c("start","mid","end")
 
 swc=raster(paste0(wdir,"in/CMIP5 Data/other data for cwd/sr_cru_max.asc"))
 load(paste0(wdir,"in/CMIP5 Data/other data for cwd/sitedata_climatologycorrection.Rdat"))
-sitedata$slope[which(sitedata$slope<0)]=0 # fix a few suprious slope values
+sitedata$slope[which(sitedata$slope<0)]=0 # fix a few spurious slope values
 
 cl=makeCluster(20)
 clusterExport(cl,c("data","setorder"))

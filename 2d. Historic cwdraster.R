@@ -18,7 +18,7 @@
 #   HistoricCWD_AETGrids_Annual.Rdat: 
 #
 # TODO:
-#   FRAN: Would be great if you could annotate a bit more. Why are some datasets labeled test?
+#   FRAN: Would be great if you could annotate a bit more. Why are some datasets labeled test? What are "sites" mentioned below?
 #   Should we clean up outputs? At least move into a single directory?
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
