@@ -1,10 +1,18 @@
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Author: Robert Heilmayr, Frances Moore, Joan Dudney
 # Project: Treeconomics
-# Date: 7/6/20
-# Purpose: Clean ITRDB rwl files
+# Date: 7/3/2023
+# Purpose: Process and detrend FIA ring widths from Klesse et al. 2008
 #
 # Input files:
+#   FIA_TreeRingMeta_Klesse2018.txt: Core metadata from Klesse et al 2018. Shared by John Shaw.
+#   FIA_TreeRingRW_Klesse2018.txt: Confidential RW measurements from Klesse et al 2018. Shared by John Shaw
+#   FIA Plot tables: Accessed from FIA Datamart
+#
+# Output:
+#   rwi_long_fia.csv: RWI series for each FIA core since 1900
+#   site_summary_fia.csv: Metadata (locations) for each FIA collection 
+#
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -21,8 +29,9 @@ library(tidylog)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Define path
+# Define paths
 wdir <- 'remote/'
+out_dir <- paste0(wdir, 'out/dendro/')
 
 # Read in Klesse metadata
 meta <- read_csv(paste0(wdir, "in/klesse_2018/FIA_TreeRingMeta_Klesse2018.txt"), col_types = cols(.default = "d", CN = "character", PLT_CN = "character"))
@@ -64,6 +73,7 @@ rwl_df <- rwl_df %>%
   select(RW, Year, CN, PLT_CN, LAT, LON, species_id) %>% 
   drop_na()
 
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Convert to RWI --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -96,6 +106,12 @@ detrend_rwl <- function(rwl_dat, method) {
   return(rwi_dat)
 }
 
+reformat_long <- function(rwi_dat) {
+  rwi_dat$year = row.names(rwi_dat)
+  rwi_dat <- rwi_dat %>% 
+    pivot_longer(names_to = "core_cn", values_to = "rwi", cols = -year)
+  return(rwi_dat)
+}
 
 rwl_nested <- rwl_df %>%
   select(PLT_CN, species_id, CN, Year, RW) %>% 
@@ -107,9 +123,33 @@ rwl_nested <- rwl_nested %>%
          rwi = map2(rwl, "Spline", detrend_rwl))
 
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Clean up formatting -------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+rwi_df <- rwl_nested %>% 
+  mutate(rwi = map(rwi, reformat_long)) %>% 
+  select(-rwl, -data) %>% 
+  unnest(rwi) %>% 
+  select(core_cn, plot_cn = PLT_CN, species_id, year, rwi)
 
-# # PLT_CN = "3036494010690", species_id = "PSME"
-# 
-# test <- rwl_nested %>% filter(PLT_CN == "3036494010690") %>% pull(data)
-# test <- test[[1]]
-# format_rwl(test)
+meta <- meta %>% 
+  mutate(tree_id = paste(PLT_CN, as.character(SUBP), as.character(TREE), sep = '_'),
+         collection_id = paste("fia", PLT_CN, species_id, sep = "_")) 
+
+tree_ids <- meta %>% 
+  select(core_cn = CN, collection_id, tree_id)
+  
+rwi_df <- rwi_df %>% 
+  left_join(tree_ids, by = "core_cn") %>% 
+  select(core_cn, plot_cn, collection_id, tree_id, species_id, year, rwi) %>% 
+  filter(year > 1900)
+
+fia_site_smry <- meta %>% 
+  select(collection_id, plot_cn = PLT_CN, species_id, latitude = LAT, longitude = LON)
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Write data -------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+write_csv(rwi_df, paste0(out_dir, "rwi_long_fia.csv"))
+write_csv(fia_site_smry, paste0(out_dir, "site_summary_fia.csv"))
