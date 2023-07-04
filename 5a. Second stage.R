@@ -64,7 +64,7 @@ n_mc <- 10000
 wdir <- 'remote/'
 
 # 1. Site-level regressions
-flm_df <- read_csv(paste0(wdir, 'out/first_stage/site_temp_cwd_std.csv'))
+flm_df <- read_csv(paste0(wdir, 'out/first_stage/site_pet_cwd_std.csv'))
 
 # 2. Historic site-level climate
 ave_site_clim <- read_rds(paste0(wdir, "out/climate/site_ave_clim.gz"))
@@ -99,36 +99,34 @@ flm_df <- flm_df %>%
 flm_df <- flm_df %>% 
   mutate(cwd_errorweights = 1 / (std.error_cwd.an),
          errorweights2 = sqrt(ntrees),
-         temp_errorweights = 1 / (std.error_temp.an),
+         pet_errorweights = 1 / (std.error_pet.an),
          int_errorweights = 1 / (std.error_intercept))
 
 # Identify and trim extreme outliers
 cwd_est_bounds = quantile(flm_df$estimate_cwd.an, c(0.01, 0.99),na.rm=T)
-# pet_est_bounds = quantile(flm_df$estimate_pet.an, c(0.01, 0.99),na.rm=T)
-temp_est_bounds = quantile(flm_df$estimate_temp.an, c(0.01, 0.99),na.rm=T)
+pet_est_bounds = quantile(flm_df$estimate_pet.an, c(0.01, 0.99),na.rm=T)
 cwd_spstd_bounds = quantile(flm_df$cwd.spstd, c(0.01, 0.99), na.rm = T)
-# pet_spstd_bounds = quantile(flm_df$pet.spstd, c(0.01, 0.99), na.rm = T)
-temp_spstd_bounds = quantile(flm_df$temp.spstd, c(0.01, 0.99), na.rm = T)
+pet_spstd_bounds = quantile(flm_df$pet.spstd, c(0.01, 0.99), na.rm = T)
+
+# flm_df <- flm_df %>%
+#   mutate(outlier = (estimate_cwd.an<cwd_est_bounds[1]) |
+#            (estimate_cwd.an>cwd_est_bounds[2]) |
+#            (estimate_pet.an<pet_est_bounds[1]) |
+#            (estimate_pet.an>pet_est_bounds[2]) |
+#            (cwd.spstd<cwd_spstd_bounds[1]) |
+#            (cwd.spstd>cwd_spstd_bounds[2]) |
+#            (pet.spstd<pet_spstd_bounds[1]) |
+#            (pet.spstd>pet_spstd_bounds[2]))
+           
 
 flm_df <- flm_df %>%
   mutate(outlier = (estimate_cwd.an<cwd_est_bounds[1]) |
-           (estimate_cwd.an>cwd_est_bounds[2]) |
-           (estimate_temp.an<temp_est_bounds[1]) |
-           (estimate_temp.an>temp_est_bounds[2]) |
-           (cwd.spstd<cwd_spstd_bounds[1]) |
-           (cwd.spstd>cwd_spstd_bounds[2]) |
-           (temp.spstd<temp_spstd_bounds[1]) |
-           (temp.spstd>temp_spstd_bounds[2]))
-           
-
-# flm_df <- flm_df %>% 
-#   mutate(outlier = (estimate_cwd.an<cwd_est_bounds[1]) |
-#                    (estimate_cwd.an>cwd_est_bounds[2]) |
-#                    (estimate_temp.an<temp_est_bounds[1]) |
-#                    (estimate_temp.an>temp_est_bounds[2]))
+                   (estimate_cwd.an>cwd_est_bounds[2]) |
+                   (estimate_pet.an<pet_est_bounds[1]) |
+                   (estimate_pet.an>pet_est_bounds[2]))
 
 # Save out full flm_df to simplify downstream scripts and ensure consistency
-flm_df %>% write.csv(paste0(wdir, "out/first_stage/site_temp_cwd_std_augmented.csv"))
+flm_df %>% write.csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv"))
 
 # Trim outliers
 trim_df <- flm_df %>% 
@@ -144,7 +142,7 @@ site_points=st_as_sf(trim_df,coords=c("longitude","latitude"),crs="+init=epsg:43
 vg <-variogram(estimate_cwd.an~1, site_points, cutoff = 1500, width = 10)
 vg.fit <- fit.variogram(vg, model = vgm(1, "Sph", 900, 1))
 plot(vg, vg.fit)
-print(paste0("Range before hitting sill (km): "), vg.fit[2,3])
+# print(paste0("Range before hitting sill (km): "), as.character(vg.fit[2,3]))
 
 vg.range = vg.fit[2,3] * 1000
 
@@ -152,9 +150,9 @@ vg.range = vg.fit[2,3] * 1000
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Quick test of primary regression ---------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-formula = as.formula("estimate_cwd.an ~ cwd.spstd + temp.spstd + (cwd.spstd^2) + (temp.spstd^2)")
+formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2)")
 mod_data <- trim_df
-cwd_mod <- feols(formula, data = mod_data,
+cwd_mod <- feols(formula, data = mod_data, weights = mod_data$cwd_errorweights,
              vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
 summary(cwd_mod)
 
@@ -162,15 +160,15 @@ marg_fx_df <- function(mod){
   inc <- 0.1
   min <- -2.5
   max <- 2.5
-  cwd_pred <- predictions(mod, newdata = datagrid(temp.spstd = 0, cwd.spstd = seq(min,max,inc))) %>% 
+  cwd_pred <- predictions(mod, newdata = datagrid(pet.spstd = 0, cwd.spstd = seq(min,max,inc))) %>% 
     mutate(variation = "cwd")
-  temp_pred <- predictions(mod, newdata = datagrid(temp.spstd = seq(min,max,inc), cwd.spstd = 0)) %>% 
-    mutate(variation = "temp")
-  return(rbind(cwd_pred, temp_pred))
+  pet_pred <- predictions(mod, newdata = datagrid(pet.spstd = seq(min,max,inc), cwd.spstd = 0)) %>% 
+    mutate(variation = "pet")
+  return(rbind(cwd_pred, pet_pred))
 }
 
 
-preds <- marg_fx_df(mod)
+preds <- marg_fx_df(cwd_mod)
 
 cwd_mfx_plot <- preds %>% 
   filter(variation == "cwd") %>% 
@@ -179,18 +177,18 @@ cwd_mfx_plot <- preds %>%
   geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2)
 cwd_mfx_plot
 
-temp_mfx_plot <- preds %>% 
-  filter(variation == "temp") %>% 
-  ggplot(aes(x = temp.spstd)) + 
+pet_mfx_plot <- preds %>% 
+  filter(variation == "pet") %>% 
+  ggplot(aes(x = pet.spstd)) + 
   geom_line(aes(y = estimate)) +
   geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2)
-temp_mfx_plot
+pet_mfx_plot
 
-formula = as.formula("estimate_temp.an ~ cwd.spstd + temp.spstd + (cwd.spstd^2) + (temp.spstd^2)")
-temp_mod <- feols(formula, weights = mod_data$temp_errorweights, data = mod_data,
+formula = as.formula("estimate_pet.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2)")
+pet_mod <- feols(formula, weights = mod_data$pet_errorweights, data = mod_data,
                  vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
-summary(temp_mod)
-preds <- marg_fx_df(temp_mod)
+summary(pet_mod)
+preds <- marg_fx_df(pet_mod)
 
 cwd_mfx_plot <- preds %>% 
   filter(variation == "cwd") %>% 
@@ -199,12 +197,12 @@ cwd_mfx_plot <- preds %>%
   geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2)
 cwd_mfx_plot
 
-temp_mfx_plot <- preds %>% 
-  filter(variation == "temp") %>% 
-  ggplot(aes(x = temp.spstd)) + 
+pet_mfx_plot <- preds %>% 
+  filter(variation == "pet") %>% 
+  ggplot(aes(x = pet.spstd)) + 
   geom_line(aes(y = estimate)) +
   geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2)
-temp_mfx_plot
+pet_mfx_plot
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Identify spatially proximate blocks of sites ---------------------------------
