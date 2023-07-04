@@ -6,10 +6,11 @@
 #
 # Input files:
 # - clim_niche.csv: Data documenting historic climate across each species range
-#     Generated using species_niche.R
-# - tree_ring_data_V2.db: Compiled database of ITRDB observations 
-# - essentialcwd_data.csv: File detailing plot-level weather history
-# - dendro_dir: Directory containing processed RWI data from "1. Dendro preprocess.R"
+#     Generated using "3b. Species_niche.R"
+# - site_an_clim.gz: File detailing site-level weather history. Generated using "3b. Species_niche.R"
+# - rwi_long.csv: Directory containing processed RWI data from "1b. Parse ITRDB.R"
+# - species_gen_gr.csv: Annotated data about species.
+# - site_summary.csv: Generated using "1b. Parse ITRDB.R"
 #
 # ToDo:
 # - fix joins to prevent duplicate species_id
@@ -38,16 +39,11 @@ library(dtplyr)
 # Import data --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define path
-wdir <- 'remote\\'
+wdir <- 'remote/'
 
-# # 2. Site-specific weather history
-# cwd_csv <- paste0(wdir, 'out\\climate\\essentialcwd_data.csv')
-# cwd_df <- read_csv(cwd_csv)
-# cwd_df <- cwd_df %>% 
-#   mutate("site_id" = as.character(site))
 
 # 1. Dendrochronologies
-dendro_dir <- paste0(wdir, "out\\dendro\\")
+dendro_dir <- paste0(wdir, "out/dendro/")
 dendro_df <- read.csv(paste0(dendro_dir, "rwi_long.csv"))
 dendro_df <- dendro_df %>% 
   select(-core_id)
@@ -65,13 +61,13 @@ dendro_df <- dendro_df %>%
 
 
 # 2. Historic site-level climate
-an_site_clim <- read_rds(paste0(wdir, "out\\climate\\site_an_clim.gz"))
+an_site_clim <- read_rds(paste0(wdir, "out/climate/site_an_clim.gz"))
 dendro_df <- dendro_df %>% 
   left_join(an_site_clim, by = c("collection_id", "year"))
 
 
 # 3. Site information
-site_smry <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
+site_smry <- read_csv(paste0(wdir, 'out/dendro/site_summary.csv'))
 site_smry <- site_smry %>% 
   select(collection_id, sp_id) %>% 
   mutate(species_id = tolower(sp_id)) %>% 
