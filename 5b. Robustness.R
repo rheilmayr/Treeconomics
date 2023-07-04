@@ -62,6 +62,7 @@ fs_spl <- read_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv'))
 fs_nb <- read_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std_nb.csv'))
 fs_ar <- read_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std_ar.csv'))
 
+fs_temp <- read_csv(paste0(wdir, 'out\\first_stage\\site_temp_cwd_std.csv'))
 fs_cum <- read_rds(paste0(wdir, 'out/first_stage/dnlm_cum_effects.rds'))
 
 # 2. Historic site-level climate
@@ -97,22 +98,22 @@ process_fs <- function(flm_df){
   flm_df <- flm_df %>% 
     mutate(cwd_errorweights = 1 / (std.error_cwd.an),
            tree_errorweights = sqrt(ntrees),
-           pet_errorweights = 1 / (std.error_pet.an),
+           temp_errorweights = 1 / (std.error_temp.an),
            int_errorweights = 1 / (std.error_intercept),
            equalweights = 1)
   
   # Identify and trim extreme outliers
   cwd_est_bounds = quantile(flm_df$estimate_cwd.an, c(0.01, 0.99),na.rm=T)
-  pet_est_bounds = quantile(flm_df$estimate_pet.an, c(0.01, 0.99),na.rm=T)
+  temp_est_bounds = quantile(flm_df$estimate_temp.an, c(0.01, 0.99),na.rm=T)
   cwd_spstd_bounds = quantile(flm_df$cwd.spstd, c(0.01, 0.99), na.rm = T)
-  pet_spstd_bounds = quantile(flm_df$pet.spstd, c(0.01, 0.99), na.rm = T)
+  temp_spstd_bounds = quantile(flm_df$temp.spstd, c(0.01, 0.99), na.rm = T)
   
   
   flm_df <- flm_df %>% 
     mutate(outlier = (estimate_cwd.an<cwd_est_bounds[1]) |
              (estimate_cwd.an>cwd_est_bounds[2]) |
-             (estimate_pet.an<pet_est_bounds[1]) |
-             (estimate_pet.an>pet_est_bounds[2]))
+             (estimate_temp.an<temp_est_bounds[1]) |
+             (estimate_temp.an>temp_est_bounds[2]))
   
   flm_df <- flm_df %>% 
     left_join(site_df, by = "collection_id")
@@ -120,7 +121,7 @@ process_fs <- function(flm_df){
   flm_df <- flm_df %>% 
     mutate(trim_y = !outlier,
            trim_x = cwd.spstd>cwd_spstd_bounds[1] & cwd.spstd<cwd_spstd_bounds[2] & 
-             pet.spstd>pet_spstd_bounds[1] & pet.spstd<pet_spstd_bounds[2])
+             temp.spstd>temp_spstd_bounds[1] & temp.spstd<temp_spstd_bounds[2])
   
   
   return(flm_df)
@@ -142,6 +143,9 @@ fs_cum <- fs_cum %>%
   mutate(trim_y = 1,
          trim_x = 1)
 
+
+fs_temp <- fs_temp %>% 
+  process_fs()
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Spatial autocorrelation of trim_df ---------------------------------
@@ -436,6 +440,12 @@ fs_spl %>% ggplot(aes(x = cwd.spstd, y = cwd.sd)) +
   geom_smooth() +
   xlim(-10,10)
 
+
+formula = as.formula("estimate_temp.an ~ cwd.spstd + temp.spstd + (cwd.spstd^2) + (temp.spstd^2)")
+data <- fs_temp %>% filter(outlier == 0)
+mod <- feols(formula, weights = data$cwd_errorweights, data = data,
+             vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
+summary(mod)
 
 ## Create figure
 highlight_n <- which(specs$trim_y == TRUE &
