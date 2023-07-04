@@ -5,10 +5,12 @@
 # Purpose: Run regressions to explore impact of historical climate on weather sensitivity
 #
 # Input files:
-# - clim_niche.csv: Data documenting historic climate across each species range
-#     Generated using species_niche.R
-# - tree_ring_data_V2.db: Compiled database of ITRDB observations 
-# - essentialcwd_data.csv: File detailing plot-level weather history
+#   site_ave_clim.gz:
+#   site_pet_cwd_std.csv:
+#   site_summary.csv:
+# 
+# Output files:
+#   ss_bootstrap.rds
 #
 # ToDo:
 # - Update / finalize genus analyses
@@ -59,18 +61,18 @@ n_mc <- 10000
 # Import data --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ### Define path
-wdir <- 'remote\\'
+wdir <- 'remote/'
 
 # 1. Site-level regressions
-flm_df <- read_csv(paste0(wdir, 'out\\first_stage\\site_temp_cwd_std.csv'))
+flm_df <- read_csv(paste0(wdir, 'out/first_stage/site_temp_cwd_std.csv'))
 
 # 2. Historic site-level climate
-ave_site_clim <- read_rds(paste0(wdir, "out\\climate\\site_ave_clim.gz"))
+ave_site_clim <- read_rds(paste0(wdir, "out/climate/site_ave_clim.gz"))
 flm_df <- flm_df %>% 
   left_join(ave_site_clim, by = c("collection_id"))
 
 # 3. Site information
-site_df <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
+site_df <- read_csv(paste0(wdir, 'out/dendro/site_summary.csv'))
 site_df <- site_df %>% 
   select(collection_id, sp_id, latitude, longitude)
 site_df <- site_df %>% 
