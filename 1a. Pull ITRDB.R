@@ -11,7 +11,6 @@ library(RCurl)
 # Define path
 wdir <- 'remote\\'
 
-
 ## Note - Downloaded on July 5, 2020; ITRDB v.7.22
 continents <- list('northamerica/mexico', 'northamerica/canada', 'northamerica/usa')
 for (continent in continents) {
@@ -26,10 +25,4 @@ for (continent in continents) {
     Sys.sleep(2)
   }
 }
-
-
-test <- as_tibble(filenames)
-i <- 5
-filenames[i]
-filenames <- filenames[i:length(filenames)]
 
