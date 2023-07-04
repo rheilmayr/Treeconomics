@@ -55,21 +55,21 @@ select <- dplyr::select
 # Import data --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ### Define path
-wdir <- 'remote\\'
+wdir <- 'remote/'
 
 # 1. Site-level regressions
-fs_spl <- read_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv'))
-fs_nb <- read_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std_nb.csv'))
-fs_ar <- read_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std_ar.csv'))
+fs_spl <- read_csv(paste0(wdir, 'out/first_stage/site_pet_cwd_std.csv'))
+fs_nb <- read_csv(paste0(wdir, 'out/first_stage/site_pet_cwd_std_nb.csv'))
+fs_ar <- read_csv(paste0(wdir, 'out/first_stage/site_pet_cwd_std_ar.csv'))
 
-fs_temp <- read_csv(paste0(wdir, 'out\\first_stage\\site_temp_cwd_std.csv'))
+fs_temp <- read_csv(paste0(wdir, 'out/first_stage/site_temp_cwd_std.csv'))
 fs_cum <- read_rds(paste0(wdir, 'out/first_stage/dnlm_cum_effects.rds'))
 
 # 2. Historic site-level climate
-ave_site_clim <- read_rds(paste0(wdir, "out\\climate\\site_ave_clim.gz"))
+ave_site_clim <- read_rds(paste0(wdir, "out/climate/site_ave_clim.gz"))
 
 # 3. Site information
-site_df <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
+site_df <- read_csv(paste0(wdir, 'out/dendro/site_summary.csv'))
 site_df <- site_df %>% 
   select(collection_id, sp_id, latitude, longitude)
 site_df <- site_df %>% 
@@ -84,13 +84,49 @@ site_df <- site_df %>%
   left_join(sp_info, by = "species_id")
 
 
-niche_df <- read.csv(paste0(wdir, "out//climate//clim_niche.csv")) %>%
+niche_df <- read.csv(paste0(wdir, "out/climate/clim_niche.csv")) %>%
   select(-X)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Prep and trim data -----------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 process_fs <- function(flm_df){
+  flm_df <- flm_df %>% 
+    left_join(ave_site_clim, by = c("collection_id"))
+  
+  # Add weighting based on inverse of first stage variance
+  flm_df <- flm_df %>% 
+    mutate(cwd_errorweights = 1 / (std.error_cwd.an),
+           tree_errorweights = sqrt(ntrees),
+           pet_errorweights = 1 / (std.error_pet.an),
+           int_errorweights = 1 / (std.error_intercept),
+           equalweights = 1)
+  
+  # Identify and trim extreme outliers
+  cwd_est_bounds = quantile(flm_df$estimate_cwd.an, c(0.01, 0.99),na.rm=T)
+  pet_est_bounds = quantile(flm_df$estimate_pet.an, c(0.01, 0.99),na.rm=T)
+  cwd_spstd_bounds = quantile(flm_df$cwd.spstd, c(0.01, 0.99), na.rm = T)
+  pet_spstd_bounds = quantile(flm_df$pet.spstd, c(0.01, 0.99), na.rm = T)
+  
+  
+  flm_df <- flm_df %>% 
+    mutate(outlier = (estimate_cwd.an<cwd_est_bounds[1]) |
+             (estimate_cwd.an>cwd_est_bounds[2]) |
+             (estimate_pet.an<pet_est_bounds[1]) |
+             (estimate_pet.an>pet_est_bounds[2]))
+  
+  flm_df <- flm_df %>% 
+    left_join(site_df, by = "collection_id")
+  
+  flm_df <- flm_df %>% 
+    mutate(trim_y = !outlier,
+           trim_x = cwd.spstd>cwd_spstd_bounds[1] & cwd.spstd<cwd_spstd_bounds[2] & 
+             pet.spstd>pet_spstd_bounds[1] & pet.spstd<pet_spstd_bounds[2])
+
+  return(flm_df)
+}
+
+process_fs_temp <- function(flm_df){
   flm_df <- flm_df %>% 
     left_join(ave_site_clim, by = c("collection_id"))
   
@@ -133,30 +169,25 @@ fs_nb <- fs_nb %>%
   process_fs()
 fs_ar <- fs_ar %>% 
   process_fs()
+fs_temp <- fs_temp %>% 
+  process_fs_temp()
 
 fs_cum <- fs_cum %>%  # Has already been trimmed and had weights calculated in dnlm script
   # left_join(ave_site_clim, by = c("collection_id")) %>% 
   left_join(site_df, by = "collection_id") %>% 
   rename(estimate_cwd.an = cwd_cum, cwd_errorweights = errorweights)
-
 fs_cum <- fs_cum %>% 
   mutate(trim_y = 1,
          trim_x = 1)
 
 
-fs_temp <- fs_temp %>% 
-  process_fs()
-
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Spatial autocorrelation of trim_df ---------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 site_points=st_as_sf(fs_spl %>% filter(outlier == FALSE),coords=c("longitude","latitude"),crs="+init=epsg:4326 +proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0")
-
 vg <-variogram(estimate_cwd.an~1, site_points, cutoff = 1500, width = 10)
 vg.fit <- fit.variogram(vg, model = vgm(1, "Sph", 900, 1))
 plot(vg, vg.fit)
-# print(paste0("Range before hitting sill (km): "), vg.fit[2,3])
-
 vg.range = vg.fit[2,3] * 1000
 
 
@@ -170,6 +201,7 @@ vg.range = vg.fit[2,3] * 1000
 #  - Linear
 #  - Species control
 #  - Detrend method
+#  - Energy control (temp in place of pet)
 
 robustness_test <- function(params){
   data <- params$despline_data
@@ -199,6 +231,8 @@ robustness_test <- function(params){
 
 specs <- data.frame(coef=NaN, 
                     se=NaN,
+                    pet = NaN,
+                    temp = NaN,
                     detrend_spline = NaN,
                     detrend_nb = NaN,
                     detrend_ar = NaN,
@@ -220,6 +254,8 @@ params <- list(despline_data = fs_spl,
 mod_slopes <- robustness_test(params)
 new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         se = mod_slopes %>% pull("std.error"),
+                        pet = TRUE,
+                        temp = FALSE,
                         trim_x = params$t_x,
                         trim_y = params$t_y,
                         weight_se = params$weights == "cwd_errorweights",
@@ -233,6 +269,32 @@ new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
 specs <- rbind(specs, new_row)
 
 
+## Temp in place of PET
+params <- list(despline_data = fs_temp,
+               formula = as.formula("estimate_cwd.an ~ cwd.spstd + temp.spstd + (cwd.spstd^2) + (temp.spstd^2)"),
+               t_x = FALSE,
+               t_y = TRUE,
+               weights = "cwd_errorweights")
+mod_slopes <- robustness_test(params)
+new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
+                      se = mod_slopes %>% pull("std.error"),
+                      pet = FALSE,
+                      temp = TRUE,
+                      trim_x = params$t_x,
+                      trim_y = params$t_y,
+                      weight_se = params$weights == "cwd_errorweights",
+                      species_control = FALSE,
+                      squared_term = TRUE,
+                      linear_mod = FALSE,
+                      detrend_spline = TRUE, 
+                      detrend_nb = FALSE,
+                      cum_dnlm = FALSE,
+                      detrend_ar = FALSE)
+specs <- rbind(specs, new_row)
+
+
+
+
 ## Test alternate desplining
 params <- list(despline_data = fs_nb,
                formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2)"),
@@ -242,6 +304,8 @@ params <- list(despline_data = fs_nb,
 mod_slopes <- robustness_test(params)
 new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         se = mod_slopes %>% pull("std.error"),
+                      pet = TRUE,
+                      temp = FALSE,
                         trim_x = params$t_x,
                         trim_y = params$t_y,
                         weight_se = params$weights == "cwd_errorweights",
@@ -263,6 +327,8 @@ params <- list(despline_data = fs_ar,
 mod_slopes <- robustness_test(params)
 new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         se = mod_slopes %>% pull("std.error"),
+                      pet = TRUE,
+                      temp = FALSE,
                         trim_x = params$t_x,
                         trim_y = params$t_y,
                         weight_se = params$weights == "cwd_errorweights",
@@ -285,6 +351,8 @@ params <- list(despline_data = fs_cum,
 mod_slopes <- robustness_test(params)
 new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                       se = mod_slopes %>% pull("std.error"),
+                      pet = TRUE,
+                      temp = FALSE,
                       trim_x = params$t_x,
                       trim_y = params$t_y,
                       weight_se = params$weights == "cwd_errorweights",
@@ -307,6 +375,8 @@ params <- list(despline_data = fs_ar,
 mod_slopes <- robustness_test(params)
 new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         se = mod_slopes %>% pull("std.error"),
+                      pet = TRUE,
+                      temp = FALSE,
                         trim_x = params$t_x,
                         trim_y = params$t_y,
                         weight_se = params$weights == "cwd_errorweights",
@@ -329,6 +399,8 @@ params <- list(despline_data = fs_nb,
 mod_slopes <- robustness_test(params)
 new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         se = mod_slopes %>% pull("std.error"),
+                      pet = TRUE,
+                      temp = FALSE,
                         trim_x = params$t_x,
                         trim_y = params$t_y,
                         weight_se = params$weights == "cwd_errorweights",
@@ -351,6 +423,8 @@ params <- list(despline_data = fs_spl,
 mod_slopes <- robustness_test(params)
 new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         se = mod_slopes %>% pull("std.error"),
+                      pet = TRUE,
+                      temp = FALSE,
                         trim_x = params$t_x,
                         trim_y = params$t_y,
                         weight_se = params$weights == "cwd_errorweights",
@@ -372,6 +446,8 @@ params <- list(despline_data = fs_spl,
 mod_slopes <- robustness_test(params)
 new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         se = mod_slopes %>% pull("std.error"),
+                      pet = TRUE,
+                      temp = FALSE,
                         trim_x = params$t_x,
                         trim_y = params$t_y,
                         weight_se = params$weights == "cwd_errorweights",
@@ -393,6 +469,8 @@ params <- list(despline_data = fs_spl,
 mod_slopes <- robustness_test(params)
 new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         se = mod_slopes %>% pull("std.error"),
+                      pet = TRUE,
+                      temp = FALSE,
                         trim_x = params$t_x,
                         trim_y = params$t_y,
                         weight_se = params$weights == "cwd_errorweights",
@@ -407,69 +485,74 @@ specs <- rbind(specs, new_row)
 
 
 
-## Test model controlling for site-level SD of cwd and pet
-params <- list(despline_data = fs_spl,
-               formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2) + pet.sd + cwd.sd"),
-               t_x = FALSE,
-               t_y = TRUE,
-               weights = "cwd_errorweights")
-mod_slopes <- robustness_test(params)
-new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
-                      se = mod_slopes %>% pull("std.error"),
-                      trim_x = params$t_x,
-                      trim_y = params$t_y,
-                      weight_se = params$weights == "cwd_errorweights",
-                      species_control = FALSE,
-                      squared_term = TRUE,
-                      linear_mod = FALSE,
-                      detrend_spline = TRUE, 
-                      detrend_nb = FALSE,
-                      cum_dnlm = FALSE,
-                      detrend_ar = FALSE)
-specs <- rbind(specs, new_row)
-
-
-formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2) + cwd.sd + pet.sd")
-data <- fs_spl %>% filter(outlier == 0)
-mod <- feols(formula, weights = data$cwd_errorweights, data = data,
-             vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
-summary(mod)
-
-fs_spl %>% ggplot(aes(x = cwd.spstd, y = cwd.sd)) +
-  geom_point() +
-  geom_smooth() +
-  xlim(-10,10)
-
-
-formula = as.formula("estimate_temp.an ~ cwd.spstd + temp.spstd + (cwd.spstd^2) + (temp.spstd^2)")
-data <- fs_temp %>% filter(outlier == 0)
-mod <- feols(formula, weights = data$cwd_errorweights, data = data,
-             vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
-summary(mod)
+# ## Test model controlling for site-level SD of cwd and pet
+# params <- list(despline_data = fs_spl,
+#                formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2) + pet.sd + cwd.sd"),
+#                t_x = FALSE,
+#                t_y = TRUE,
+#                weights = "cwd_errorweights")
+# mod_slopes <- robustness_test(params)
+# new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
+#                       se = mod_slopes %>% pull("std.error"),
+#                       trim_x = params$t_x,
+#                       trim_y = params$t_y,
+#                       weight_se = params$weights == "cwd_errorweights",
+#                       species_control = FALSE,
+#                       squared_term = TRUE,
+#                       linear_mod = FALSE,
+#                       detrend_spline = TRUE, 
+#                       detrend_nb = FALSE,
+#                       cum_dnlm = FALSE,
+#                       detrend_ar = FALSE)
+# specs <- rbind(specs, new_row)
+# 
+# 
+# formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2) + cwd.sd + pet.sd")
+# data <- fs_spl %>% filter(outlier == 0)
+# mod <- feols(formula, weights = data$cwd_errorweights, data = data,
+#              vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
+# summary(mod)
+# 
+# fs_spl %>% ggplot(aes(x = cwd.spstd, y = cwd.sd)) +
+#   geom_point() +
+#   geom_smooth() +
+#   xlim(-10,10)
+# 
+# 
+# formula = as.formula("estimate_cwd.an ~ cwd.spstd + temp.spstd + (cwd.spstd^2) + (temp.spstd^2)")
+# data <- fs_temp %>% filter(outlier == 0)
+# mod <- feols(formula, weights = data$cwd_errorweights, data = data,
+#              vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
+# summary(mod)
 
 ## Create figure
-highlight_n <- which(specs$trim_y == TRUE &
-                       specs$trim_x == FALSE &
-                       specs$weight_se == TRUE &
-                       specs$species_control == FALSE &
-                       specs$squared_term == TRUE &
-                       specs$detrend_spline == TRUE &
-                       specs$cum_dnlm == FALSE)
+highlight_n <- 1
+  
+  # which(specs$pet == TRUE,
+  #                    specs$temp == FALSE,
+  #                    specs$trim_y == TRUE &
+  #                      specs$trim_x == FALSE &
+  #                      specs$weight_se == TRUE &
+  #                      specs$species_control == FALSE &
+  #                      specs$squared_term == TRUE &
+  #                      specs$detrend_spline == TRUE &
+  #                      specs$cum_dnlm == FALSE)
 
 
 # chart <- schart(specs, highlight=highlight_n, ci = c(.95), n=c(1, 3,2,2))
 
 
-labels <- list("Detrending" = c("Spline", "Negative binomial", "Autoregressive"),
+labels <- list("Energy control" = c("PET", "Mean temperature"),
+               "Detrending" = c("Spline", "Negative binomial", "Autoregressive"),
                "First stage" = "Cumulative\ndynamic lag",
                "Model structure" = c("Squared\nCWD and PET", "Linear\nCWD and PET", "Species\nfixed effects"),
                "Trimming and\nweighting" = c("Weight by\ninverse of s.e.", "Trim\noutliers in y", "Trim\noutliers in X"))
 
 
 svg(paste0(wdir, 'figures\\a4_robustness.svg'), width = 7, height = 11)
-
+specs <- specs %>% drop_na()
 robustness_fig <- schart(specs, labels, highlight=highlight_n, order = "asis", 
-                         n=c(1, 2, 1, 2,3), ci = c(.95), 
+                         n=c(1, 1, 2, 1, 2,3), ci = c(.95), 
                          ylab = "Slope of line relating sites' historic\nCWD to CWD's impact on growth\n(evaluated at median historic CWD)",
                          col.est=c("grey80", "dodgerblue4"),
                          col.dot=c("grey60","grey95","grey95","dodgerblue4"),
