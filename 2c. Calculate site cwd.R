@@ -5,6 +5,10 @@
 # Purpose: Convert site topography, soil and weather to CWD/AET/PET
 #
 # Input files:
+#   sitedataforcwd.csv: Compiled site-level climate and soil data. Created by "2b. Pull site weather.R"
+# 
+# Output files:
+#   essentialcwd_data.csv: Compiled annual CWD/PET data for each site.
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -24,10 +28,10 @@ library(geosphere)
 # Load data --------------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define path
-wdir <- 'remote\\'
+wdir <- 'remote/'
 
 # 1. Pre-processed climate and soil data
-data=fread(paste0(wdir,"out\\climate\\sitedataforcwd_210620.csv"))
+data=fread(paste0(wdir,"out/climate/sitedataforcwd.csv"))
 miss_var_summary(data)
 
 
