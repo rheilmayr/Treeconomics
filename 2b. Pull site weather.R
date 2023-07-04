@@ -6,7 +6,9 @@
 #
 # Input files:
 #   site_summary_slopeaspect.csv: Site-level topography. Created by "2a. Pull site topography.R"
-#   CRUData directory: Data files for CRU climate data. Accessed from https://crudata.uea.ac.uk/cru/data/hrg/.
+#   cru_ts4.04.1901.2019.pre: Monthly precipitation data from CRU. Accessed from https://crudata.uea.ac.uk/cru/data/hrg/.
+#   cru_ts4.04.1901.2019.tmin: Monthly min temperature data from CRU. Accessed from https://crudata.uea.ac.uk/cru/data/hrg/.
+#   cru_ts4.04.1901.2019.tmax: Monthly max temperature data from CRU. Accessed from https://crudata.uea.ac.uk/cru/data/hrg/.
 #   WorldClim directory: Data files for WorldClim climate data. Accessed from https://www.worldclim.org/.
 #   sr_cru_max.asc: Soil water capacity raster. Accessed from Wang-Erlandsson et al., 2016.
 # 
