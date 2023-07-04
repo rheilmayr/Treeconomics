@@ -8,14 +8,15 @@ The code in this repository reproduces the analysis conducted in Heilmayr, Dudne
 ## 1. Parse and detrend ITRDB data
 - "1a. Pull ITRDB.R" - Pulls ITRDB files from NOAA ftp
 - "1b. Parse ITRDB.R" - Reads each rwl file, detrends series, and combines into master dendro file
+- "1c. Parse Klesse.R" - Reads FIA rw data from Klesse et al., 2018. Note that input data is confidential and can't be provided publicly
 
 
 ## 2. Prep climate data
 - "2a. Pull site topography.R" - Extracts aspect, slope and elevation from ASTER data
 - "2b. Pull site weather.R" - Extracts and downscales precip and temp history for each site
 - "2c. Calculate site CWD.R" - Combines topography, swc and weather to calculate annual CWD / AET history for each site
-- "2d. Historic cwdraster" - Calculates historic CWD / AET rasters using CRU data
-- "2e. CMIP5 projections" - Calculates future CWD / AET rasters using CMIP5 data
+- "2d. Historic cwdraster.R" - Calculates historic CWD / AET rasters using CRU data
+- "2e. CMIP5 projections.R" - Calculates future CWD / AET rasters using CMIP5 data
 
 
 ## 3. Calculate species niches
@@ -48,3 +49,19 @@ The code in this repository reproduces the analysis conducted in Heilmayr, Dudne
 ## Helper functions
 - "f_cwd_function.R" - Functions to process monthly weather and soil data to generate annual PET, CWD and AET.
 - "f_spec_chart_function.R" - Function to run specification chart for robustness results
+
+
+
+
+## Data to provide (to run starting from script 3b)
+#   merged_ranges.shp:
+#   HistoricCWD_AETGrids.Rdat: Rasters describing historic CWD and AET
+#     Generated using historic_cwdraster.R
+#   monthlycrubaseline_tas:
+#   cmip5_cwdaet_start.Rdat:
+#   cmip5_cwdaet_end.Rdat:
+#   essentialcwd_data.csv:
+#   site_summary.csv:
+#   rwi_long.csv: Directory containing processed RWI data from "1b. Parse ITRDB.R"
+#   species_gen_gr.csv: Annotated data about species.
+
