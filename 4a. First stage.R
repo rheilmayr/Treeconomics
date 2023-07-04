@@ -433,7 +433,7 @@ site_df <- site_df %>%
   mutate(fs_result = map(data, .f = fs_mod_bl),
          fs_result_nb = map(data, .f = fs_mod_nb),
          fs_result_ar = map(data, .f = fs_mod_ar),
-         fs_results_temp = map(data, .f = fs_mod_temp))
+         fs_result_temp = map(data, .f = fs_mod_temp))
 
 
 data_df <- site_df %>% 
