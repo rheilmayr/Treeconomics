@@ -5,7 +5,13 @@
 # Purpose: Pull ASTER topography
 #
 # Input files:
-#
+#   site_summary.csv: Lat/Lon data for ITRDB sites. Created by "1b. Parse ITRDB.R"
+#   site_summary_fia.csv: Lat/Lon data for FIA sites. Created by "1c. Parse Klesse.R"
+#   Aster tiles: Elevation data tiles. Accessed from XX.
+# 
+# Output files:
+#   site_summary_slopeaspect.csv: Updated site summary with slope and aspect data.
+# 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
@@ -14,7 +20,7 @@
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 library(tidyverse)
 library(raster)
-library()
+
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data --------------------------------------------------------
@@ -56,6 +62,9 @@ for(i in 1:dim(site)[1]){
   print(i)
 }
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Write data --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 site=cbind(site,slopeaspect)
 colnames(site)[13:15]=c("slope","aspect","demelevation")
 
