@@ -5,6 +5,13 @@
 # Purpose: Combine site-level weather, topography and swc for cwd calcs
 #
 # Input files:
+#   site_summary_slopeaspect.csv: Site-level topography. Created by "2a. Pull site topography.R"
+#   CRUData directory: Data files for CRU climate data. Accessed from https://crudata.uea.ac.uk/cru/data/hrg/.
+#   WorldClim directory: Data files for WorldClim climate data. Accessed from https://www.worldclim.org/.
+#   sr_cru_max.asc: Soil water capacity raster. Accessed from Wang-Erlandsson et al., 2016.
+# 
+# Output files:
+#   sitedataforcwd.csv: Compiled site-level climate and soil data.
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -43,7 +50,7 @@ cru_dir <- paste0(wdir,"in/CRUData/")
 wclim_dir <- paste0(wdir,"in/WorldClim/")
 
 # 3. Load soil water capacity data
-swc <- raster(paste0(wdir,"in\\wang_swc\\sr_cru_max.asc"))
+swc <- raster(paste0(wdir,"in/wang_swc/sr_cru_max.asc"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -129,7 +136,7 @@ sites <- sites %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Save combined topography, weather, and swc data ------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-save(sites,file=paste0(wdir,"out/climate/sitedataforcwd.Rdat"))
+# save(sites,file=paste0(wdir,"out/climate/sitedataforcwd.Rdat"))
 fwrite(sites,file=paste0(wdir,"out/climate/sitedataforcwd.csv"))
 
        
