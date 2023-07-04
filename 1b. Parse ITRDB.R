@@ -54,7 +54,7 @@ out_dir <- paste0(wdir, 'out\\dendro\\')
 itrdb_df <- itrdb_meta %>% 
   filter(LastYear > 1901,
          !is.na(Species)) %>% 
-  select(collection_id = ITRDB_Code, latitude = Latitude, longitude = Longitude, species_id = Species) %>% 
+  select(collection_id = ITRDB_Code, latitude = Latitude, longitude = Longitude, elevation_itrdb = elevation, species_id = Species) %>% 
   drop_na()
 
 
@@ -390,8 +390,9 @@ sum_rwl <- function(e_dat, l_dat){
     }
 }
 
-erwl_files <- sapply(sum_sites, site_to_filename, suffix = 'e')
-erwl_data <- tibble::enframe(erwl_files, name = "collection_id", value = "file")
+erwl_data <- itrdb_df %>% select(collection_id, file = e_rwl) %>% filter(file != "NaN")
+# erwl_files <- sapply(sum_sites, site_to_filename, suffix = 'e')
+# erwl_data <- tibble::enframe(erwl_files, name = "collection_id", value = "file")
 erwl_data$rwl <- map(erwl_data$file, open_rwl) 
 erwl_data <- erwl_data %>% unnest(rwl)
 erwl_data <- erwl_data %>% 
@@ -402,8 +403,9 @@ e_clean_data <- erwl_results$clean_data
 e_clean_data <- e_clean_data %>% 
   rename(erwl = rwl)
 
-lrwl_files <- sapply(sum_sites, site_to_filename, suffix = 'l')
-lrwl_data <- tibble::enframe(lrwl_files, name = "collection_id", value = "file")
+lrwl_data <- itrdb_df %>% select(collection_id, file = l_rwl) %>% filter(file != "NaN")
+# lrwl_files <- sapply(sum_sites, site_to_filename, suffix = 'l')
+# lrwl_data <- tibble::enframe(lrwl_files, name = "collection_id", value = "file")
 lrwl_data$rwl <- map(lrwl_data$file, open_rwl) 
 lrwl_data <- lrwl_data %>% unnest(rwl)
 lrwl_data <- lrwl_data %>% 
@@ -510,8 +512,8 @@ clean_data <- clean_data  %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Tabulate sites that are dropped from analysis  -------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-site_smry <- site_data %>% 
-  select(collection_id, location, latitude, longitude, elevation, sp_id) %>% 
+site_smry <- itrdb_df %>% 
+  select(collection_id, latitude, longitude, itrdb_elevation, sp_id = species_id, datasource) %>% 
   unique()
 
 l_parse_errors <- lrwl_results$errors %>% pull(collection_id)
@@ -589,7 +591,7 @@ write_csv(site_smry, paste0(out_dir, "site_summary.csv"))
 # Summarize number of observations ---------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # number of original files
-site_data$collection_id %>% unique() %>% length()
+itrdb_df$collection_id %>% unique() %>% length()
 
 # number of sites dropped due to "other" rwl files
 site_smry %>% 
