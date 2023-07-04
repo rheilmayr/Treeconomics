@@ -321,7 +321,7 @@ fs_mod <- function(site_data, outcome = "rwi"){
     tryCatch(
       expr = {
         # TODO: 7-9-21; Should we switch back to tree-level FE model? Complicates intercepts...
-        formula <- as.formula(paste0(outcome, " ~ pet.an + cwd.an"))
+        formula <- as.formula(paste0(outcome, " ~ temp.an + cwd.an"))
         mod <- lm(formula, data = site_data)
 
         # mod <- lm(rwi ~ pet.an + cwd.an, data = site_data)
@@ -338,11 +338,11 @@ fs_mod <- function(site_data, outcome = "rwi"){
         nobs <- nobs(mod)
         mod <- tidy(mod) %>%
           mutate(term = term %>% str_replace("\\(Intercept\\)", "intercept")) %>% 
-          filter(term %in% c('intercept', 'cwd.an', 'pet.an')) %>% 
+          filter(term %in% c('intercept', 'cwd.an', 'temp.an')) %>% 
           pivot_wider(names_from = "term", values_from = c("estimate", "std.error", "statistic", "p.value"))
         mod$cov_int_cwd = mod_vcov[c("(Intercept)"), c("cwd.an")]
-        mod$cov_int_pet = mod_vcov[c("(Intercept)"), c("pet.an")]
-        mod$cov_cwd_pet = mod_vcov[c("cwd.an"), c("pet.an")]
+        mod$cov_int_pet = mod_vcov[c("(Intercept)"), c("temp.an")]
+        mod$cov_cwd_pet = mod_vcov[c("cwd.an"), c("temp.an")]
         mod$r2 = mod_sum$r.squared
       },
       error = function(e){ 
@@ -361,11 +361,23 @@ fs_mod <- function(site_data, outcome = "rwi"){
 site_df <- dendro_df %>% 
   drop_na() %>% 
   mutate(cwd.an = cwd.an.spstd,
-         pet.an = pet.an.spstd) %>% 
+         pet.an = pet.an.spstd,
+         temp.an = temp.an.spstd) %>% 
   group_by(collection_id) %>%
   add_tally(name = 'nobs') %>% 
   filter(nobs>10) %>% 
   nest()
+
+
+# i = 200
+# test_data <- site_df[i,2][[1]][[1]]
+# comb_mod <- lm(rwi ~ cwd.an.spstd + pet.an.spstd + temp.an.spstd, data = test_data)
+# summary(comb_mod)
+# temp_mod <- lm(rwi ~ cwd.an.spstd + temp.an.spstd, data = test_data)
+# summary(temp_mod)
+# pet_mod <- lm(rwi ~ cwd.an.spstd + pet.an.spstd, data = test_data)
+# summary(pet_mod)
+
 
 #### REVIEWER COMMENTS - TESTING ALTERNATE MODELS
 i = 3500
@@ -445,7 +457,28 @@ fs_df <- fs_df %>%
 fs_df <- fs_df %>% 
   select(-error)
 
-fs_df %>% write_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv'))
+# fs_df %>%
+#   # filter(p.value_cwd.an<0.05) %>% 
+#   select(estimate_cwd.an) %>% 
+#   summary()
+# 
+# fs_df %>%
+#   filter(p.value_temp.an<0.05) %>% 
+#   select(estimate_temp.an) %>% 
+#   summary()
+# 
+# pet_fs_df %>%
+#   filter(p.value_pet.an<0.05) %>% 
+#   select(collection_id, estimate_pet.an) %>% 
+#   summary()
+# 
+# pet_fs_df %>%
+#   # filter(p.value_cwd.an<0.05) %>% 
+#   select(collection_id, estimate_cwd.an) %>% 
+#   summary()
+
+# fs_df %>% write_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv'))
+fs_df %>% write_csv(paste0(wdir, 'out\\first_stage\\site_temp_cwd_std.csv'))
 
 
 ## Repeat using results from nb detrended data
