@@ -18,6 +18,7 @@
 #   HistoricCWD_AETGrids_Annual.Rdat: 
 #
 # TODO:
+#   FRAN: Should we be calculating CWD / AET for each year first, then taking the average of that for the baseline?
 #   FRAN: Would be great if you could annotate a bit more. Why are some datasets labeled test? What are "sites" mentioned below?
 #   Should we clean up outputs? At least move into a single directory?
 #
@@ -85,8 +86,8 @@ for(j in 2:12){
 
 
 # save(tas_months,pr_months,file=paste0(wdir,"in/CRUData/monthlycrubaseline.Rdat"))
-writeRaster(tas_months, file=paste0(wdir,"in/CRUData/monthlycrubaseline_tas"))
-writeRaster(pr_months, file=paste0(wdir,"in/CRUData/monthlycrubaseline_pr"))
+writeRaster(tas_months %>% mean(), file=paste0(wdir,"in/CRUData/monthlycrubaseline_tas"), overwrite = TRUE)
+writeRaster(pr_months %>% sum(), file=paste0(wdir,"in/CRUData/monthlycrubaseline_pr"), overwrite = TRUE)
 
 
 # melt permanent site data down into a long data frame for cwd function
