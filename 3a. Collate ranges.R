@@ -4,25 +4,33 @@
 # Project: Treeconomics
 # Date: 5/27/20
 # Purpose: Collate individual species range maps
+# 
+# Input files:
+#   /species_ranges/: Directory of individual species range maps created from lit review.
+# 
+# Output files:
+#   merged_ranges.shp: Compiled shapefile of range maps for all species included in this study
+# 
+# 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Set-up --------------------------------------------------------------
+# Load packages --------------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Packages
 library(raster)
 library(sf)
 library(tidyverse)
 
-# Create file list
-wdir <- 'remote\\in\\species_ranges\\'
-# wdir <- 'D:\\cloud\\Dropbox\\collaborations\\treeconomics\\species_ranges\\'
-ranges_dir <- paste0(wdir, 'processed_data\\')
-species_list <- list.files(ranges_dir)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load and merge data ----------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Create file list
+wdir <- 'remote\\in\\species_ranges\\'
+ranges_dir <- paste0(wdir, 'processed_data\\')
+species_list <- list.files(ranges_dir)
+
 new_crs <- 4326
 load_shp <- function(sp_name){
   file_name <- paste0(ranges_dir, "\\", sp_name, "\\", sp_name, ".shp")
@@ -64,9 +72,8 @@ select_ranges <- select_ranges %>%
 
 merged_sf <- rbind(merged_sf, select_ranges)
 
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Export new file --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 st_write(merged_sf, paste0(wdir, 'merged_ranges.shp'), overwrite = TRUE)
-
-# merged_sf %>% st_set_geometry(NULL) %>% select(sp_code) %>% distinct()
