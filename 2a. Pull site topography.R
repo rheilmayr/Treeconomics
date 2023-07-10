@@ -32,7 +32,8 @@ wdir <- 'remote//'
 # 1. Load ITRDB site latitude and longitude
 site_itrdb <- read_csv(paste0(wdir, 'out//dendro//site_summary.csv')) %>% 
   drop_na() %>% 
-  select(collection_id, latitude, longitude, datasource)
+  mutate(plot_cn = collection_id) %>% 
+  select(plot_cn, latitude, longitude, datasource)
 
 # site <- site %>%
 #   rename(elevation_itrdb = elevation)
@@ -41,7 +42,8 @@ site_itrdb <- read_csv(paste0(wdir, 'out//dendro//site_summary.csv')) %>%
 site_fia <- read_csv(paste0(wdir, 'out//dendro//site_summary_fia.csv')) %>% 
   drop_na() %>% 
   mutate(datasource = "klesse_2018") %>% 
-  select(collection_id, latitude, longitude, datasource)
+  select(plot_cn, latitude, longitude, datasource) %>% 
+  distinct() # NOTE: Using plot_cn rather than collection_id since ~1/3 of collections are repeated locations but unique species.
 
 # Combine sites
 site <- rbind(site_itrdb, site_fia)
