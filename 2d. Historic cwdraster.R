@@ -5,10 +5,10 @@
 # Purpose: Create gridded 0.5 degree cwd, pet and aet based on 1901-1980 climatological baseline (CRU Data)
 #
 # Input files:
-#   cru_ts4.04.1901.2019.tmp.dat.nc: Monthly mean temp data from CRU. ASK FRAN WHERE THIS GETS CALCULATED.
+#   cru_ts4.04.1901.2019.tmp.dat.nc: Monthly mean temp data from CRU. FRAN - WHERE DOES THIS GET CALCULATED?
 #   cru_ts4.04.1901.2019.pre.dat.nc: Monthly precip data from CRU. Accessed from https://crudata.uea.ac.uk/cru/data/hrg/.
 #   sr_cru_max.asc: Soil water capacity raster. Accessed from Wang-Erlandsson et al., 2016.
-#   slopeaspectraster.Rdat: ASK FRAN WHERE THIS GETS CALCULATED.
+#   slopeaspectraster.Rdat: FRAN - WHERE DOES THIS GET CALCULATED?
 # 
 # Output files:
 #   monthlycrubaseline_tas:
@@ -20,7 +20,7 @@
 # TODO:
 #   FRAN: Should we be calculating CWD / AET for each year first, then taking the average of that for the baseline?
 #   FRAN: Would be great if you could annotate a bit more. Why are some datasets labeled test? What are "sites" mentioned below?
-#   Should we clean up outputs? At least move into a single directory?
+#   FRAN: Should we clean up outputs? At least move into a single directory?
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
