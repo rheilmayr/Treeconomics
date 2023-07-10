@@ -46,7 +46,7 @@ site_fia <- read_csv(paste0(wdir, 'out//dendro//site_summary_fia.csv')) %>%
 # Combine sites
 site <- rbind(site_itrdb, site_fia)
 
-# 4. Set Directory for DEM tiles
+# 3. Set Directory for DEM tiles
 demfiles=list.files("E:\\DEM Data",full.names=TRUE)
 demfiles=demfiles[grep("ASTGT",demfiles)]
 
