@@ -20,6 +20,7 @@
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 library(tidyverse)
 library(raster)
+select = dplyr::select
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -28,17 +29,31 @@ library(raster)
 # Set working directory
 wdir <- 'remote//'
 
-# 1. Load site latitude and longitude
-site <- read_csv(paste0(wdir, 'out//dendro//site_summary.csv')) %>% 
-  drop_na()
+# 1. Load ITRDB site latitude and longitude
+site_itrdb <- read_csv(paste0(wdir, 'out//dendro//site_summary.csv')) %>% 
+  drop_na() %>% 
+  select(collection_id, latitude, longitude, datasource)
+
 # site <- site %>%
 #   rename(elevation_itrdb = elevation)
 
-#2. Set Directory for DEM tiles
+# 2. Load FIA site latitude and longitude
+site_fia <- read_csv(paste0(wdir, 'out//dendro//site_summary_fia.csv')) %>% 
+  drop_na() %>% 
+  mutate(datasource = "klesse_2018") %>% 
+  select(collection_id, latitude, longitude, datasource)
+
+# Combine sites
+site <- rbind(site_itrdb, site_fia)
+
+# 4. Set Directory for DEM tiles
 demfiles=list.files("E:\\DEM Data",full.names=TRUE)
 demfiles=demfiles[grep("ASTGT",demfiles)]
 
-#3. Read in DEM for each site and extract slope and aspect (in radians) for each point
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Extract topography --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Read in DEM for each site and extract slope and aspect (in radians) for each point
 for(i in 1:dim(site)[1]){
   #get dem granule for each site location
   lat=site$latitude[i];lon=site$longitude[i]
@@ -61,6 +76,7 @@ for(i in 1:dim(site)[1]){
   if(i>1) slopeaspect=rbind(slopeaspect,siteslopeaspect)
   print(i)
 }
+
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Write data --------------------------------------------------------
