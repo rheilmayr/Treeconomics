@@ -152,3 +152,17 @@ fia_site_smry <- meta %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 write_csv(rwi_df, paste0(out_dir, "rwi_long_fia.csv"))
 write_csv(fia_site_smry, paste0(out_dir, "site_summary_fia.csv"))
+
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Optional - visualize data -------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+library(sf)
+library(tmap)
+tmap_mode("view")
+
+fia_site_smry <- fia_site_smry %>% 
+  st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
+tm_shape(fia_site_smry) +
+  tm_dots("species_id")
