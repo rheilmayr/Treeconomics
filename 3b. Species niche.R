@@ -7,7 +7,7 @@
 #
 # Input files:
 #   merged_ranges.shp:
-#   HistoricCWD_AETGrids.Rdat: Rasters describing historic CWD and AET
+#   HistoricCWD_AETGrids_Annual.Rdat: Rasters describing historic CWD and AET
 #     Generated using historic_cwdraster.R
 #   monthlycrubaseline_tas:
 #   cmip5_cwdaet_start.Rdat:
