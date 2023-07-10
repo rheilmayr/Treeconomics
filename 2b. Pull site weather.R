@@ -38,10 +38,10 @@ library(seegSDM)
 # Load data --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Set working directory
-wdir <- 'remote\\'
+wdir <- 'remote/'
 
 # 1. Load site topography 
-sites=fread(paste0(wdir, 'out//dendro//site_summary_slopeaspect.csv'))
+sites=fread(paste0(wdir, 'out/dendro/site_summary_slopeaspect.csv'))
 sites <- sites %>% 
   dplyr::rename(elevation = demelevation)
 plots=unique(data.frame(latitude=sites$latitude,longitude=sites$longitude,site_id=sites$collection_id))
