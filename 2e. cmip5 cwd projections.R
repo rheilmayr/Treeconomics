@@ -8,7 +8,10 @@
 #   /CMIP5 Data/tas/: Directory of temperature data from CMIP5 model output. Accessed from XX.
 #   /CMIP5 Data/pr/: Directory of precip data from CMIP5 model output. Accessed from XX.
 # 
-# 
+# Output files:
+#   cmip5_cwdaet_start.Rdat
+#   cmip5_cwdaet_end.Rdat 
+#
 # TODO:
 #   FRAN: Could you add more annotation and clean up imports / exports? Seems like some files are read in multiple times (e.g. SWC?)
 #
