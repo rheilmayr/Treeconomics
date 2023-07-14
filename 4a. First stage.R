@@ -33,6 +33,9 @@ library(broom)
 library(purrr)
 library(fixest)
 library(dtplyr)
+library(rstanarm)
+library(broom.mixed)
+library(furrr)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -369,44 +372,7 @@ site_df <- dendro_df %>%
 # summary(pet_mod)
 
 
-# #### REVIEWER COMMENTS - TESTING ALTERNATE MODELS
-# i = 3500
-# data_df <- site_df[i, 2]
-# data_df <- data_df[[1]][[1]]
-# mod <- lm(rwi ~ cwd.an + pet.an, data_df)
-# summary(mod)
-# 
-# data_df <- data_df %>%
-#   mutate(tree_id = as.factor(tree))
-# data_df$tree %>% unique() %>% length()
-# mod_re <- lmer(rwi ~ 1 + cwd.an + pet.an + (1 | tree_id), data_df)
-# summary(mod_re)
-# ## Identical coefficients to main specification, but singular / boundary warnings
-# 
-# data_df <- data_df %>%
-#   mutate(tree_id = as.factor(tree))
-# data_df$tree %>% unique() %>% length()
-# mod_fe <- feols(rwi ~ cwd.an + pet.an | tree_id, data_df)
-# summary(mod_fe)
-# ## Very similar coefficients to main specification. Could include this in robustness plot, but doing predictions with this would be a huge headache
-# 
-# mod_bayes <- stan_lmer(rwi ~ cwd.an + pet.an + (1 | tree_id), data_df)
-# summary(mod_bayes)
-# 
-# ave_site_clim <- read_rds(paste0(wdir, "out\\climate\\site_ave_clim.gz"))
-# dendro_df <- dendro_df %>%
-#   left_join(ave_site_clim, by = "collection_id")
-# 
-# mod_full_fe <- lm(rwi ~ cwd.an.spstd * cwd.spstd * I(cwd.spstd**2)  + cwd.an.spstd * pet.spstd * I(pet.spstd**2) + pet.an.spstd * cwd.spstd * I(cwd.spstd**2) + pet.an.spstd * pet.spstd * I(pet.spstd**2), data = dendro_df)
-# summary(mod_full_fe)
-# 
-# library(lme4)
-# mod_full_re <- lmer(rwi ~ cwd.an.spstd * cwd.spstd * I(cwd.spstd**2)  + cwd.an.spstd * pet.spstd * I(pet.spstd**2) + pet.an.spstd * cwd.spstd * I(cwd.spstd**2) + pet.an.spstd * pet.spstd * I(pet.spstd**2) + (1 | collection_id), data = dendro_df)
-# summary(mod_full_fe)
-# ## Yields fairly similar coefficient estimate to two-stage model. Generate ME plot?
-# 
-# #### REVIEWER COMMENTS - TESTING ALTERNATE MODELS
-# 
+
 # 
 # #### REVIEWER COMMENTS - DRIVEN BY VARIABILITY?
 # sd_df <- dendro_df %>% 
@@ -505,7 +471,4 @@ fs_temp <- fs_temp %>%
   unnest(mod) %>% 
   select(-error)
 fs_temp %>% write_csv(paste0(wdir, 'out\\first_stage\\site_temp_cwd_std.csv'))
-
-
-
 
