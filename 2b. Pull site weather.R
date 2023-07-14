@@ -41,10 +41,12 @@ library(seegSDM)
 wdir <- 'remote/'
 
 # 1. Load site topography 
-sites=fread(paste0(wdir, 'out/dendro/site_summary_slopeaspect.csv'))
-sites <- sites %>% 
-  dplyr::rename(elevation = demelevation)
-plots=unique(data.frame(latitude=sites$latitude,longitude=sites$longitude,site_id=sites$collection_id))
+sites=fread(paste0(wdir, 'out/dendro/site_summary_slopeaspect.csv')) %>% 
+  dplyr::select(-V1)
+
+# sites <- sites %>% 
+#   dplyr::rename(elevation = demelevation)
+plots=unique(data.frame(latitude=sites$latitude,longitude=sites$longitude,site_id=sites$plot_cn))
 plots=SpatialPointsDataFrame(coords=plots[,c(2,1)],data=as.data.frame(plots[,3]))
 
 # 2. Define directories for CRU and WorldClim data 
@@ -126,8 +128,8 @@ napoints=nearestLand(plots@coords[nas,],swc,max_distance = 100000)
 plotswc[nas]=extract(swc,napoints)
 plotswc=data.frame(swc=plotswc,site_id=plots@data[,1])
 
-sites <- sites %>% 
-  dplyr::rename(site_id = collection_id) %>% 
+sites <- sites %>%
+  dplyr::rename(site_id = plot_cn) %>% 
   left_join(plotswc, by = c("site_id"))
 sites <- sites %>% 
   left_join(climdat,by=c("site_id"))
