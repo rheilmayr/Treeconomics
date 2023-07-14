@@ -84,6 +84,6 @@ for(i in 1:dim(site)[1]){
 # Write data --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 site=cbind(site,slopeaspect)
-colnames(site)[13:15]=c("slope","aspect","demelevation")
+colnames(site)[6:8]=c("slope","aspect","demelevation")
 
 write.csv(site, file=paste0(wdir, 'out//dendro//site_summary_slopeaspect.csv'))
