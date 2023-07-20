@@ -5,18 +5,20 @@
 # Purpose: Run plot-level regressions of RWI sensitivity to annual weather variability
 #
 # Input files:
-# - clim_niche.csv: Data documenting historic climate across each species range
-#     Generated using "3b. Species_niche.R"
 # - site_an_clim.gz: File detailing site-level weather history. Generated using "3b. Species_niche.R"
-# - rwi_long.csv: Directory containing processed RWI data from "1b. Parse ITRDB.R"
-# - species_gen_gr.csv: Annotated data about species.
-# - site_summary.csv: Generated using "1b. Parse ITRDB.R"
+# - rwi_long.csv: Data containing processed RWI data. Generated using "1b. Parse ITRDB.R"
+# - site_summary.csv: Summary data about each site. Generated using "1b. Parse ITRDB.R"
+#
+# Output files:
+# - example_sites.csv: Dendrochronologies for two example sites. Used for methods summary figure.
+# - site_pet_cwd_std.csv: Table of first stage regression parameters for baseline specification.
+# - site_pet_cwd_std_nb.csv: Table of first stage regression parameters for robustness model using NB desplining.
+# - site_pet_cwd_std_ar.csv: Table of first stage regression parameters for robustness model using AR desplining.
+# - site_temp_cwd_std.csv:Table of first stage regression parameters for robustness model using temperature in place of PET.
+#
 #
 # ToDo:
 # - fix joins to prevent duplicate species_id
-# - think through how to deal with CWD outliers
-# - track down lost observations - currently dropping a lot due to NAN or failed RWI generation
-# - Incorporate code from tree-level analysis script to generate DLNM plots? 
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -27,19 +29,15 @@
 library(tidyr)
 library(tidyverse)
 library(dbplyr)
-library(RSQLite)
-library(lfe)
 library(broom)
 library(purrr)
 library(fixest)
 library(dtplyr)
-library(rstanarm)
-library(broom.mixed)
 library(furrr)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Import data --------------------------------------------------------
+# Import and integrate data --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define path
 wdir <- 'remote/'
@@ -79,16 +77,6 @@ site_smry <- site_smry %>%
 dendro_df <- dendro_df %>% 
   left_join(site_smry, by = 'collection_id')
 
-# 4. Species information
-sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
-sp_info <- sp_info %>% 
-  select(species_id, genus, gymno_angio, family)
-site_smry <- site_smry %>% 
-  left_join(sp_info, by = c("species_id"))
-psme_list <- site_smry %>% 
-  filter(species_id == "psme") %>% 
-  pull(collection_id)
-
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Export example sites for presentations  ------------------------------
@@ -98,196 +86,10 @@ dendro_df %>%
   filter(collection_id %in% ex_sites) %>% 
   write.csv(paste0(wdir, "out\\dendro\\example_sites.csv"))
 
-# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# # Explore variance by site ------------------------------
-# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# # Calculate site-level historic climate
-# hist_clim_df <- clim_df %>%
-#   group_by(collection_id) %>%
-#   filter(year<1980) %>%
-#   summarise(aet.ave = mean(aet.an),
-#             cwd.ave = mean(cwd.an),
-#             pet.ave = mean(pet.an),
-#             cwd.min = min(cwd.an)) %>% 
-#   left_join(site_smry, by = "collection_id") %>% 
-#   select(-genus, -gymno_angio, -species_id)
-# 
-# 
-# hist_clim_df <- hist_clim_df %>% 
-#   left_join(niche_df, by = c("species_id" = "sp_code")) %>% 
-#   mutate(pet.spstd = (pet.ave - sp_pet_mean) / sp_pet_sd,
-#          cwd.spstd = (cwd.ave - sp_cwd_mean) / sp_cwd_sd)
-# 
-# 
-# site_stats <- dendro_df %>% 
-#   group_by(collection_id) %>% 
-#   summarise(rwi_var = var(rwi),
-#             rwi_mean = mean(rwi)) %>% 
-#   left_join(hist_clim_df, by = c("collection_id"))
-# 
-# site_stats %>% ggplot(aes(x = cwd.spstd, y = rwi_var)) +
-#   geom_point(shape = 23) +
-#   geom_smooth(method=lm) +
-#   theme_bw(base_size = 25) +
-#   ylab("Variance in RWI")+
-#   xlab("Historic CWD\n(Deviation from species mean)") +
-#   ylim(0, 0.5) +
-#   xlim(-3, 3)
-# 
-# site_stats %>% ggplot(aes(x = cwd.spstd, y = rwi_mean)) +
-#   geom_point(shape = 23) +
-#   geom_smooth(method=lm) +
-#   theme_bw(base_size = 25) +
-#   ylab("Mean RWI")+
-#   xlab("Historic CWD\n(Deviation from species mean)") +
-#   ylim(0.9, 1.1) +
-#   xlim(-3, 3)
-# 
-# 
-# var_mod <- lm(rwi_var ~ cwd.spstd + pet.spstd, data = site_stats)
-# mean_mod <- lm(rwi_mean ~ cwd.spstd + pet.spstd, data = site_stats)
-
-
-
-
-
-
-
-
-# flm_df <- flm_df %>% 
-#   left_join(hist_clim_df, by = c("collection_id"))
-# 
-# trim_df %>% 
-#   filter(errorweights>5300) %>% 
-#   ggplot(aes(x = cwd.spstd, y = estimate_cwd.an)) +
-#   geom_point(shape = 23) +
-#   geom_smooth(method=lm) +
-#   theme_bw(base_size = 25) +
-#   ylab("Sensitivity to CWD")+
-#   xlab("Historic CWD\n(Deviation from species mean)") +
-#   ylim(-0.001, 0.0005) +
-#   xlim(-3, 3)
-# 
-# flm_df <- flm_df %>% 
-#   mutate(errorweights = 1 / (std.error_cwd.an),
-#          pet_errorweights = 1 / (std.error_pet.an))
-# 
-# flm_df <- flm_df %>%
-#   group_by(species_id) %>%
-#   mutate(cwd.qhigh=quantile(estimate_cwd.an,0.99,na.rm=T),
-#          cwd.qlow=quantile(estimate_cwd.an,0.01,na.rm=T)) %>%
-#   ungroup()
-# 
-# trim_df <- flm_df %>%
-#   filter(estimate_cwd.an>cwd.qlow & estimate_cwd.an<cwd.qhigh,
-#          abs(cwd.spstd)<5,
-#          abs(pet.spstd)<5,
-#          abs(std.error_cwd.an) < 50 * abs(estimate_cwd.an),
-#          abs(std.error_cwd.an) < 50 * abs(estimate_cwd.an)) %>% 
-#   drop_na()
-# coef_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, data = trim_df, weights = errorweights)
-# coef_mod <- lm(estimate_cwd.an ~ cwd.spstd + pet.spstd, data = trim_df %>% filter(errorweights>5300))
-# summary(coef_mod)
-
-
-
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Define regression model and helper funcs -------------------------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# dendro_lm <- function(s_id, sp_id){
-#   dendro_file <- paste0('sid-', s_id, '_spid-', sp_id, '.csv')
-#   dendro_dat <- read.csv(paste0(dendro_dir, dendro_file)) %>% 
-#     mutate(site_id = as.character(s_id))
-#   dendro_dat <- dendro_dat %>% 
-#     inner_join(clim_df, by = c("site_id", "year"))
-#   
-#   failed <- F
-#   # Try to run felm. Typically fails if missing cwd / aet data 
-#   tryCatch(
-#     expr = {
-#       dendro_dat <- dendro_dat %>%
-#         mutate(ln_rwi = log(rwi))
-#       mod <- felm(ln_rwi ~ pet.an + cwd.an |tree_id|0|tree_id+year, data = dendro_dat)
-#     },
-#     error = function(e){ 
-#       message("Returned error on site ",s_id, " and species ", sp_id)
-#       print(e)
-#       failed <<- T
-#     }
-#   )
-#   if (failed){
-#     return(NULL)
-#   }
-#   return(mod)
-# }
-# 
-# 
-# getcov <- function(felm_mod, cov_vars = c("pet.an", "cwd.an")){
-#   failed <- F
-#   tryCatch(
-#     expr = {
-#       vcov <- felm_mod$vcv
-#       pet_cwd_cov <- vcov %>% 
-#         subset(rownames(vcov) == cov_vars[1]) %>% 
-#         as_tibble() %>% 
-#         pull(cov_vars[2])
-#     },
-#     error = function(e){
-#       failed <<- T
-#     }
-#   )
-#   if (failed){
-#     return(NULL)
-#   }
-#   return(pet_cwd_cov)
-# }
-
-
-getcov <- function(felm_mod){
-  failed <- F
-  tryCatch(
-    expr = {
-      vcov <- felm_mod$vcv
-      pet_cwd_cov <- vcov %>% 
-        subset(rownames(vcov) == "cwd.an") %>% 
-        as_tibble() %>% 
-        pull("pet.an")
-    },
-    error = function(e){
-      failed <<- T
-    }
-  )
-  if (failed){
-    return(NULL)
-  }
-  return(pet_cwd_cov)
-}
-
-
-getnobs <- function(felm_mod){
-  failed <- F
-  tryCatch(
-    expr = {
-      nobs <- felm_mod$N
-    },
-    error = function(e){
-      failed <<- T
-    }
-  )
-  if (failed){
-    return(NULL)
-  }
-  return(nobs)
-}
-
-
-ihsTransform <- function(y) {log(y + (y ^ 2 + 1) ^ 0.5)}
-
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Run site-level regressions --------------------------------------------------------
+# Define regression model  -------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 fs_mod <- function(site_data, outcome = "rwi", energy_var = "pet.an"){
   rwl_mean <- site_data$rwl %>% mean(na.rm = TRUE)
@@ -311,7 +113,7 @@ fs_mod <- function(site_data, outcome = "rwi", energy_var = "pet.an"){
       expr = {
         formula <- as.formula(paste0(outcome, " ~ ", energy_var, " + cwd.an"))
         mod <- lm(formula, data = site_data)
-
+        
         mod_sum <- summary(mod)
         mod_vcov <- vcov(mod)
         # cov <- list(int_cwd = mod_vcov[1, 2], 
@@ -344,6 +146,10 @@ fs_mod <- function(site_data, outcome = "rwi", energy_var = "pet.an"){
   return(tibble(mod = list(mod), nobs = nobs, ntrees = ntrees, rwl_mean = rwl_mean, rwl_sd = rwl_sd, error = reg_error))
 }
 
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Run site-level regressions --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 site_df <- dendro_df %>% 
   drop_na() %>% 
   rename(cwd.an = cwd.an.spstd,
@@ -353,41 +159,6 @@ site_df <- dendro_df %>%
   add_tally(name = 'nobs') %>% 
   filter(nobs>10) %>% 
   nest()
-
-
-# i = 200
-# test_data <- site_df[i,2][[1]][[1]]
-# test_data
-# site_data = test_data
-# outcome = "rwi"
-# energy_var = "pet.an"
-# mod <- fs_mod(test_data, outcome = outcome, energy_var = energy_var)
-
-
-# comb_mod <- lm(rwi ~ cwd.an.spstd + pet.an.spstd + temp.an.spstd, data = test_data)
-# summary(comb_mod)
-# temp_mod <- lm(rwi ~ cwd.an.spstd + temp.an.spstd, data = test_data)
-# summary(temp_mod)
-# pet_mod <- lm(rwi ~ cwd.an.spstd + pet.an.spstd, data = test_data)
-# summary(pet_mod)
-
-
-
-# 
-# #### REVIEWER COMMENTS - DRIVEN BY VARIABILITY?
-# sd_df <- dendro_df %>% 
-#   group_by(collection_id) %>% 
-#   summarise(cwd_sd = sd(cwd.an.spstd, na.rm = TRUE),
-#             cwd_mean = mean(cwd.an.spstd, na.rm = TRUE))
-# 
-# mod <- lm(cwd_mean ~ cwd_sd, sd_df)
-# summary(mod)
-# sd_df %>% ggplot(aes(x = cwd_mean, y = cwd_sd)) +
-#   geom_point()
-# 
-# 
-# #### REVIEWER COMMENTS - DRIVEN BY VARIABILITY?
-
 
 
 fs_mod_bl <- partial(fs_mod, outcome = "rwi", energy_var = "pet.an")
@@ -416,27 +187,6 @@ fs_df <- fs_df %>%
 fs_df <- fs_df %>% 
   select(-error)
 
-# fs_df %>%
-#   # filter(p.value_cwd.an<0.05) %>% 
-#   select(estimate_cwd.an) %>% 
-#   summary()
-# 
-# fs_df %>%
-#   filter(p.value_temp.an<0.05) %>% 
-#   select(estimate_temp.an) %>% 
-#   summary()
-# 
-# pet_fs_df %>%
-#   filter(p.value_pet.an<0.05) %>% 
-#   select(collection_id, estimate_pet.an) %>% 
-#   summary()
-# 
-# pet_fs_df %>%
-#   # filter(p.value_cwd.an<0.05) %>% 
-#   select(collection_id, estimate_cwd.an) %>% 
-#   summary()
-
-# fs_df %>% write_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std.csv'))
 fs_df %>% write_csv(paste0(wdir, 'out/first_stage/site_pet_cwd_std.csv'))
 
 
@@ -448,7 +198,7 @@ fs_nb <- fs_nb[which(!(fs_nb %>% pull(mod) %>% is.na())),]
 fs_nb <- fs_nb %>% 
   unnest(mod) %>% 
   select(-error)
-fs_nb %>% write_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std_nb.csv'))
+fs_nb %>% write_csv(paste0(wdir, 'out/first_stage/site_pet_cwd_std_nb.csv'))
 
 
 ## Repeat using results from ar detrended data
@@ -459,7 +209,7 @@ fs_ar <- fs_ar[which(!(fs_ar %>% pull(mod) %>% is.na())),]
 fs_ar <- fs_ar %>% 
   unnest(mod) %>% 
   select(-error)
-fs_ar %>% write_csv(paste0(wdir, 'out\\first_stage\\site_pet_cwd_std_ar.csv'))
+fs_ar %>% write_csv(paste0(wdir, 'out/first_stage/site_pet_cwd_std_ar.csv'))
 
 
 ## Repeat using results from temp model
@@ -470,5 +220,42 @@ fs_temp <- fs_temp[which(!(fs_temp %>% pull(mod) %>% is.na())),]
 fs_temp <- fs_temp %>% 
   unnest(mod) %>% 
   select(-error)
-fs_temp %>% write_csv(paste0(wdir, 'out\\first_stage\\site_temp_cwd_std.csv'))
+fs_temp %>% write_csv(paste0(wdir, 'out/first_stage/site_temp_cwd_std.csv'))
 
+
+
+
+
+
+# #### REVIEWER COMMENTS - DRIVEN BY VARIABILITY?
+# sd_df <- dendro_df %>% 
+#   group_by(collection_id) %>% 
+#   summarise(cwd_sd = sd(cwd.an.spstd, na.rm = TRUE),
+#             cwd_mean = mean(cwd.an.spstd, na.rm = TRUE))
+# 
+# mod <- lm(cwd_mean ~ cwd_sd, sd_df)
+# summary(mod)
+# sd_df %>% ggplot(aes(x = cwd_mean, y = cwd_sd)) +
+#   geom_point()
+# 
+# 
+# #### REVIEWER COMMENTS - DRIVEN BY VARIABILITY?
+
+
+#### REVIEWER COMMENTS - Single model?
+
+library(rstanarm)
+library(broom.mixed)
+
+ave_site_clim <- read_rds(paste0(wdir, "out/climate/site_ave_clim.gz"))
+flm_df <- flm_df %>% 
+  left_join(ave_site_clim, by = c("collection_id"))
+
+
+all_dendro <- dendro_df %>% 
+  drop_na() %>% 
+  rename(cwd.an = cwd.an.spstd,
+         pet.an = pet.an.spstd,
+         temp.an = temp.an.spstd)
+
+#### REVIEWER COMMENTS - Single model?
