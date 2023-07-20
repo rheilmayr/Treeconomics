@@ -94,7 +94,7 @@ dendro_df <- dendro_df %>%
 # Run model ---------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 mod <- feols(rwi ~ cwd.an.spstd + cwd.an.spstd:pet.spstd + cwd.an.spstd:pet.spstd**2 + cwd.an.spstd:cwd.spstd + cwd.an.spstd:cwd.spstd**2 +
-               pet.an.spstd + pet.an.spstd:pet.spstd + pet.an.spstd:pet.spstd**2 + pet.an.spstd:cwd.spstd + pet.an.spstd:cwd.spstd**2 | collection_id + species_id, data = dendro_df)
+               pet.an.spstd + pet.an.spstd:pet.spstd + pet.an.spstd:pet.spstd**2 + pet.an.spstd:cwd.spstd + pet.an.spstd:cwd.spstd**2 | collection_id + species_id + tree_id, data = dendro_df)
 # mod <- lmer(rwi ~ cwd.an.spstd + cwd.an.spstd:pet.spstd + cwd.an.spstd:pet.spstd**2 + cwd.an.spstd:cwd.spstd + cwd.an.spstd:cwd.spstd**2 +
 #                pet.an.spstd + pet.an.spstd:pet.spstd + pet.an.spstd:pet.spstd**2 + pet.an.spstd:cwd.spstd + pet.an.spstd:cwd.spstd**2 + (1 | collection_id), data = dendro_df)
 
@@ -126,3 +126,32 @@ cwd_mfx_plot <- cwd_pred_1 %>%
   geom_line(aes(y = adj_estimate)) +
   geom_ribbon(aes(ymin=adj_conf.low, ymax=adj_conf.high), alpha=0.2)
 cwd_mfx_plot
+
+
+
+
+# #### REVIEWER COMMENTS - Single model?
+# library(lme4)
+# library(rstanarm)
+# library(broom.mixed)
+# 
+# ave_site_clim <- read_rds(paste0(wdir, "out/climate/site_ave_clim.gz"))
+# all_dendro <- dendro_df %>% 
+#   left_join(ave_site_clim, by = c("collection_id"))
+# 
+# all_dendro <- dendro_df %>% 
+#   drop_na() %>% 
+#   rename(cwd.an = cwd.an.spstd,
+#          pet.an = pet.an.spstd,
+#          temp.an = temp.an.spstd)
+# 
+# mod_df <- all_dendro
+# 
+# mod <- lmer(rwi ~ cwd.an * pet.spstd * cwd.spstd + pet.an + (1 | collection_id), data = mod_df)
+# summary(mod)
+# 
+# mod <- feols(rwi ~ cwd.an + cwd.an:pet.spstd + cwd.an:(pet.spstd**2) + cwd.an:cwd.spstd + cwd.an:(cwd.spstd**2) + 
+#                pet.an + pet.an:pet.spstd + pet.an:(pet.spstd**2) + pet.an:cwd.spstd + pet.an:(cwd.spstd**2)| collection_id, data = mod_df)
+# summary(mod)
+# 
+# #### REVIEWER COMMENTS - Single model?

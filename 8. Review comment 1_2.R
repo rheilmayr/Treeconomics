@@ -21,3 +21,19 @@
 # - Re-run first stage model using RE, Bayesian RE and FE structures. Compare coefficients.
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+
+# #### REVIEWER COMMENTS - DRIVEN BY VARIABILITY?
+# sd_df <- dendro_df %>% 
+#   group_by(collection_id) %>% 
+#   summarise(cwd_sd = sd(cwd.an.spstd, na.rm = TRUE),
+#             cwd_mean = mean(cwd.an.spstd, na.rm = TRUE))
+# 
+# mod <- lm(cwd_mean ~ cwd_sd, sd_df)
+# summary(mod)
+# sd_df %>% ggplot(aes(x = cwd_mean, y = cwd_sd)) +
+#   geom_point()
+# 
+# 
+# #### REVIEWER COMMENTS - DRIVEN BY VARIABILITY?
