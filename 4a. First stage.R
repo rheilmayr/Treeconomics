@@ -28,6 +28,7 @@
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 library(tidyr)
 library(tidyverse)
+library(tidylog)
 library(dbplyr)
 library(broom)
 library(purrr)
@@ -223,39 +224,3 @@ fs_temp <- fs_temp %>%
 fs_temp %>% write_csv(paste0(wdir, 'out/first_stage/site_temp_cwd_std.csv'))
 
 
-
-
-
-
-# #### REVIEWER COMMENTS - DRIVEN BY VARIABILITY?
-# sd_df <- dendro_df %>% 
-#   group_by(collection_id) %>% 
-#   summarise(cwd_sd = sd(cwd.an.spstd, na.rm = TRUE),
-#             cwd_mean = mean(cwd.an.spstd, na.rm = TRUE))
-# 
-# mod <- lm(cwd_mean ~ cwd_sd, sd_df)
-# summary(mod)
-# sd_df %>% ggplot(aes(x = cwd_mean, y = cwd_sd)) +
-#   geom_point()
-# 
-# 
-# #### REVIEWER COMMENTS - DRIVEN BY VARIABILITY?
-
-
-#### REVIEWER COMMENTS - Single model?
-
-library(rstanarm)
-library(broom.mixed)
-
-ave_site_clim <- read_rds(paste0(wdir, "out/climate/site_ave_clim.gz"))
-flm_df <- flm_df %>% 
-  left_join(ave_site_clim, by = c("collection_id"))
-
-
-all_dendro <- dendro_df %>% 
-  drop_na() %>% 
-  rename(cwd.an = cwd.an.spstd,
-         pet.an = pet.an.spstd,
-         temp.an = temp.an.spstd)
-
-#### REVIEWER COMMENTS - Single model?
