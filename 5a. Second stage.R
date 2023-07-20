@@ -5,16 +5,15 @@
 # Purpose: Run regressions to explore impact of historical climate on weather sensitivity
 #
 # Input files:
-#   site_ave_clim.gz:
-#   site_pet_cwd_std.csv:
-#   site_summary.csv:
+# - site_pet_cwd_std.csv: Table of first stage regression parameters for baseline specification. Generated in "4a. First stage.R"
+# - site_an_clim.gz: Site-level climate parameters. Generated using "3b. Species_niche.R"
+# - site_summary.csv: Summary data about each site. Generated using "1b. Parse ITRDB.R"
+# - species_gen_gr.csv: Lookup key for angiosperm / gymnosperm differentiation
 # 
 # Output files:
-#   ss_bootstrap.rds
-#
-# ToDo:
-# - Update / finalize genus analyses
-# - Rebuild robustness tests based on final baseline model
+# - site_pet_cwd_std_augmented.csv: Intermediate file to enable downstream identification of outlier assignment.
+# - mc_sample.gz: Intermediate file of all bootstrapped samples.
+# - ss_bootstrap.rds: Final second stage model parameters for each of n_mc Monte Carlo runs.
 #
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -236,8 +235,8 @@ for (site in site_list){
     pull(collection_id)
   block_list[site] <- list(block_sites)
 }
-save(block_list,file=paste0(wdir,"out/spatial_blocks.Rdat"))
-load(file=paste0(wdir,"out/spatial_blocks.Rdat"))
+# save(block_list,file=paste0(wdir,"out/spatial_blocks.Rdat"))
+# load(file=paste0(wdir,"out/spatial_blocks.Rdat"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -404,10 +403,6 @@ bs_constant <- function(data){
     summarise(cwd_const_sens = weighted.mean(cwd_coef, cwd_errorweights),
           pet_const_sens = weighted.mean(pet_coef, pet_errorweights),
           int_const_sens = weighted.mean(int_coef, pet_errorweights))
-    # summarise(cwd_const_sens = mean(cwd_coef),
-    #           pet_const_sens = mean(pet_coef),
-    #           int_const_sens = mean(pet_coef))
-    
   return(const_sens)
 }
 
@@ -417,31 +412,6 @@ boot_df <- block_draw_df %>%
   select(-iter_idx) %>% 
   group_by(boot_id) %>% 
   nest()
-
-# # n_sites <- boot_df %>% pull(collection_id) %>% unique() %>% length()
-# # n_obs = n_mc * n_sites
-# 
-# 
-# 
-# # boot_df <- boot_df %>% 
-# #   ## TODO: Here's where we probably want to introduce block bootstrapping design...
-# #   sample_n(size = n_obs, replace = TRUE, weight = cwd_errorweights) %>% 
-# #   ## TODO: Should weighting be done separately for CWD, PET and Intercept terms? 
-# #   ## Each has a different standard error in first stage...
-# #   mutate(iter_idx = rep(1:n_mc, each=n_sites)) %>% 
-# #   relocate(iter_idx) %>% 
-# #   group_by(iter_idx) %>% 
-# #   nest() 
-#   ## Note: goal at end of bootstrap is to have a dataframe with 10,000 nested datasets 
-#   ## that can be used for second stage model...
-# 
-# source("block_bootstrapping.R")
-# ncores=detectCores()-2
-# my.cluster=makeCluster(ncores);registerDoParallel(cl=my.cluster)
-# boot_df=blockbootstrap_func(boot_df)
-# saveRDS(boot_df,file=paste0(wdir,"out/blockbootstrap_samples.rds"))
-# 
-# boot_df <- readRDS(paste0(wdir,"out/blockbootstrap_samples.rds"))
 
 
 ## Estimate second stage models
@@ -454,12 +424,7 @@ boot_df <- boot_df %>%
   ungroup()
 
 
-## Summarize bootstrap results
-bs_coefs <- apply(boot_df %>% select(-boot_id), 2, mean) %>% print()
-bs_ste <- apply(boot_df %>% select(-boot_id), 2, sd) %>% print()
-
-
-## Save out bootstrapped coefficients that reflect uncertainty from both first and second stage models
+## Save out bootstrapped coefficients
 write_rds(boot_df, paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
 
 
