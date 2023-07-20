@@ -16,7 +16,7 @@
 #   site_summary.csv:
 # 
 # Output files:
-#   clim_niche.csv: Tabulation of each species' historic climate niche. Paramters used for standardization.
+#   clim_niche.csv: Tabulation of each species' historic climate niche. Parameters used for standardization.
 #   sp_clim_predictions.gz: Dataset describing species' standardized historic climate and their predicted climate under CMIP5 across species' full range
 #   site_ave_clim.gz: Tables describing each site's species-standardized average historic climate
 #   site_an_clim.gz: Tables describing each site's annual species-standardized weather
