@@ -44,8 +44,7 @@ options(scipen=999)
 wdir <- 'remote/'
 
 # 1. Site-level regressions
-flm_df <- read_csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv")) %>%
-  select(-X1)
+flm_df <- read_csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv"))
 
 # 2. Species range maps
 range_file <- paste0(wdir, 'in/species_ranges/merged_ranges.shp')
