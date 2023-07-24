@@ -262,7 +262,7 @@ flm_itrdb <- flm_itrdb %>%
 
 
 
-test_itrdb <- trim_itrdb %>%
+test_itrdb <- flm_itrdb %>%
   filter(species_id %in% c("pipo", "psme", "pied", "pifl"),
          outlier == 0)
 
@@ -447,3 +447,6 @@ combined_plot
 
 flm_itrdb %>% pull(ntrees) %>% summary()
 flm_df %>% pull(ntrees) %>% summary()
+test_itrdb %>% pull(species_id) %>% unique()
+test_fia %>% pull(species_id) %>% unique()
+test_fia %>% pull(plo)
