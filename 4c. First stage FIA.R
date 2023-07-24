@@ -150,3 +150,155 @@ fs_df %>% write_csv(paste0(wdir, 'out\\first_stage\\fia_pet_cwd_std.csv'))
 
 
 
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Histogram of first stage coefficients --------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+cwd_trim_df <- trim_df %>% 
+  select(collection_id, estimate = estimate_cwd.an, p = p.value_cwd.an) %>% 
+  mutate(variable = "cwd")
+
+pet_trim_df <- trim_df %>% 
+  select(collection_id, estimate = estimate_pet.an, p = p.value_pet.an) %>% 
+  mutate(variable = "pet")
+
+long_trim_df <- rbind(cwd_trim_df, pet_trim_df) %>% 
+  mutate(`p<0.05` = p<0.05)
+
+cwd_median <- long_trim_df %>% filter(variable == "cwd") %>% pull(estimate) %>% median()
+pet_median <- long_trim_df %>% filter(variable == "pet") %>% pull(estimate) %>% median()
+
+cwd_est_plot <- long_trim_df %>%
+  filter(variable == "cwd") %>% 
+  # filter(estimate > -0.01 & estimate<0.0001) %>% 
+  ggplot(aes(x = estimate, fill = `p<0.05`)) +
+  geom_histogram(bins = 200) +
+  # scale_x_continuous(trans="log1p") +
+  theme_bw() +
+  xlim(-1.5, 1.5) +
+  scale_fill_manual(values = c("steelblue2", "dodgerblue4")) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black", size = 1) +
+  # geom_vline(xintercept = cwd_median, color = "tomato3", size = 1.5) +
+  xlab("Coefficient estimate") +
+  ylab("Frequency") +
+  # ylim(c(0, 150)) +
+  theme(legend.position = c(.9,.85),
+        legend.key = element_blank(),
+        legend.background = element_blank()) +
+  ggtitle("Site-level estimates of contemporaneous, marginal effect of CWD")
+
+pet_est_plot <- long_trim_df %>%
+  filter(variable == "pet") %>% 
+  ggplot(aes(x = estimate, fill = `p<0.05`)) +
+  geom_histogram(bins = 200) +
+  # scale_x_continuous(trans="log1p") +
+  theme_bw() +
+  xlim(-1.5, 1.5) +
+  scale_fill_manual(values = c("steelblue2", "dodgerblue4")) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black", size = 1) +
+  # geom_vline(xintercept = pet_median, color = "tomato3", size = 1.5) +
+  xlab("Coefficient estimate") +
+  ylab("Frequency") +
+  # ylim(c(0, 150)) +
+  theme(legend.position = c(.9,.85),
+        legend.key = element_blank(),
+        legend.background = element_blank()) +
+  ggtitle("Site-level estimates of contemporaneous, marginal effect of PET")
+
+cwd_est_plot
+pet_est_plot
+
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Main sensitivity plot --------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# test_df <- mc_df %>% 
+#   left_join(flm_df %>% select(collection_id, cwd.spstd, pet.spstd), by = "collection_id")
+# 
+# trim_df <- mc_df %>% 
+#   rename(estimate_cwd.an = cwd_coef,
+#          estimate_pet.an = pet_coef)
+
+# Note: PET 1-99% quantiles vary from -1.9 to 3.5; PET from -2.9 to 1.8. -3 to 3.5 seems like a good block for plots
+cwd_pred_min <- -2
+cwd_pred_max <- 2
+pet_pred_min <- -2
+pet_pred_max <- 2
+
+### Binned plot of cwd sensitivity
+seq_inc <- 0.1
+half_inc <- (seq_inc / 2)
+cwd_seq_min <- cwd_pred_min - half_inc
+cwd_seq_max <- cwd_pred_max + half_inc
+cwd_sequence <- seq(cwd_seq_min, cwd_seq_max, seq_inc)
+
+pet_seq_min <- pet_pred_min - half_inc
+pet_seq_max <- pet_pred_max + half_inc
+pet_sequence <- seq(pet_seq_min, pet_seq_max, seq_inc)
+
+convert_bin <- function(n){
+  cwd_sequence[n] + half_inc
+}
+
+plot_dat <- trim_df
+# plot_dat <- trim_df %>%
+#   filter(cwd.spstd > pred_min, 
+#          cwd.spstd < pred_max,
+#          pet.spstd > pred_min,
+#          cwd.spstd < pred_max) %>% 
+#   # filter(((abs(cwd.spstd)<3) & (abs(pet.spstd<3)))) %>%
+#   drop_na()
+
+plot_dat_a <- plot_dat %>%
+  mutate(cwd.q = cut(cwd.spstd, breaks = cwd_sequence, labels = FALSE),
+         cwd.q = convert_bin(cwd.q),
+         pet.q = cut(pet.spstd, breaks = pet_sequence, labels = FALSE),
+         pet.q = convert_bin(pet.q)) %>% 
+  filter(pet.spstd > pet_pred_min,
+         pet.spstd < pet_pred_max,
+         cwd.spstd > cwd_pred_min,
+         cwd.spstd < cwd_pred_max)
+
+plot_dat_b <- plot_dat_a %>%
+  group_by(cwd.q, pet.q) %>%
+  summarize(cwd_sens = mean(estimate_cwd.an, na.rm = TRUE),
+            # cwd_sens = weighted.mean(estimate_cwd.an, w = cwd_errorweights, na.rm = TRUE),
+            pet_sens = mean(estimate_pet.an, na.rm = TRUE),
+            n = n())
+
+base_text_size = 18
+
+
+cwd_binned_margins <- plot_dat_b %>%
+  ggplot(aes(x = cwd.q, y = pet.q, z = cwd_sens)) +
+  stat_summary_hex(fun = function(x) mean(x), bins=12)+
+  scale_fill_gradient2(low = "#401552", mid = "grey93", high = "#82bead", midpoint = .98, 
+                       na.value = NA, name="Mean RWI")+
+  
+  # xlim(c(pred_min, pred_max)) +
+  # ylim(c(pred_min, pred_max)) +
+  #scale_fill_viridis_c(direction = -1) +
+  scale_fill_continuous_diverging(rev = TRUE, mid = 0,
+                                  limits = c(-.33, .05),
+                                  oob = scales::squish) +
+  ylab("Deviation from mean PET")+
+  xlab("Deviation from mean CWD")+
+  theme_bw(base_size = base_text_size)+
+  labs(fill = "Marginal effect\nof CWD") +
+  ylab("Historic PET\n(Deviation from species mean)") +
+  xlab("Historic CWD\n(Deviation from species mean)") +
+  theme(
+    legend.key = element_blank(),
+    legend.background = element_blank(), 
+    legend.title=element_text(size=base_text_size - 4),
+    legend.text = element_text(size = base_text_size - 6))+
+  #panel.grid.major = element_blank(), 
+  #panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))+
+  coord_fixed() +
+  geom_hline(yintercept = 0, size = 1, linetype = 2) +
+  geom_vline(xintercept = 0, size = 1, linetype = 2) +
+  xlim(c(cwd_pred_min, cwd_pred_max)) +
+  ylim(c(pet_pred_min, pet_pred_max))
+
+
+cwd_binned_margins
