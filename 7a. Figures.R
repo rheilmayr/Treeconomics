@@ -83,7 +83,6 @@ site_smry <- site_smry %>%
 site_loc <- site_smry %>%
   select(collection_id, latitude, longitude)
 flm_df <- flm_df %>% 
-  left_join(site_loc, by = "collection_id") %>%
   st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
 
 
