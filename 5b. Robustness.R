@@ -48,6 +48,8 @@ library(units)
 library(dtplyr)
 library(marginaleffects)
 source("f_spec_chart_function.R")
+library(lme4)
+library(multcomp)
 
 select <- dplyr::select
 
@@ -86,6 +88,31 @@ site_df <- site_df %>%
 
 niche_df <- read.csv(paste0(wdir, "out/climate/clim_niche.csv")) %>%
   select(-X)
+
+
+# 5. Dendrochronologies - used for single-stage model comparison
+dendro_dir <- paste0(wdir, "out/dendro/")
+dendro_df <- read.csv(paste0(dendro_dir, "rwi_long.csv"))
+dendro_df <- dendro_df %>% 
+  select(-core_id)
+
+## Combine multiple cores from the same tree
+dendro_df <- dendro_df %>% 
+  lazy_dt() %>% 
+  group_by(collection_id, tree, year) %>% 
+  summarise(rwi = mean(rwi),
+            .groups = "drop") %>% 
+  as_tibble()
+
+
+# 6. Historic site-level climate
+an_site_clim <- read_rds(paste0(wdir, "out/climate/site_an_clim.gz"))
+dendro_df <- dendro_df %>% 
+  left_join(an_site_clim, by = c("collection_id", "year"))
+
+dendro_df <- dendro_df %>% 
+  left_join(ave_site_clim, by = "collection_id")
+
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Prep and trim data -----------------------------------------------------
@@ -202,32 +229,38 @@ vg.range = vg.fit[2,3] * 1000
 #  - Species control
 #  - Detrend method
 #  - Energy control (temp in place of pet)
+#  - Single-stage RE model
 
 robustness_test <- function(params){
+  # print(params$mod_type)
   data <- params$despline_data
   formula <- params$formula
   if (params$t_x) {data <- data %>% filter(trim_x==TRUE)}
   if (params$t_y) {data <- data %>% filter(trim_y==TRUE)}
-  cwd_median <- data$cwd.spstd %>% median()
+  cwd_median <- data %>% select(cwd.spstd) %>% drop_na() %>% pull(cwd.spstd) %>% median()
   error_weights <- data[[params$weights]]
   # mod <- feols(formula, weights = data[[wght[[3]]]], data = data)
-  mod <- feols(formula, weights = error_weights, data = data,
-               vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
-  mod_slopes <- slopes(mod, newdata = datagrid(pet.spstd = 0, cwd.spstd = cwd_median))
-  mod_slopes <- mod_slopes %>% 
-    as_tibble() %>% 
-    filter(term == "cwd.spstd")
+  if (params$mod_type == "fe") {
+    mod <- feols(formula, weights = error_weights, data = data,
+                 vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
+    # mod_slopes <- slopes(mod, newdata = datagrid(pet.spstd = 0, cwd.spstd = cwd_median))
+    # mod_slopes <- mod_slopes %>% 
+    #   as_tibble() %>% 
+    #   filter(term == "cwd.spstd")
+    test_str <- paste0("cwd.spstd + (2 * \`I(cwd.spstd^2)\` * ", as.character(cwd_median), ") = 0")
+    }
+  if (params$mod_type == "re") {
+    mod <- lmer(formula, data = data)
+    test_str <- paste0("cwd.an.spstd:cwd.spstd + (2 * cwd.an.spstd:I(cwd.spstd^2) * ", as.character(cwd_median), ") = 0")
+  }
+  lincom <- glht(mod, linfct = c(test_str))
+  lincom <- summary(lincom)
+  estimate <- lincom$test$coefficients 
+  std.error <- lincom$test$sigma
+  mod_slopes <- tibble("estimate" = estimate, "std.error" = std.error)
   return(mod_slopes)
 }
 
-
-# Parameters to vary
-#  - Trim X
-#  - Trim y
-#  - Weighting
-#  - Linear
-#  - Species control
-#  - Detrend method
 
 specs <- data.frame(coef=NaN, 
                     se=NaN,
@@ -239,6 +272,7 @@ specs <- data.frame(coef=NaN,
                     cum_dnlm = NaN,
                     squared_term = NaN,
                     linear_mod = NaN,
+                    single_stage = NaN,
                     species_control = NaN, 
                     weight_se = NaN,
                     trim_y = NaN,
@@ -247,6 +281,7 @@ specs <- data.frame(coef=NaN,
 
 ## Baseline model
 params <- list(despline_data = fs_spl,
+               mod_type = "fe",
                formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2)"),
                t_x = FALSE,
                t_y = TRUE,
@@ -259,6 +294,7 @@ new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         trim_x = params$t_x,
                         trim_y = params$t_y,
                         weight_se = params$weights == "cwd_errorweights",
+                      single_stage = FALSE,
                         species_control = FALSE,
                         squared_term = TRUE,
                         linear_mod = FALSE,
@@ -269,8 +305,40 @@ new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
 specs <- rbind(specs, new_row)
 
 
+## Single stage RE model
+params <- list(despline_data = dendro_df,
+               mod_type = "re",
+               formula = as.formula("rwi ~ cwd.an.spstd:pet.spstd + cwd.an.spstd:I(pet.spstd**2) +
+               cwd.an.spstd:cwd.spstd + cwd.an.spstd:I(cwd.spstd**2) +
+               pet.an.spstd:pet.spstd + pet.an.spstd:I(pet.spstd**2) +
+               pet.an.spstd:cwd.spstd + pet.an.spstd:I(cwd.spstd**2) +
+                                    (1 + cwd.an.spstd + pet.an.spstd | collection_id)"),
+               t_x = FALSE,
+               t_y = FALSE,
+               weights = "equalweights")
+mod_slopes <- robustness_test(params)
+new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
+                      se = mod_slopes %>% pull("std.error"),
+                      pet = TRUE,
+                      temp = FALSE,
+                      trim_x = params$t_x,
+                      trim_y = params$t_y,
+                      weight_se = params$weights == "cwd_errorweights",
+                      species_control = FALSE,
+                      single_stage = TRUE,
+                      squared_term = TRUE,
+                      linear_mod = FALSE,
+                      detrend_spline = TRUE, 
+                      detrend_nb = FALSE,
+                      cum_dnlm = FALSE,
+                      detrend_ar = FALSE)
+specs <- rbind(specs, new_row)
+
+
+
 ## Temp in place of PET
 params <- list(despline_data = fs_temp,
+               mod_type = "fe",
                formula = as.formula("estimate_cwd.an ~ cwd.spstd + temp.spstd + (cwd.spstd^2) + (temp.spstd^2)"),
                t_x = FALSE,
                t_y = TRUE,
@@ -283,6 +351,7 @@ new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                       trim_x = params$t_x,
                       trim_y = params$t_y,
                       weight_se = params$weights == "cwd_errorweights",
+                      single_stage = FALSE,
                       species_control = FALSE,
                       squared_term = TRUE,
                       linear_mod = FALSE,
@@ -297,6 +366,7 @@ specs <- rbind(specs, new_row)
 
 ## Test alternate desplining
 params <- list(despline_data = fs_nb,
+               mod_type = "fe",
                formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2)"),
                t_x = FALSE,
                t_y = TRUE,
@@ -309,6 +379,7 @@ new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         trim_x = params$t_x,
                         trim_y = params$t_y,
                         weight_se = params$weights == "cwd_errorweights",
+                      single_stage = FALSE,
                         species_control = FALSE,
                         squared_term = TRUE,
                       linear_mod = FALSE,
@@ -320,6 +391,7 @@ specs <- rbind(specs, new_row)
 
 
 params <- list(despline_data = fs_ar,
+               mod_type = "fe",
                formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2)"),
                t_x = FALSE,
                t_y = TRUE,
@@ -332,6 +404,7 @@ new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         trim_x = params$t_x,
                         trim_y = params$t_y,
                         weight_se = params$weights == "cwd_errorweights",
+                      single_stage = FALSE,
                         species_control = FALSE,
                         squared_term = TRUE,
                       linear_mod = FALSE,
@@ -344,6 +417,7 @@ specs <- rbind(specs, new_row)
 
 ## Cumulative impact from dynamic lag
 params <- list(despline_data = fs_cum,
+               mod_type = "fe",
                formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2)"),
                t_x = FALSE,
                t_y = TRUE,
@@ -356,6 +430,7 @@ new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                       trim_x = params$t_x,
                       trim_y = params$t_y,
                       weight_se = params$weights == "cwd_errorweights",
+                      single_stage = FALSE,
                       species_control = FALSE,
                       squared_term = TRUE,
                       linear_mod = FALSE,
@@ -368,6 +443,7 @@ specs <- rbind(specs, new_row)
 
 ## Test alternate model structures
 params <- list(despline_data = fs_ar,
+               mod_type = "fe",
                formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd"),
                t_x = FALSE,
                t_y = TRUE,
@@ -380,6 +456,7 @@ new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         trim_x = params$t_x,
                         trim_y = params$t_y,
                         weight_se = params$weights == "cwd_errorweights",
+                      single_stage = FALSE,
                         species_control = FALSE,
                         squared_term = FALSE,
                         linear_mod = TRUE,
@@ -392,6 +469,7 @@ specs <- rbind(specs, new_row)
 
 
 params <- list(despline_data = fs_nb,
+               mod_type = "fe",
                formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2) | species_id"),
                t_x = FALSE,
                t_y = TRUE,
@@ -404,6 +482,7 @@ new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         trim_x = params$t_x,
                         trim_y = params$t_y,
                         weight_se = params$weights == "cwd_errorweights",
+                      single_stage = FALSE,
                         species_control = TRUE,
                         squared_term = TRUE,
                       linear_mod = FALSE,
@@ -416,6 +495,7 @@ specs <- rbind(specs, new_row)
 
 ## Test alternate trimming or weighting
 params <- list(despline_data = fs_spl,
+               mod_type = "fe",
                formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2)"),
                t_x = TRUE,
                t_y = TRUE,
@@ -428,6 +508,7 @@ new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         trim_x = params$t_x,
                         trim_y = params$t_y,
                         weight_se = params$weights == "cwd_errorweights",
+                      single_stage = FALSE,
                         species_control = FALSE,
                         squared_term = TRUE,
                       linear_mod = FALSE,
@@ -439,6 +520,7 @@ specs <- rbind(specs, new_row)
 
 
 params <- list(despline_data = fs_spl,
+               mod_type = "fe",
                formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2)"),
                t_x = FALSE,
                t_y = FALSE,
@@ -451,6 +533,7 @@ new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         trim_x = params$t_x,
                         trim_y = params$t_y,
                         weight_se = params$weights == "cwd_errorweights",
+                      single_stage = FALSE,
                         species_control = FALSE,
                         squared_term = TRUE,
                       linear_mod = FALSE,
@@ -462,6 +545,7 @@ specs <- rbind(specs, new_row)
 
 
 params <- list(despline_data = fs_spl,
+               mod_type = "fe",
                formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2)"),
                t_x = FALSE,
                t_y = TRUE,
@@ -474,6 +558,7 @@ new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         trim_x = params$t_x,
                         trim_y = params$t_y,
                         weight_se = params$weights == "cwd_errorweights",
+                      single_stage = FALSE,
                         species_control = FALSE,
                         squared_term = TRUE,
                       linear_mod = FALSE,
@@ -545,14 +630,14 @@ highlight_n <- 1
 labels <- list("Energy control" = c("PET", "Mean temperature"),
                "Detrending" = c("Spline", "Negative binomial", "Autoregressive"),
                "First stage" = "Cumulative\ndynamic lag",
-               "Model structure" = c("Squared\nCWD and PET", "Linear\nCWD and PET", "Species\nfixed effects"),
+               "Model structure" = c("Squared\nCWD and PET", "Linear\nCWD and PET",  "Single stage", "Species\nfixed effects"),
                "Trimming and\nweighting" = c("Weight by\ninverse of s.e.", "Trim\noutliers in y", "Trim\noutliers in X"))
 
 
 svg(paste0(wdir, 'figures\\a4_robustness.svg'), width = 7, height = 11)
 specs <- specs %>% drop_na()
 robustness_fig <- schart(specs, labels, highlight=highlight_n, order = "asis", 
-                         n=c(1, 1, 2, 1, 2,3), ci = c(.95), 
+                         n=c(1, 1, 1, 2, 1, 2,3), ci = c(.95), 
                          ylab = "Slope of line relating sites' historic\nCWD to CWD's impact on growth\n(evaluated at median historic CWD)",
                          col.est=c("grey80", "dodgerblue4"),
                          col.dot=c("grey60","grey95","grey95","dodgerblue4"),
