@@ -5,8 +5,11 @@
 # Purpose: Create predictions of growth impacts from climate change
 #
 # Input files:
-# - ss_mod: R model object saved from Second stage
-# - 
+# - ss_bootstrap.rds: R model object saved from Second stage
+# - sp_clim_predictions.gz:
+# 
+# Output files
+# - sp_rwi/<sp_code>.gz:
 #
 # ToDo:
 #
