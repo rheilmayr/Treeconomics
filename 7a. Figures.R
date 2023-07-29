@@ -111,6 +111,7 @@ mod_df <- read_rds(paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
 # 7. Genus second stage model
 genus_models <- readRDS(paste0(wdir, "out/second_stage/ss_conley_genus.rds"))
 
+sp_models <- readRDS(paste0(wdir, "out/second_stage/ss_conley_species.rds"))
 
 # 2. Species range maps
 range_file <- paste0(wdir, 'in/species_ranges/merged_ranges.shp')
