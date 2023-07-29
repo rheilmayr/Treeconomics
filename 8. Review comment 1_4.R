@@ -29,6 +29,7 @@ library(rstanarm)
 library(broom.mixed)
 library(furrr)
 library(patchwork)
+library(nlme) ##TODO: Shift to nlme lme model?
 
 
 
@@ -107,10 +108,13 @@ fs_mod_compare <- function(site_data){
         site_data <- site_data %>%
           mutate(tree_id = as.factor(tree))
         base_mod <- lm(rwi ~ pet.an + cwd.an, data = site_data)
+        formula = as.formula("rwi ~pet.an + cwd.an")
+        # re_mod <- nlme:lme(formula, random = ~ 1 | tree, data = site_data)
         fe_mod <- feols(rwi ~ pet.an + cwd.an | tree_id, site_data )
         bayes_mod <- stan_lmer(rwi ~ cwd.an + pet.an + (1 | tree_id), site_data)
         
         base_coef <- broom::tidy(base_mod) %>% filter(term == "cwd.an") %>% select(estimate, std.error) %>% mutate(mod = "base")
+        # re_coef <- broom.mixed::tidy(re_mod) %>% filter(term == "cwd.an") %>% select(estimate, std.error) %>% mutate(mod = "re")
         fe_coef <- broom::tidy(fe_mod) %>% filter(term == "cwd.an") %>% select(estimate, std.error) %>% mutate(mod = "fe")
         bayes_coef <- broom.mixed::tidy(bayes_mod) %>% filter(term == "cwd.an") %>% select(estimate, std.error) %>% mutate(mod = "bayes_re")
         
@@ -139,8 +143,6 @@ site_df <- dendro_df %>%
   filter(nobs>10) %>% 
   nest()
 
-hold <- sample_df
-
 n_cores <- availableCores() - 6
 future::plan(multisession, workers = n_cores)
 my_seed <- 5597
@@ -151,7 +153,7 @@ sample_df <- sample_df %>%
   mutate(coefficients = future_map(data,
                                    .f = fs_mod_compare,
                                    .options = furrr_options(seed = my_seed,
-                                                            packages = c( "rstanarm", "broom", "broom.mixed"))))
+                                                            packages = c( "nlme", "broom", "broom.mixed"))))
 end.time <- Sys.time()
 time.taken <- end.time - start.time
 time.taken
