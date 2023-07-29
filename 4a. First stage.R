@@ -28,8 +28,9 @@
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 library(tidyr)
 library(tidyverse)
-library(tidylog)
+# library(tidylog)
 library(dbplyr)
+library(broom.mixed)
 library(broom)
 library(purrr)
 library(fixest)
@@ -92,14 +93,9 @@ dendro_df %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define regression model  -------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-fs_mod <- function(site_data, outcome = "rwi", energy_var = "pet.an"){
-  rwl_mean <- site_data$rwl %>% mean(na.rm = TRUE)
-  rwl_sd <- site_data$rwl %>% sd(na.rm = TRUE)
-  
+fs_mod <- function(site_data, outcome = "rwi", energy_var = "pet.an", mod_type = "lm"){
   failed <- F
   reg_error <- NA
-  femod <- NA
-  pet_cwd_cov <- NA
   nobs <- NA
   ntrees <- site_data %>% select(tree) %>%  n_distinct()
   no_cwd_var <- (site_data %>% select(cwd.an) %>% n_distinct() == 1)
@@ -113,7 +109,15 @@ fs_mod <- function(site_data, outcome = "rwi", energy_var = "pet.an"){
     tryCatch(
       expr = {
         formula <- as.formula(paste0(outcome, " ~ ", energy_var, " + cwd.an"))
-        mod <- lm(formula, data = site_data)
+        if (mod_type == "lm"){
+          mod <- lm(formula, data = site_data)
+        }
+        if (mod_type == "lme"){
+          mod <- nlme::lme(formula,
+                           data=site_data, method="REML",
+                           random = ~ 1 | tree,
+                           correlation = nlme::corAR1(form=~year|tree))
+        }
         
         mod_sum <- summary(mod)
         mod_vcov <- vcov(mod)
@@ -144,7 +148,7 @@ fs_mod <- function(site_data, outcome = "rwi", energy_var = "pet.an"){
   if (failed){
     return(NA)
   }
-  return(tibble(mod = list(mod), nobs = nobs, ntrees = ntrees, rwl_mean = rwl_mean, rwl_sd = rwl_sd, error = reg_error))
+  return(tibble(mod = list(mod), nobs = nobs, ntrees = ntrees, error = reg_error))
 }
 
 
@@ -162,16 +166,22 @@ site_df <- dendro_df %>%
   nest()
 
 
-fs_mod_bl <- partial(fs_mod, outcome = "rwi", energy_var = "pet.an")
-fs_mod_nb <- partial(fs_mod, outcome = "rwi_nb", energy_var = "pet.an")
-fs_mod_ar <- partial(fs_mod, outcome = "rwi_ar", energy_var = "pet.an")
-fs_mod_temp <- partial(fs_mod, outcome = "rwi", energy_var = "temp.an")
+fs_mod_bl <- partial(fs_mod, outcome = "rwi", energy_var = "pet.an", mod_type = "lm")
+fs_mod_nb <- partial(fs_mod, outcome = "rwi_nb", energy_var = "pet.an", mod_type = "lm")
+fs_mod_ar <- partial(fs_mod, outcome = "rwi_ar", energy_var = "pet.an", mod_type = "lm")
+fs_mod_temp <- partial(fs_mod, outcome = "rwi", energy_var = "temp.an", mod_type = "lm")
+fs_mod_re <- partial(fs_mod, outcome = "rwi", energy_var = "pet.an", mod_type = "lme")
 
 site_df <- site_df %>% 
   mutate(fs_result = map(data, .f = fs_mod_bl),
          fs_result_nb = map(data, .f = fs_mod_nb),
          fs_result_ar = map(data, .f = fs_mod_ar),
-         fs_result_temp = map(data, .f = fs_mod_temp))
+         fs_result_temp = map(data, .f = fs_mod_temp),
+         fs_result_re = map(data, .f = fs_mod_re))
+
+
+site_df <- site_df %>% 
+  mutate(fs_result_re = map(data, .f = fs_mod_re))
 
 
 data_df <- site_df %>% 
@@ -224,3 +234,12 @@ fs_temp <- fs_temp %>%
 fs_temp %>% write_csv(paste0(wdir, 'out/first_stage/site_temp_cwd_std.csv'))
 
 
+## Repeat using results from re model
+fs_re <- site_df %>% 
+  select(collection_id, fs_result_re) %>% 
+  unnest(fs_result_re)
+fs_re <- fs_re[which(!(fs_re %>% pull(mod) %>% is.na())),]
+fs_re <- fs_re %>% 
+  unnest(mod) %>% 
+  select(-error)
+fs_re %>% write_csv(paste0(wdir, 'out/first_stage/site_pet_cwd_std_re.csv'))
