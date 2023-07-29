@@ -12,7 +12,7 @@
 # 
 #
 # Approach:
-# - Run one integrated model?
+# - Run one integrated model
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -94,8 +94,6 @@ dendro_df <- dendro_df %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Run model ---------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-ss_df <- read_csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv"))
-
 mod_re <- lmer(rwi ~ cwd.an.spstd:pet.spstd + cwd.an.spstd:I(pet.spstd**2) + 
               cwd.an.spstd:cwd.spstd + cwd.an.spstd:I(cwd.spstd**2) +
               pet.an.spstd:pet.spstd + pet.an.spstd:I(pet.spstd**2) + 
@@ -118,6 +116,9 @@ confint(lincom)
 
 
 ## Contrast to primary specification confidence interval
+ss_df <- read_csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv"))
+
+
 ss_bs <- read_rds(paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
 ss_bs %>% pull(cwd_cwd) %>% quantile(c(0.025, 0.975))
 
