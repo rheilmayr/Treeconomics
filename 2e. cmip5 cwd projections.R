@@ -44,6 +44,7 @@ prfiles=list.files(paste0(wdir,"in/CMIP5 Data/pr"),pattern=".nc")
 years=list(1970:2000,2045:2055,2090:2100)
 yearmonths=rep(1861:2100,each=12)
 
+#calculate monthly average temperature and rainfall for each time period
 for(i in 1:length(tasfiles)){
   tasfile=brick(paste0(wdir,"in/CMIP5 Data/tas/",tasfiles[i]))
   prfile=brick(paste0(wdir,"in/CMIP5 Data/pr/",prfiles[i]))
@@ -91,7 +92,7 @@ colnames(sitedata)=c("slope","aspect","swc","lon","lat")
 sitedata$site=1:dim(sitedata)[1]
 
 
-#need to get correction of CMIP data using WorldClim 1970-2000 climatology
+#need to get correction of CMIP data using WorldClim 1970-2000 climatology 
 precipfiles=list.files(paste0(wdir,"in/WorldClim/Lower Resolution/precip"),pattern=".tif")
 tmeanfiles=list.files(paste0(wdir,"in/WorldClim/Lower Resolution/tmean"),pattern=".tif")
 
@@ -104,7 +105,7 @@ for(i in 1:12){
 }
 
 precipclim=crop(precipclim,extent(swc));tempclim=crop(tempclim,extent(swc))
-precipclim=aggregate(precipclim,fact=3);tempclim=aggregate(tempclim,fact=3)
+precipclim=aggregate(precipclim,fact=3);tempclim=aggregate(tempclim,fact=3) #match the resolution of the climate model data by taking mean
 
 
 #get model-specific correction factors based on 1970-2000 climatology
@@ -129,6 +130,7 @@ for(i in 1:length(tempmodelfiles)){
 
 save(sitedata,pr_correction,tas_correction,file=paste0(wdir,"in/CMIP5 Data/other data for cwd/sitedata_climatologycorrection.Rdat"))
 
+#apply calculated bais based on monthly differences between WorldClim and model runs to climate model projections and calculate cwd and aet
 datfolder=paste0(wdir, "in/CMIP5 Data/")
 
 period=c("start","mid","end")
@@ -148,7 +150,7 @@ for(i in 1:length(period)){
     load(paste0(datfolder,"monthly tas rasters/",period[i],"/",tempmodelfiles[j]))
     load(paste0(datfolder,"monthly pr rasters/",period[i],"/",precipmodelfiles[j]))
     tas_months=rotate(tas_months);pr_months=rotate(pr_months)
-    tas_months=resample(tas_months,swc);pr_months=resample(pr_months,swc)
+    tas_months=resample(tas_months,swc);pr_months=resample(pr_months,swc) #match raster to soil water holding capacity raster
     
     #convert units - temperatre from kelvin to degrees, precip from kg per m2 per second to mm per month
     tas_months=tas_months-273.15; pr_months=pr_months*60*60*24*30
@@ -161,9 +163,9 @@ for(i in 1:length(period)){
     tasdata$site=1:dim(tasdata)[1];prdata$site=1:dim(tasdata)[1]
     tasdata=reshape2::melt(tasdata,id.vars="site");prdata=reshape2::melt(prdata,id.vars="site")
     climatedata=cbind(tasdata,prdata[,3])
-    colnames(climatedata)=c("site","month","temp","precip")
+    colnames(climatedata)=c("site","month","temp","precip") #create data from raster cells of temperature and rainfall values for each month
     
-    dat=merge(sitedata,climatedata)
+    dat=merge(sitedata,climatedata) #merge climate projections for each raster cell with data frame of site-constants (slope, elevation, aspect, swc)
     dat=dat[complete.cases(dat),]
 
     test=cwd_function(site=as.factor(dat$site),slope=dat$slope,latitude=dat$lat,foldedaspect=dat$aspect,ppt=dat$precip,tmean=dat$temp,month=dat$month,soilawc=dat$swc,year=NULL,type="normal")
