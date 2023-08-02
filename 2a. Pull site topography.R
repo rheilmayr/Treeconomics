@@ -7,7 +7,7 @@
 # Input files:
 #   site_summary.csv: Lat/Lon data for ITRDB sites. Created by "1b. Parse ITRDB.R"
 #   site_summary_fia.csv: Lat/Lon data for FIA sites. Created by "1c. Parse Klesse.R"
-#   Aster tiles: Elevation data tiles. Accessed from XX.
+#   Aster tiles: Elevation data tiles. Accessed from https://lpdaac.usgs.gov/products/astgtmv003/
 # 
 # Output files:
 #   site_summary_slopeaspect.csv: Updated site summary with slope and aspect data.
