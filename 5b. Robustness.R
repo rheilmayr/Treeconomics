@@ -564,34 +564,6 @@ specs <- rbind(specs, new_row)
 
 
 ## Test alternate trimming or weighting
-# Drop outliers in X
-params <- list(despline_data = fs_spl,
-               mod_type = "fe",
-               formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2)"),
-               t_x = TRUE,
-               t_y = TRUE,
-               weights = "cwd_errorweights")
-mod_slopes <- robustness_test(params)
-new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
-                        se = mod_slopes %>% pull("std.error"),
-                      pet = TRUE,
-                      temp = FALSE,
-                      tmprl = FALSE,
-                        trim_x = params$t_x,
-                        trim_y = params$t_y,
-                        weight_se = params$weights == "cwd_errorweights",
-                      contemp_rwi = TRUE,
-                      two_stage = TRUE,
-                      single_stage = FALSE,
-                        species_control = FALSE,
-                        squared_term = TRUE,
-                      linear_mod = FALSE,
-                      cum_dnlm = FALSE,
-                      detrend_spline = TRUE, 
-                        detrend_nb = FALSE,
-                        detrend_ar = FALSE)
-specs <- rbind(specs, new_row)
-
 # Don't drop any outliers
 params <- list(despline_data = fs_spl,
                mod_type = "fe",
@@ -648,7 +620,33 @@ new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                         detrend_ar = FALSE)
 specs <- rbind(specs, new_row)
 
-
+# Drop outliers in X
+params <- list(despline_data = fs_spl,
+               mod_type = "fe",
+               formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2)"),
+               t_x = TRUE,
+               t_y = TRUE,
+               weights = "cwd_errorweights")
+mod_slopes <- robustness_test(params)
+new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
+                      se = mod_slopes %>% pull("std.error"),
+                      pet = TRUE,
+                      temp = FALSE,
+                      tmprl = FALSE,
+                      trim_x = params$t_x,
+                      trim_y = params$t_y,
+                      weight_se = params$weights == "cwd_errorweights",
+                      contemp_rwi = TRUE,
+                      two_stage = TRUE,
+                      single_stage = FALSE,
+                      species_control = FALSE,
+                      squared_term = TRUE,
+                      linear_mod = FALSE,
+                      cum_dnlm = FALSE,
+                      detrend_spline = TRUE, 
+                      detrend_nb = FALSE,
+                      detrend_ar = FALSE)
+specs <- rbind(specs, new_row)
 
 # ## Test model controlling for site-level SD of cwd and pet
 # params <- list(despline_data = fs_spl,
@@ -721,7 +719,7 @@ svg(paste0(wdir, 'figures\\a4_robustness.svg'), width = 9, height = 14)
 specs <- specs %>% drop_na()
 robustness_fig <- schart(specs, labels, highlight=highlight_n, order = "asis", 
                          heights = c(.4,.6),
-                         n=c(1, 2, 1, 1, 4, 3), ci = c(.95), 
+                         n=c(1, 2, 1, 1, 3, 3), ci = c(.95), 
                          ylab = "Slope of line relating sites' historic\nCWD to CWD's impact on growth\n(evaluated at median historic CWD)",
                          col.est=c("grey80", "dodgerblue4"),
                          col.dot=c("grey60","grey95","grey95","dodgerblue4"),
