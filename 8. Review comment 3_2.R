@@ -247,7 +247,7 @@ models <- list(
   "Spatially correlated errors" = spat_re_mod
 )
 
-modelsummary(models, gof_omit = 'DF|Deviance|R2|AIC|BIC|ICC|Log.Lik.|aicc|Std. errors')
+modelsummary(models, gof_omit = 'DF|Deviance|R2|AIC|BIC|ICC|Log.Lik.|aicc|Std. errors', stars = TRUE)
 
 
 
