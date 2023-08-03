@@ -22,7 +22,71 @@
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+library(tidyverse)
 
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Import data --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+### Define path
+wdir <- 'remote/'
+
+# 1. Site-level regressions
+flm_df <- read_csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv"))
+
+# 2. Historic site-level climate
+ave_site_clim <- read_rds(paste0(wdir, "out/climate/site_ave_clim.gz"))
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Explore concerns --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+### Relationship between cwd and sd(cwd)
+flm_df %>% 
+  ggplot(aes(x = cwd.spstd, y = cwd.sd)) +
+  geom_point(alpha = 0.2) +
+  geom_smooth() +
+  xlim(-5, 10) +
+  ylim(0, 30) +
+  ylab("Standard deviation of CWD") +
+  xlab("Historic CWD\n(deviation from species mean)") +
+  theme_bw()
+
+
+### Relationship between beta and sd(cwd)
+flm_df %>% 
+  filter(outlier == FALSE) %>% 
+  ggplot(aes(x = cwd.sd, y = estimate_cwd.an)) +
+  geom_point(alpha = 0.2) +
+  geom_smooth() +
+  xlab("Standard deviation of CWD") +
+  ylab("Sensitivity to CWD") +
+  # ylim(-2,2) +
+  xlim(0,5) +
+  theme_bw()
+
+
+trim_df <- flm_df %>% filter(outlier == FALSE)
+mod <- feols(estimate_cwd.an ~ cwd.sd + cwd.spstd + (cwd.spstd^2) + pet.sd + pet.spstd + (pet.spstd^2), 
+           data = trim_df, weights = trim_df$cwd_errorweights,
+           vcov = conley(cutoff = 460, distance = "spherical"))
+summary(mod)
+
+
+
+mod1 <- lm(cwd.sd ~ cwd.spstd, data = trim_df)
+summary(mod1)
+
+
+mod2 <- feols(estimate_cwd.an ~ cwd.sd, trim_df)
+summary(mod2)
+
+library(modelsummary)
+models <- list(
+  "sd(CWD) ~ ave(CWD)" = mod1,
+  "beta ~ sd(CWD)" = mod2
+)
+modelsummary(models, coef_rename = c("cwd.spstd" = "Average CWD", "cwd.sd" = "sd(CWD)"), stars = TRUE, gof_omit = 'F|DF|Deviance|R2|AIC|BIC|ICC|Log.Lik.|aicc|Std. errors')
 
 # #### REVIEWER COMMENTS - DRIVEN BY VARIABILITY?
 # sd_df <- dendro_df %>% 
