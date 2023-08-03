@@ -5,14 +5,24 @@
 # Purpose: Clean ITRDB rwl files
 #
 # Input files:
-#
+#   - ITRDBmetadata12January2022.xlsx: Metadata catalog of the ITRDB v8. Used 
+#       to index sites
+#   - /itrdb-v713-cleaned-rwl/: Directory holding the reformatted ITRDB (rITRDB)
+#       Downloaded from https://www.ncei.noaa.gov/access/paleo-search/study/25570
+#   - /rwi/: Directory holding ITRDB noaa.rwl files from ITRDB v7.22.
+#       Downloaded jsing 1a. Pull ITRDB.R
+# 
+# Output files:
+#   - rwi_long.csv: Long dataset (collection by tree by year) of all detrended ITRDB data 
+#   - site_summary.csv: Summary of each ITRDB site included in rwi_long
+# 
+# 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Package imports --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-#devtools::install_github("tidyverse/tidyr") #if necessary for pivot_wider function
 library(tidyr)
 library(tidyverse)
 library(dbplyr)
@@ -41,7 +51,7 @@ ritrdb_data_dir <- paste0(wdir, 'in/itrdb_zhao_corrected/AppendixS1/Cleaned data
 ritrdb_meta <- read_csv(paste0(ritrdb_data_dir, "rwl_metadata.csv"))
 
 ## Original ITRDB data (v7.22)
-itrdb_data_dir <- paste0(wdir, 'in\\itrdb\\rwi\\')
+itrdb_data_dir <- paste0(wdir, 'in/itrdb/rwi/')
 header_files <- list.files(itrdb_data_dir, pattern = 'noaa.rwl')
 
 ## Define output directory
@@ -54,7 +64,7 @@ out_dir <- paste0(wdir, 'out\\dendro\\')
 itrdb_df <- itrdb_meta %>% 
   filter(LastYear > 1901,
          !is.na(Species)) %>% 
-  select(collection_id = ITRDB_Code, latitude = Latitude, longitude = Longitude, elevation_itrdb = elevation, species_id = Species) %>% 
+  select(collection_id = ITRDB_Code, latitude = Latitude, longitude = Longitude, elevation_itrdb = Elevation, species_id = Species) %>% 
   drop_na()
 
 
