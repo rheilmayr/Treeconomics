@@ -38,6 +38,9 @@ wdir <- 'remote\\'
 itrdb_sites <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv')) %>% 
   mutate(sp_id = str_to_lower(sp_id))
 
+itrdb_sites <- itrdb_sites %>% 
+  filter(datasource %in% c("ritrdb_7.13", "itrdb_7.22"))  # Narrow to set of sites included in ITRDB or rITRDB
+
 # Load species ranges
 range_file <- paste0(wdir, 'in//species_ranges//merged_ranges.shp')
 range_sf <- st_read(range_file)
@@ -55,8 +58,8 @@ dendro_df <- read_csv(paste0(wdir, 'out\\dendro\\rwi_long.csv')) %>%
   mutate(valid_dendro = 1)
 
 # Load cwd data
-cwd_csv = paste0(wdir, 'out//climate//essentialcwd_data.csv')
-cwd_df <- read.csv(cwd_csv, sep=',')
+cwd_csv = paste0(wdir, 'out/climate/essentialcwd_data.csv')
+cwd_df <- read_csv(cwd_csv)
 cwd_df <- cwd_df %>% 
   mutate("collection_id" = as.character(site))
 cwd_sites <- cwd_df %>%
@@ -109,51 +112,86 @@ itrdb_sites <- itrdb_sites %>%
   mutate(valid_dates = map_dbl(valid_dates, replace_valids),
          valid_parse = map_dbl(valid_parse, replace_valids),
          valid_rwl = map_dbl(valid_rwl, replace_valids)) %>% 
-  select(collection_id, valid_dates, valid_parse, valid_rwl, sp_id)
+  select(collection_id, datasource, valid_dates, valid_parse, valid_rwl, sp_id)
 
 # Merge datasets to index
 data_inventory <- itrdb_sites %>% 
-  merge(cwd_sites, by = "collection_id", all = TRUE) %>% 
-  merge(range_species, by = "sp_id", all = TRUE) %>% 
-  merge(dendro_df, by = "collection_id", all = TRUE) %>% 
-  merge(first_stage, by = "collection_id", all = TRUE) %>% 
-  merge(ave_clim, by = "collection_id", all = TRUE) %>% 
-  merge(an_clim, by = "collection_id", all = TRUE) %>% 
-  merge(fut_clim, by = "sp_id", all = TRUE) %>% 
-  merge(vary_clim, by = "collection_id", all = TRUE)
+  left_join(cwd_sites, by = "collection_id") %>% 
+  left_join(range_species, by = "sp_id") %>% 
+  left_join(dendro_df, by = "collection_id") %>% 
+  left_join(first_stage, by = "collection_id") %>% 
+  left_join(ave_clim, by = "collection_id") %>% 
+  left_join(an_clim, by = "collection_id") %>% 
+  left_join(fut_clim, by = "sp_id") %>% 
+  left_join(vary_clim, by = "collection_id")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Explore possible data problems ------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-data_inventory <- data_inventory %>% 
-  select(-valid_dates)
+# Number of sites included in either rITRDB 7.13 or ITRDB 7.22 where metadata 
+# includes location, indicates they span into the study period (>1901) and have species label: 4362
+data_inventory %>% 
+  pull(collection_id) %>% 
+  length()
 
-dim(itrdb_sites)
+# Number of sites remaining after RWL parse and second check for data from the study period: 4312 
+data_inventory %>% 
+  filter(valid_dates == 1, valid_parse == 1, valid_rwl == 1) %>% 
+  pull(collection_id) %>% 
+  length()
+
+# Confirm this matches the output dendro data: 4312
+dendro_df %>% 
+  pull(collection_id) %>% 
+  unique() %>% 
+  length()
+
+# Sites dropped due to missing range maps: 447
+# Sites remaining for anlaysis: 3865
+data_inventory %>% 
+  filter(valid_dates == 1, valid_parse == 1, valid_rwl == 1) %>% 
+  group_by(valid_range) %>% 
+  tally()
+
+
+# Sites dropped due to missing raw climate/topo data: 20
+# Sites remaining for analysis: 3845
+data_inventory %>% 
+  filter(valid_dates == 1, valid_parse == 1, valid_rwl == 1, valid_range == 1) %>% 
+  group_by(valid_clim) %>% 
+  tally()
+
+
+# Sites dropped due to missing species-standardized climate data: None
+# Sites remaining for analysis: 3845
+data_inventory %>% 
+  filter(valid_dates == 1, valid_parse == 1, valid_rwl == 1, valid_range == 1, valid_clim==1) %>% 
+  group_by(valid_ave_clim, valid_an_clim, valid_fut_clim) %>% 
+  tally()
+
+
+# Sites dropped due to errors in first stage regression: 
+# - Error 1: No variation in PET or CWD: 61
+# - Error 2: Too few observations to identify regression: 8
+# Sites remaining for analysis: 3776
+data_inventory %>% 
+  filter(valid_dates == 1, valid_parse == 1, valid_rwl == 1, valid_range == 1, valid_clim==1) %>% 
+  group_by(valid_fs, valid_weather_vary) %>% 
+  tally()
+
+
+# Sites dropped in primary specification as outliers in first stage regression estimates:
+
+
 data_inventory %>% gg_miss_upset()
 miss_var_summary(data_inventory)
 
 ## Total number of complete sites in analysis
 data_inventory %>% complete.cases() %>% sum()
 
-#### NOTES
-# Missing dendro: Largely due to strange format of ITRDB files, leading to parsing errors
-# Missing first stage: For ones with valid dendro, missing due to no variation in CWD / PET
-# Missing range: A few species dominate combined with sites that don't specify beyond genera
-# Missing standardized climate: Largely (entirely?) due to missing range maps
 
-
-## Summary
-## Dendro processing:
-# Lose 387 to parsing, and 21 to no rwl file
-# Once you factor in sites with no data in the time period, we increase to 662 missing
-
-## Clim standardization
-# 21 missing due to errors in raw CWD calculations
-# 604 more dropped due to no species range maps
-# Combined, this means ~623 sites don't have standardized climate data
-
-## FS estimation
-# another ~70 sites don't have any variation in their weather records so can't estimate fs model coefficients
-# altogether, lose ~1204 of 4905 sites
+data_inventory %>% 
+  group_by(valid_rwl, valid_dendro, valid_range, valid_fs) %>% 
+  tally()
 
