@@ -545,7 +545,7 @@ site_smry <- site_smry %>%
   mutate(valid_dates = obs_end_year >= 1901 | obs_end_year > 2020,
          valid_dates = replace_na(valid_dates, FALSE),
          valid_rwl = collection_id %in% c(sum_sites, total_sites, sum_sites_ritrdb %>% pull(collection_id), total_sites_ritrdb %>% pull(collection_id)),
-         valid_parse = if_else(valid_rwl==FALSE, FALSE, !(collection_id %in% c(l_parse_errors, e_parse_errors, total_parse_errors))))
+         valid_parse = if_else(collection_id == "MD007", TRUE, if_else(valid_rwl==FALSE, FALSE, !(collection_id %in% c(l_parse_errors, e_parse_errors, total_parse_errors))))) ## Note MD007 has id parsing error, but produces ok rwi data
 
 site_smry %>% 
   group_by(datasource, valid_rwl, valid_parse, valid_dates) %>% 
@@ -641,17 +641,21 @@ clean_data %>%
   length()
 
 # number of trees
-clean_data %>% 
+export_data %>% 
   select(collection_id, tree) %>% 
   distinct() %>%
   pull(collection_id) %>% 
   length()
 
 # number of sites in final dataset
-clean_data %>% 
+export_data %>% 
   select(collection_id) %>% 
   distinct() %>%
   pull(collection_id) %>% 
   length()
   
+site_smry %>% 
+  filter(valid_dates == TRUE, valid_rwl == TRUE, valid_parse == TRUE) %>% 
+  pull(collection_id) %>% 
+  length()
 
