@@ -41,8 +41,8 @@ library(ggplotify)
 wdir <- 'remote\\'
 
 # 1. Dendrochronologies
-dendro_dir <- paste0(wdir, "out\\dendro\\")
-dendro_df <- read.csv(paste0(dendro_dir, "rwi_long.csv"))
+dendro_dir <- paste0(wdir, "out/dendro/")
+dendro_df <- read_csv(paste0(dendro_dir, "rwi_long.csv"))
 dendro_df <- dendro_df %>% 
   select(-core_id)
 
@@ -58,13 +58,13 @@ dendro_df <- dendro_df %>%
 
 
 # 2. Historic site-level climate
-an_site_clim <- read_rds(paste0(wdir, "out\\climate\\site_an_clim.gz"))
+an_site_clim <- read_rds(paste0(wdir, "out/climate/site_an_clim.gz"))
 # dendro_df <- dendro_df %>% 
 #   left_join(an_site_clim, by = c("collection_id", "year"))
 
 
 # 3. Site information
-site_smry <- read_csv(paste0(wdir, 'out\\dendro\\site_summary.csv'))
+site_smry <- read_csv(paste0(wdir, 'out/dendro/site_summary.csv'))
 site_smry <- site_smry %>% 
   select(collection_id, sp_id, latitude, longitude) %>% 
   mutate(species_id = tolower(sp_id)) %>% 
@@ -82,7 +82,7 @@ dendro_df <- dendro_df %>%
 
 
 # 5. Historic site-level climate
-ave_site_clim <- read_rds(paste0(wdir, "out\\climate\\site_ave_clim.gz"))
+ave_site_clim <- read_rds(paste0(wdir, "out/climate/site_ave_clim.gz"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -90,6 +90,15 @@ ave_site_clim <- read_rds(paste0(wdir, "out\\climate\\site_ave_clim.gz"))
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 nlags=15
 shock = 1
+
+keep_trees <- dendro_df %>%  # Need to remove trees with too few observations to fit crossbasis
+  group_by(tree_id) %>% 
+  tally() %>% 
+  filter(n>20) %>% 
+  pull(tree_id)
+
+dendro_df <- dendro_df %>% 
+  filter(tree_id %in% keep_trees)
 
 cwd_lag_names <- str_c("cwd_L", str_pad(0:nlags, width = 2, pad = 0))
 pet_lag_names <- str_c("pet_L", str_pad(0:nlags, width = 2, pad = 0))
@@ -111,7 +120,7 @@ clim_lagged <- clim_lagged %>%
 cwd_lagged = data.frame(clim_lagged[,grep("cwd_L",colnames(clim_lagged))])
 pet_lagged = data.frame(clim_lagged[,grep("pet_L",colnames(clim_lagged))])
 
-
+an_site_clim <- an_site_clim %>% drop_na()
 cb_knots=logknots(nlags,3)
 cwd_cb = crossbasis(an_site_clim$cwd.an.spstd,
                     lag=c(0,nlags),
@@ -169,49 +178,49 @@ cb_df <- dendro_df %>%
   left_join(ave_site_clim, by = "collection_id") 
 
 
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Filter outliers ------------------------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-cwd_spstd_bounds = quantile(ave_site_clim$cwd.spstd, c(0.01, 0.99), na.rm = T)
-pet_spstd_bounds = quantile(ave_site_clim$pet.spstd, c(0.01, 0.99), na.rm = T)
-rwi_bounds = quantile(dendro_df$rwi, c(0.01, 0.99), na.rm = T)
-
-clim_sample <- ave_site_clim %>% 
-  mutate(outlier = 
-           (cwd.spstd<cwd_spstd_bounds[1]) |
-           (cwd.spstd>cwd_spstd_bounds[2]) |
-           (pet.spstd<pet_spstd_bounds[1]) |
-           (pet.spstd>pet_spstd_bounds[2])) %>% 
-  filter(outlier==0) %>% 
-  pull(collection_id)
-
-dendro_sample <- dendro_df %>% 
-  mutate(outlier =
-           (rwi<rwi_bounds[1]) |
-           (rwi>rwi_bounds[2])) %>% 
-  filter(outlier==0) %>% 
-  pull(collection_id)
-
-mod_df <- cb_df %>%
-  filter()
-  # filter(collection_id %in% clim_sample) %>%
-  # filter(collection_id %in% dendro_sample) %>% 
-  # filter(pet.spstd > 0.5 & cwd.spstd > 0.5)
-  # filter(pet.spstd < -0 & cwd.spstd < -0)
-  # filter((collection_id %in% old_incompletes))
-
-
-mod_df <- cb_df %>% 
-  left_join(trim_df %>% select(collection_id, cwd_errorweights), by = "collection_id")
-
-
-# flm_df %>% arrange(desc(estimate_pet.an))
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# # Filter outliers ------------------------------
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# cwd_spstd_bounds = quantile(ave_site_clim$cwd.spstd, c(0.01, 0.99), na.rm = T)
+# pet_spstd_bounds = quantile(ave_site_clim$pet.spstd, c(0.01, 0.99), na.rm = T)
+# rwi_bounds = quantile(dendro_df$rwi, c(0.01, 0.99), na.rm = T)
+# 
+# clim_sample <- ave_site_clim %>% 
+#   mutate(outlier = 
+#            (cwd.spstd<cwd_spstd_bounds[1]) |
+#            (cwd.spstd>cwd_spstd_bounds[2]) |
+#            (pet.spstd<pet_spstd_bounds[1]) |
+#            (pet.spstd>pet_spstd_bounds[2])) %>% 
+#   filter(outlier==0) %>% 
+#   pull(collection_id)
+# 
+# dendro_sample <- dendro_df %>% 
+#   mutate(outlier =
+#            (rwi<rwi_bounds[1]) |
+#            (rwi>rwi_bounds[2])) %>% 
+#   filter(outlier==0) %>% 
+#   pull(collection_id)
 # 
 # mod_df <- cb_df %>%
-# # #   filter(cwd.spstd < 0)
-# #   # filter(collection_id %in% site_sample) %>%
-# #   # filter(collection_id == "CO559")
-#   filter(collection_id == "RUSS094")
+#   filter()
+#   # filter(collection_id %in% clim_sample) %>%
+#   # filter(collection_id %in% dendro_sample) %>% 
+#   # filter(pet.spstd > 0.5 & cwd.spstd > 0.5)
+#   # filter(pet.spstd < -0 & cwd.spstd < -0)
+#   # filter((collection_id %in% old_incompletes))
+# 
+# 
+# mod_df <- cb_df %>% 
+#   left_join(trim_df %>% select(collection_id, cwd_errorweights), by = "collection_id")
+# 
+# 
+# # flm_df %>% arrange(desc(estimate_pet.an))
+# # 
+# # mod_df <- cb_df %>%
+# # # #   filter(cwd.spstd < 0)
+# # #   # filter(collection_id %in% site_sample) %>%
+# # #   # filter(collection_id == "CO559")
+# #   filter(collection_id == "RUSS094")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
