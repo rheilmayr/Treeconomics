@@ -1,3 +1,10 @@
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Author: Robert Heilmayr, Frances Moore, Joan Dudney
+# Project: Treeconomics
+# Date: 5/7/2020
+# Purpose: Iterate through downloading ITRDB data from NOAA ftp server
+#
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Import packages --------------------------------------------------------
