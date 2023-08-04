@@ -17,8 +17,6 @@
 # - site_temp_cwd_std.csv:Table of first stage regression parameters for robustness model using temperature in place of PET.
 #
 #
-# ToDo:
-# - fix joins to prevent duplicate species_id
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -47,7 +45,7 @@ wdir <- 'remote/'
 
 # 1. Dendrochronologies
 dendro_dir <- paste0(wdir, "out/dendro/")
-dendro_df <- read.csv(paste0(dendro_dir, "rwi_long.csv"))
+dendro_df <- read_csv(paste0(dendro_dir, "rwi_long.csv"))
 dendro_df <- dendro_df %>% 
   select(-core_id)
 
@@ -61,7 +59,6 @@ dendro_df <- dendro_df %>%
             rwi_nb = mean(rwi_nb),
             .groups = "drop") %>% 
   as_tibble()
-
 
 # 2. Historic site-level climate
 an_site_clim <- read_rds(paste0(wdir, "out/climate/site_an_clim.gz"))
@@ -78,6 +75,14 @@ site_smry <- site_smry %>%
 
 dendro_df <- dendro_df %>% 
   left_join(site_smry, by = 'collection_id')
+
+
+# 4. Drop data from species without range maps and resulting climatic niche data
+niche_df <- read.csv(paste0(wdir, "out//climate//clim_niche.csv")) %>%
+  select(-X)
+niche_species <- niche_df %>% pull(sp_code) %>% unique()
+dendro_df <- dendro_df %>% 
+  filter(species_id %in% niche_species)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -156,13 +161,13 @@ fs_mod <- function(site_data, outcome = "rwi", energy_var = "pet.an", mod_type =
 # Run site-level regressions --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 site_df <- dendro_df %>% 
-  drop_na() %>% 
+  # drop_na() %>% 
   rename(cwd.an = cwd.an.spstd,
          pet.an = pet.an.spstd,
          temp.an = temp.an.spstd) %>% 
   group_by(collection_id) %>%
   add_tally(name = 'nobs') %>% 
-  filter(nobs>10) %>% 
+  # filter(nobs>10) %>% 
   nest()
 
 
@@ -178,10 +183,6 @@ site_df <- site_df %>%
          fs_result_ar = map(data, .f = fs_mod_ar),
          fs_result_temp = map(data, .f = fs_mod_temp),
          fs_result_re = map(data, .f = fs_mod_re))
-
-
-site_df <- site_df %>% 
-  mutate(fs_result_re = map(data, .f = fs_mod_re))
 
 
 data_df <- site_df %>% 
@@ -243,3 +244,4 @@ fs_re <- fs_re %>%
   unnest(mod) %>% 
   select(-error)
 fs_re %>% write_csv(paste0(wdir, 'out/first_stage/site_pet_cwd_std_re.csv'))
+
