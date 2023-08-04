@@ -72,7 +72,8 @@ itrdb_df <- itrdb_meta %>%
 # ID sites in revisited ITRDB --------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ritrdb_df <- ritrdb_meta %>% 
-  filter(type %in% c("Ring Width","Earlywood Width", "Latewood Width")) 
+  filter(type %in% c("Ring Width","Earlywood Width", "Latewood Width"),
+         missing_file == 0) 
 
 ritrdb_df <- ritrdb_df %>% 
   mutate(collection_id = gsub('e$|l$|w$', '', id),
@@ -282,6 +283,7 @@ open_rwl <- function(file){
         expr = {
           path_nohead <- remove_head(file)
           rwl <<- read.tucson(paste0(path_nohead))
+          file.remove(path_nohead)
         },
         error = function(e){
           message("Returned error on site ", file)
@@ -304,8 +306,8 @@ open_rwl <- function(file){
 
 
 remove_head <- function(file){
-  path <- paste0(data_dir, file)
-  temp_path <- paste0(data_dir, "temp_nohead.rwl")
+  path <- paste0(file)
+  temp_path <- paste0("temp_nohead.rwl")
   txt <- readLines(path)
   txt <- txt[-(1:3)]
   fileConn<-file(temp_path)
@@ -523,7 +525,7 @@ clean_data <- clean_data  %>%
 # Tabulate sites that are dropped from analysis  -------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 site_smry <- itrdb_df %>% 
-  select(collection_id, latitude, longitude, itrdb_elevation, sp_id = species_id, datasource) %>% 
+  select(collection_id, latitude, longitude, elevation_itrdb, sp_id = species_id, datasource) %>% 
   unique()
 
 l_parse_errors <- lrwl_results$errors %>% pull(collection_id)
@@ -541,8 +543,14 @@ site_smry <- site_smry %>%
 
 site_smry <- site_smry %>% 
   mutate(valid_dates = obs_end_year >= 1901 | obs_end_year > 2020,
-         valid_rwl = collection_id %in% c(sum_sites, total_sites),
-         valid_parse = !(collection_id %in% c(l_parse_errors, e_parse_errors, total_parse_errors)))
+         valid_dates = replace_na(valid_dates, FALSE),
+         valid_rwl = collection_id %in% c(sum_sites, total_sites, sum_sites_ritrdb %>% pull(collection_id), total_sites_ritrdb %>% pull(collection_id)),
+         valid_parse = if_else(valid_rwl==FALSE, FALSE, !(collection_id %in% c(l_parse_errors, e_parse_errors, total_parse_errors))))
+
+site_smry %>% 
+  group_by(datasource, valid_rwl, valid_parse, valid_dates) %>% 
+  tally() %>% 
+  print()
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
