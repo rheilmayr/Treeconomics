@@ -478,7 +478,7 @@ specs <- rbind(specs, new_row)
 ## First stage controlling for temporal autocorrelation
 params <- list(despline_data = fs_re,
                mod_type = "fe",
-               formula = as.formula("estimate_cwd.an ~ cwd.spstd + temp.spstd + (cwd.spstd^2) + (temp.spstd^2)"),
+               formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2)"),
                t_x = FALSE,
                t_y = TRUE,
                weights = "cwd_errorweights")
