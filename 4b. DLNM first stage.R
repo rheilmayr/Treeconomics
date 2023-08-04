@@ -5,9 +5,16 @@
 # Purpose: Assess tree-level evolution of drought sensitivity
 #
 # Input files:
-# - 
+# - site_an_clim.gz: File detailing site-level weather history. Generated using "3b. Species_niche.R"
+# - rwi_long.csv: Data containing processed RWI data. Generated using "1b. Parse ITRDB.R"
+# - site_summary.csv: Summary data about each site. Generated using "1b. Parse ITRDB.R"
 #
-# ToDo:
+# Output files:
+# - dnlm_cum_effects.rds: Site-level estimates of cumulative lagged effect of 1 CWD shock
+#     Used to run robustness regression of cumulative effect.
+# - dnlm_lagged_effects.rmd: Lagged effects in different sites. Used to generate Supplementary Figure
+# 
+# 
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -69,14 +76,6 @@ site_smry <- site_smry %>%
   select(collection_id, sp_id, latitude, longitude) %>% 
   mutate(species_id = tolower(sp_id)) %>% 
   select(-sp_id)
-
-
-# 4. Species information
-sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
-sp_info <- sp_info %>% 
-  select(species_id, genus, gymno_angio, family)
-site_smry <- site_smry %>% 
-  left_join(sp_info, by = c("species_id"))
 dendro_df <- dendro_df %>% 
   left_join(site_smry, by = 'collection_id')
 
