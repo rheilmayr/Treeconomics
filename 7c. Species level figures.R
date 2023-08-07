@@ -21,22 +21,25 @@ library(rgdal)
 library(viridis)
 library(patchwork)
 library(effects)
+library(dplR)
 select <- dplyr::select
 
 theme_set(
-  theme_bw(base_size = 25)+
+  theme_bw(base_size = 8)+
     theme(panel.grid.major = element_blank(), 
           panel.grid.minor = element_blank(),
-          text=element_text(family ="Helvetica"),
+          # text=element_text(family ="Helvetica"),
           panel.background = element_rect(fill='transparent'), 
           plot.background = element_rect(fill='transparent', color=NA), 
           legend.background = element_rect(fill='transparent')))
+
+pt_size = .pt
 
 #===============================================================================
 # 2) Data imports  ---------
 #===============================================================================
 ### Define path
-wdir <- 'NewRemote/'
+wdir <- 'remote/'
 
 # 1. Site-level regressions
 flm_df <- read_csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv")) 
@@ -68,11 +71,16 @@ rwi_list <- list.files(paste0(wdir, "out/predictions/pred_10000/sp_rwi/"), patte
 sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
 
 # 6. Dendro examples - note: currently just exporting two pipo sites in first stage script
-dendro_ex <- read.csv(paste0(wdir, "out/dendro/example_sites.csv"))
+dendro_ex <- read_csv(paste0(wdir, "out/dendro/example_sites.csv"))
+
+# 7. Raw dendro file for one site
+rwl_path <- paste0(wdir, "in/itrdb_zhao_corrected/AppendixS1/Cleaned datasets/itrdb-v713-cleaned-rwl/usa/ca585.rwl")
+rwl_dat <- read.tucson(paste0(rwl_path))
+
 
 
 #===============================================================================
-# 3) Prep climate / prediction data  ---------
+# Prep climate / prediction data  ---------
 #===============================================================================
 # Define species
 flm_df %>% group_by(species_id) %>% tally() %>% arrange(desc(n))
@@ -105,63 +113,13 @@ spp_predictions <- sp_predictions %>%
 
 
 #===============================================================================
-# 3) Data summary plots  ---------
+# Define example sites  ---------
 #===============================================================================
-### Map of ITRDB sites and species range
 # Pull relevant ITRDB sites
 trim_df <- trim_df %>%
   drop_na() %>%
   st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
 
-# Pull relevant range map
-sp_range <- range_sf %>% 
-  filter(sp_code == spp_code)
-sp_bbox <- st_bbox(sp_range)
-
-lon_lims <- c(sp_bbox$xmin - 1, sp_bbox$xmax + 1)
-lat_lims <- c(sp_bbox$ymin - 1, sp_bbox$ymax + 1)
-
-# Plot species ranges
-world <- ne_coastline(scale = "medium", returnclass = "sf")
-map <- ggplot() +
-  geom_sf(data = world) +
-  geom_sf(data = sp_range, fill = '#21908CFF', alpha = .5, colour = NA) +
-  geom_sf(data = trim_df, color = '#440154FF', fill = 'red', alpha = .8) +
-  annotate("text", x = high_coords[[1]][1], y = high_coords[[1]][2], label = "A", color = "orange", size = 12) +
-  annotate("text", x = low_coords[[1]][1], y = low_coords[[1]][2], label = "B", color = "orange", size = 12) +
-  #theme_bw(base_size = 15)+
-  ylab("Latitude")+
-  xlab("Longitude")+
-  #ggtitle("ITRDB sites with PIPO")+
-  coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
-map
-
-#4x7
-
-### Plot of climatic range with ITRDB sites
-xmin <- -2
-xmax <- 2
-hex <- spp_predictions %>% ggplot(aes(x = cwd_hist, y = pet_hist)) +
-  geom_density_2d(color = '#21908CFF') +
-  # geom_density_2d(colour = "black") +
-  #geom_density_2d_filled(alpha = .6) +
-  xlim(xmin, xmax) +
-  ylim(xmin, xmax) +
-  # labs(fill = "Number of cells") +
-  ylab("Historic PET\n(Deviation from species mean)") +
-  xlab("Historic CWD\n(Deviation from species mean)") + 
-  coord_fixed() +
-  guides(fill=F, colour=F)+
-  geom_point(data = trim_df, aes(x = cwd.spstd, y = pet.spstd), colour = '#440154FF', alpha = 0.5)
-hex
-
-ggsave(paste0(wdir, 'figures/Figures_JD/Methods figure/TransparentFigs/hex.png'), plot = hex, bg= 'transparent', width = 8, height = 6)
-
-
-
-#===============================================================================
-# Plot of first stage for several sites  ---------
-#===============================================================================
 high_sens = "CO559"
 low_sens = "CA585"
 
@@ -182,32 +140,112 @@ low_val <- trim_df %>%
   pull(estimate_cwd.an) %>% 
   round(digits = 3)
 
+
+high_fs <- trim_df %>% filter(collection_id == high_sens)
+low_fs <- trim_df %>% filter(collection_id == low_sens)
+
 high_lab <- paste0("sensitivity = ", as.character(high_val))
 low_lab <- paste0("sensitivity = ", as.character(low_val))
 
-# ex_plots <- trim_df %>% 
-#   filter(collection_id == high_sens | collection_id == low_sens)
-map_ex <- ggplot() +
+high_color <- "#404788"
+low_color <- "#efca2a"
+
+#440154FF
+
+#===============================================================================
+# Step 1: data and detrending  ---------
+#===============================================================================
+### Map of ITRDB sites and species range
+
+# Pull relevant range map
+sp_range <- range_sf %>% 
+  filter(sp_code == spp_code)
+sp_bbox <- st_bbox(sp_range)
+
+lon_lims <- c(sp_bbox$xmin - 1, sp_bbox$xmax + 1)
+lat_lims <- c(sp_bbox$ymin - 1, sp_bbox$ymax + 1)
+
+# Plot species ranges
+world <- ne_coastline(scale = "medium", returnclass = "sf")
+map <- ggplot() +
   geom_sf(data = world) +
   geom_sf(data = sp_range, fill = '#21908CFF', alpha = .5, colour = NA) +
-  geom_sf(data = trim_df, color = 'darkblue', alpha = 1) +
-  annotate("text", x = high_coords[[1]][1], y = high_coords[[1]][2], label = "A", color = "darkred", size = 12) +
-  annotate("text", x = low_coords[[1]][1], y = low_coords[[1]][2], label = "B", color = "darkred", size = 12) +
-  # geom_sf(data = ex_plots, color = 'red', fill = 'red', alpha = .8) +
-  #theme_bw(base_size = 20)+
-  #theme(axis.title.x=element_blank(),
-        #axis.title.y=element_blank()) +
-  ylab("Latitude")+
-  xlab("Longitude")+
-  coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
-
-map_ex
-
-ggsave(paste0(wdir, 'figures/Figures_JD/Methods figure/TransparentFigs/map_ex.png'), plot = map_ex, bg= 'transparent', width = 7, height = 10)
+  geom_sf(data = trim_df, color = 'darkred', fill = 'darkred', alpha = .8) +
+  geom_point(aes(x = high_coords[[1]][1], y = high_coords[[1]][2]), color = high_color, size = 10) +
+  geom_label(aes(x = high_coords[[1]][1], y = high_coords[[1]][2], label = "A"), fill = high_color, color = "white", size = 5, label.size = NA) +
+  geom_point(aes(x = low_coords[[1]][1], y = low_coords[[1]][2]), color = low_color, size = 10) +
+  geom_label(aes(x = low_coords[[1]][1], y = low_coords[[1]][2], label = "B"), fill = low_color, color = "black", size = 5, label.size = NA) +
+  # ylab("Latitude")+
+  # xlab("Longitude")+
+  coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE) +
+  theme(axis.title.x=element_blank(),
+        axis.title.y = element_blank())
+map
+ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/map_ex.png'), plot = map, bg= 'transparent', width = 2.25, height = 2.9)
 
 
+### Illustrate detrending
+rwl <- rwl_dat %>% select(PPP02B)
+rwi <- rwl %>% 
+  select(PPP02B) %>% 
+  detrend(method = "Spline", make.plot = TRUE)
+detrend_df <- tibble("RWL" = rwl$PPP02B, "RWI" = rwi$PPP02B) %>% 
+  mutate(Spline = RWL / RWI) %>% 
+  drop_na() %>% 
+  mutate(Age = row_number(),
+         Detrend_spline = 1)
+
+rwl_plot <- ggplot(data = detrend_df) +
+  geom_line(aes(x = Age, y = RWL), size = 0.5) +
+  geom_line(aes(x = Age, y = Spline),linetype="dashed", size = 0.25) +
+  ylab("RWL (mm)") +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank())
 
 
+rwi_plot <- ggplot(data = detrend_df) +
+  geom_line(aes(x = Age, y = RWI), size = 0.5) +
+  geom_line(aes(x = Age, y = Detrend_spline),linetype="dashed", size = 0.25) +
+  ylab("RWI") +
+  xlab("Age (years)")
+
+despline_plot <- rwl_plot / rwi_plot
+ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/despline.png'), plot = despline_plot, bg= 'transparent', width = 2, height = 2.9)
+
+
+#===============================================================================
+# Step 2: Climatic range  ---------
+#===============================================================================
+### Plot of climatic range with ITRDB sites
+xmin <- -1.5
+xmax <- 2
+hex <- spp_predictions %>% 
+  ggplot(aes(x = cwd_hist, y = pet_hist)) +
+  geom_density_2d(color = '#21908CFF') +
+  # geom_density_2d(colour = "black") +
+  #geom_density_2d_filled(alpha = .6) +
+  xlim(xmin, xmax) +
+  ylim(xmin, xmax) +
+  # labs(fill = "Number of cells") +
+  ylab("Historic PET\n(Deviation from species mean)") +
+  xlab("Historic CWD\n(Deviation from species mean)") + 
+  coord_fixed() +
+  guides(fill=F, colour=F)+
+  geom_point(data = trim_df, aes(x = cwd.spstd, y = pet.spstd), colour = 'darkred', alpha = 0.7, size = 0.75) +
+  geom_point(aes(x = high_fs$cwd.spstd, y = high_fs$pet.spstd), color = high_color, size = 10) +
+  geom_label(aes(x = high_fs$cwd.spstd, y = high_fs$pet.spstd, label = "A"), fill = high_color, color = "white", size = 5, label.size = NA) +
+  geom_point(aes(x = low_fs$cwd.spstd, y = low_fs$pet.spstd), color = low_color, size = 10) +
+  geom_label(aes(x = low_fs$cwd.spstd, y = low_fs$pet.spstd, label = "B"), fill = low_color, color = "black", size = 5, label.size = NA)
+hex
+
+ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/hex.png'), plot = hex, bg= 'transparent', width = 2.9, height = 2.9)
+
+
+
+#===============================================================================
+# Step 3: First stage for example sites  ---------
+#===============================================================================
 high_ex <- dendro_ex %>% 
   filter(collection_id == high_sens) %>% 
   mutate(label="high")
@@ -216,7 +254,7 @@ low_ex <- dendro_ex %>%
   mutate(label="low")
 
 both_ex <- high_ex %>% 
-  full_join(low_ex)
+  rbind(low_ex)
 
 both_fig <- both_ex %>%
   ggplot(aes(x = cwd.an.spstd, y = rwi, color=label, fill=label)) +
@@ -232,80 +270,16 @@ both_fig <- both_ex %>%
   ylim(c(0,3)) +
   xlim(c(-1.25, 0))+
   guides(fill=F, color=F)+
-  annotate("text", x = -1, y = 2.75, label = paste("Site A"), size = 7)+
-  annotate("text", x = -0.4, y = 2.25, label = paste("Site B"), size = 7)
-
+  annotate("text", x = -1, y = 2.75, label = paste("Site A"), size = 7/ pt_size)+
+  annotate("text", x = -0.4, y = 2.5, label = paste("Site B"), size = 7/ pt_size)
 
 both_fig
+ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/both_fig.png'), plot = both_fig, bg= 'transparent', width = 3.5, height = 2.9)
 
-ggsave(paste0(wdir, 'figures/Figures_JD/Methods figure/TransparentFigs/both_fig.png'), plot = both_fig, bg= 'transparent', width = 8, height = 6)
-
-#ggsave(paste0(wdir, 'figures\\1_data_and_hypoth.svg'), plot = f1, width = 8, height = 5)
-
-# low_ex <- dendro_ex %>% 
-#   filter(collection_id == low_sens) %>% 
-#   ggplot(aes(x = cwd.an.spstd, y = rwi)) +
-#   geom_point(alpha=.1, color="#efca2a") +
-#   geom_smooth(method=lm, color = "#efca2a", fill = "#efca2a") +
-#   theme_bw(base_size = 20) +
-#   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-#         plot.title = element_text(hjust = 0.5))+
-#   ylab("Ring width index")+
-#   xlab("Climatic water deficit") +
-#   ylim(c(0,3)) +
-#   xlim(c(-1.25, 0)) 
-#   #ggtitle("Site B") 
-#   #annotate("text", x = -1.1, y = 1.3, label = low_lab, size = 7)
-# low_ex
-# 
-# (map_ex | high_ex / low_ex) +
-#   plot_layout(widths = c(2,1))
 
 #===============================================================================
-# 4) Observed sensitivity  ---------
+# Step 4: Second stage variation in sensitivity  ---------
 #===============================================================================
-### Map of CWD sensitivity
-sens_map <- ggplot() +
-  geom_sf(data = world) +
-  geom_sf(data = sp_range, fill = 'gray', alpha = .9, colour = NA) +
-  geom_sf(data = trim_df, aes(color = estimate_cwd.an)) +
-  #theme_bw(base_size = 22)+
-  ylab("Latitude")+
-  xlab("Longitude")+
-  coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE) +
-  scale_color_viridis(direction = -1)
-sens_map
-
-
-### Plot of observed CWD sensitivity on climatic range 
-lgd_pos <- c(.18, .75)
-sens_niche <- spp_predictions %>% 
-  filter(cwd_sens <= 1, cwd_hist<=1, pet_hist <= 1) %>% 
-  ggplot(aes(x = cwd_hist, y = pet_hist)) +
-  geom_density_2d(colour = "black", alpha=.5) +
-  # geom_density_2d_filled(alpha = 0.5) +
-  #xlim(xmin, xmax) +
-  #ylim(xmin, xmax) +
-  # labs(fill = "Number of cells") +
-  ylab("Historic PET\n(Deviation from species mean)") +
-  xlab("Historic CWD\n(Deviation from species mean)") + 
-  theme_bw(base_size = 20) +
-  xlim(-1.7,1)+
-  ylim(-1.7,1)+
-  coord_fixed() +
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        plot.title = element_text(hjust = 0.5))+
-  geom_point(data = filter(trim_df, estimate_cwd.an <= 1&cwd.spstd<=1&pet.spstd<=1), aes(x = cwd.spstd, y = pet.spstd, 
-                                                                                         color = estimate_cwd.an), size = 3) +
-  scale_color_viridis(direction = -1)+
-  labs(color = "Sensitivity\nto CWD") +
-  theme(legend.position = c(lgd_pos),
-        legend.key = element_blank(),
-        legend.background = element_blank())
-sens_niche
-
-
-
 ### Plot of cwd sensitivity against cwd.spstd
 mod <- lm(estimate_cwd.an ~ cwd.spstd + I(cwd.spstd^2) + pet.spstd + I(pet.spstd^2), data = trim_df)
 eff = effect("cwd.spstd", mod, partial.residuals=T)
@@ -327,107 +301,51 @@ partial_plot <- ggplot(filter(x,cwd <=1&fit<=1), aes(x = cwd, y = fit, color="bl
   geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.3, fill = "#21908CFF") +
   xlab("Historic CWD\n(Deviation from species mean)") +
   ylab("Partial effect of CWD\non CWD sensitivity")+
-  guides(scale = "none", color=F)
+  guides(scale = "none", color=F) +
+  geom_point(aes(x = high_fs$cwd.spstd, y = high_fs$estimate_cwd.an), color = high_color, size = 10) +
+  geom_label(aes(x = high_fs$cwd.spstd, y = high_fs$estimate_cwd.an, label = "A"), fill = high_color, color = "white", size = 5, label.size = NA) +
+  geom_point(aes(x = low_fs$cwd.spstd, y = low_fs$estimate_cwd.an), color = low_color, size = 10) +
+  geom_label(aes(x = low_fs$cwd.spstd, y = low_fs$estimate_cwd.an, label = "B"), fill = low_color, color = "black", size = 5, label.size = NA)
 # geom_smooth(data = xy, aes(x = trans(x), y = y), 
 #             method = "loess", span = 2/3, linetype = "dashed", se = FALSE)
 partial_plot
 
-ggsave(paste0(wdir, 'figures/Figures_JD/Methods figure/TransparentFigs/partial_plot.png'), plot = partial_plot, bg= 'transparent', width = 8, height = 7)
+ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/partial_plot.png'), plot = partial_plot, bg= 'transparent', width = 3.5, height = 3.05)
 
-combined_plot <- (map_ex | both_fig) / (sens_niche | partial_plot)+ plot_layout(widths = c(1,4))
-combined_plot
-combined_plot <- (map_ex | high_ex / low_ex) / (sens_niche | partial_plot)
-#ggsave(paste0(wdir, "figures\\", "5_sp_example.svg"), combined_plot, width = 15, height = 12)
+# combined_plot <- (map_ex | both_fig) / (sens_niche | partial_plot)+ plot_layout(widths = c(1,4))
+# combined_plot
+# combined_plot <- (map_ex | high_ex / low_ex) / (sens_niche | partial_plot)
+# #ggsave(paste0(wdir, "figures\\", "5_sp_example.svg"), combined_plot, width = 15, height = 12)
+
 
 #===============================================================================
-# 5) Predictions  ---------
+# Step 5: Prediction of sensitivity  ---------
 #===============================================================================
 spp_predictions <- spp_predictions %>% filter(abs(cwd_hist) < 2) ## TODO - FIgure out correct cut-off for predictions
 
-### Plot of cwd.start vs cwd.fut
-spp_predictions %>% 
-  ggplot(aes(x = cwd_cmip_start_mean, y = cwd_cmip_end_mean)) +
-  geom_point() +
-  geom_abline(slope = 1, intercept = 0) +
-  coord_fixed() +
-  xlim(c(-4,6)) +
-  ylim(c(-4,6)) +
-  theme_bw()
+### Map of CWD sensitivity
+cwd_sens_map <- ggplot() +
+  geom_sf(data = world) +
+  geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = cwd_sens)) +
+  #theme_bw(base_size = 22)+
+  theme(legend.position = c(.15,.18))+
+  ylab("Latitude")+
+  xlab("Longitude")+
+  guides(fill=guide_legend("Sens."))+
+  #scale_fill_viridis_c(direction = -1) +
+  scale_fill_viridis(option="mako", direction = -1)+
+  coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE) +
+  theme(axis.title.x=element_blank(),
+        axis.title.y = element_blank(),
+        legend.key.size = unit(10, "pt"))
+cwd_sens_map
 
-### Plot of cwd.spstd vs cwd.sens
-spp_predictions %>% 
-  ggplot(aes(x = cwd_hist, y = cwd_sens)) +
-  geom_point() +
-  xlim(c(-2,4)) +
-  ylim(c(-.09,-0.04)) +
-  theme_bw()
-
-### Plot of cwd.spstd vs rwi
-spp_predictions %>% 
-  ggplot(aes(x = cwd_hist, y = rwi_pred_change_mean)) +
-  geom_point(color = "dark blue", alpha = 0.5) +
-  geom_errorbar(aes(ymin=rwi_pred_change_025, ymax=rwi_pred_change_975)) +
-  # xlim(c(-2,2)) +
-  # ylim(c(-.5,.3)) +
-  theme_bw() 
-# +
-#   stat_smooth(method = "gam", formula = y ~ s(x), size = 1, color = "red")
-
-spp_predictions %>% 
-  ggplot(aes(x = cwd_hist, y = rwi_pclim_change_mean)) +
-  geom_point(color = "dark blue", alpha = 0.5) +
-  geom_errorbar(aes(ymin=rwi_pclim_change_025, ymax=rwi_pclim_change_975)) +
-  # xlim(c(-2,2)) +
-  # ylim(c(-.5,.3)) +
-  theme_bw() 
+ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/cwd_sens_map.png'), plot = cwd_sens_map, bg= 'transparent', width = 2.25, height = 2.9)
 
 
-# ### Map of historic CWD
-# cwd_map <- ggplot() +
-#   geom_sf(data = world) +
-#   geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = cwd_hist)) +
-#   theme_bw(base_size = 22)+
-#   ylab("Latitude")+
-#   xlab("Longitude")+
-#   scale_fill_viridis_c(direction = -1) +
-#   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
-# cwd_map
-
-# ## Interactive map
-# library(tmap)
-# tmap_mode("view")
-# cmip_end <- load(paste0(wdir, 'in\\CMIP5 CWD\\cmip5_cwdaet_end.Rdat'))
-# cwd_cmip_end <- cwd_raster
-# crs_template <- crs(cwd_cmip_end)
-# cwd_df <- spp_predictions %>% 
-#   drop_na() %>% 
-#   select(x, y, cwd_hist)
-# raster_template <- cwd_df %>% select(x,y)
-# cwd_df <- cwd_df %>%
-#   drop_na()
-# cwd_df2 <- raster_template %>%
-#   left_join(cwd_df, by = c("x", "y"))
-# cwd_rast2 <- rasterFromXYZ(cwd_df2, crs = crs_template)
-# tm_shape(cwd_rast2) +
-#   tm_raster() +
-#   tm_facets(as.layers = TRUE)
-# 
-# tm_shape(cwd_raster$layer.1.1.1) +
-#   tm_raster() +
-#   tm_facets(as.layers = TRUE)
-
-
-### Map of historic PET
-# pet_map <- ggplot() +
-#   geom_sf(data = world) +
-#   geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = pet_hist)) +
-#   theme_bw(base_size = 22)+
-#   ylab("Latitude")+
-#   xlab("Longitude")+
-#   scale_fill_viridis_c(direction = -1) +
-#   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
-# pet_map
-
+#===============================================================================
+# Step 5: Prediction of RWI change  ---------
+#===============================================================================
 ### Map of CWD change
 spp_predictions <- spp_predictions %>% 
   mutate(cwd_change = cwd_cmip_end_mean - cwd_cmip_start_mean,
@@ -438,72 +356,36 @@ cwd_change_map <- ggplot() +
   geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = cwd_change)) +
   #theme_bw(base_size = 22)+
   guides(fill=guide_legend("Δ CWD"))+
-  theme(legend.position = c(.2,.15))+
+  theme(legend.position = c(.18,.15))+
   ylab("Latitude")+
   xlab("Longitude")+
   #scale_fill_viridis_c(direction = -1) +
   scale_fill_viridis(option="magma")+
-  coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
+  coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE) +
+  theme(axis.title.x=element_blank(),
+        axis.title.y = element_blank(),
+        legend.key.size = unit(10, "pt"))
 cwd_change_map
 
-ggsave(paste0(wdir, 'figures/Figures_JD/Methods figure/TransparentFigs/cwd_change_map.png'), plot = cwd_change_map, bg= 'transparent', width = 10, height = 8)
-
-### Map of PET change
-pet_change_map <- ggplot() +
-  geom_sf(data = world) +
-  geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = pet_change)) +
-  theme_bw(base_size = 22)+
-  ylab("Latitude")+
-  xlab("Longitude")+
-  scale_fill_viridis_c(direction = -1) +
-  coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
-pet_change_map
-
-
-### Map of CWD sensitivity
-cwd_sens_map <- ggplot() +
-  geom_sf(data = world) +
-  geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = cwd_sens)) +
-  #theme_bw(base_size = 22)+
-  theme(legend.position = c(.21,.15))+
-  ylab("Latitude")+
-  xlab("Longitude")+
-  guides(fill=guide_legend("Sens."))+
-  #scale_fill_viridis_c(direction = -1) +
-  scale_fill_viridis(option="mako", direction = -1)+
-  coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
-cwd_sens_map
-
-ggsave(paste0(wdir, 'figures/Figures_JD/Methods figure/TransparentFigs/cwd_sens_map.png'), plot = cwd_sens_map, bg= 'transparent', width = 10, height = 8)
-
-
-# ### Map of PET sensitivity
-# pet_sens_map <- ggplot() +
-#   geom_sf(data = world) +
-#   geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = pet_sens)) +
-#   theme_bw(base_size = 22)+
-#   ylab("Latitude")+
-#   xlab("Longitude")+
-#   scale_fill_viridis_c(direction = -1) +
-#   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
-# pet_sens_map
+ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/cwd_change_map.png'), plot = cwd_change_map, bg= 'transparent', width = 2.25, height = 2.9)
 
 
 ### Map of predicted RWI
 rwi_map <- ggplot() +
   geom_sf(data = world) +
   geom_raster(data = spp_predictions %>% drop_na(), aes(x = x, y = y, fill = rwi_pred_change_mean)) +
-  #theme_bw(base_size = 22)+
-  theme(legend.position = c(.23,.15))+
+  # theme_bw(base_size = 12)+
   ylab("Latitude")+
   xlab("Longitude")+
   scale_fill_viridis_c(direction = -1) +
   #scale_fill_viridis(option="mako")+
   guides(fill=guide_legend(title="Δ RWI"))+
-  coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)
+  coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE) +
+  theme(legend.position = c(.18,.15),
+        axis.title.x=element_blank(),
+        axis.title.y = element_blank(),
+        legend.key.size = unit(10, "pt"))
 rwi_map
 
+ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/rwi_map.png'), plot = rwi_map, bg= 'transparent', width = 2.25, height = 2.9)
 
-ggsave(paste0(wdir, 'figures/Figures_JD/Methods figure/TransparentFigs/rwi_map.png'), plot = rwi_map, bg= 'transparent', width = 10, height = 8)
-
-#cwd_change_map + rwi_map + plot_layout(guides = "collect")
