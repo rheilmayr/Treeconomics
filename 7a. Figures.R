@@ -207,236 +207,7 @@ div_palette <- scale_colour_brewer(
 #   stat_smooth(method = "gam", formula = y ~ s(x), size = 1, color = "red")
 
 
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# ITRDB map, histogram, and climate with species ranges ------------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# world <- ne_countries(scale = "medium", returnclass = "sf")
-# 
-# map <- ggplot() +
-#   theme_bw(base_size = 15)+
-#   geom_sf(data = world, color = "darkgrey", fill ="lightgrey", alpha=.9) +
-#   #geom_sf(data = sp_range, fill = 'lightblue', alpha = .9, colour = NA) +
-#   geom_sf(data = flm_df, color = "#443A83FF", alpha = .2) +
-#   ylab("Latitude")+
-#   xlab("Longitude")
-# map
 
-world <- map_data("world")
-
-site_loc <- site_smry %>% 
-  select(collection_id, latitude, longitude)
-
-xr <- seq(-180, 180, 45)
-xlabels <- parse(text=str_c(abs(xr), "^o"))
-yr <- seq(-90, 90, 35)
-ylabels <- parse(text=str_c(abs(yr), "^o"))
-
-map <-ggplot() +
-  geom_map(data = world, map = world,
-           aes(x=long, y=lat, map_id = region),
-           color = "black", fill = "lightgray", size = 0.1,alpha=.7) +
-  theme_bw(base_size =25)+
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
-  geom_point(data = site_loc, aes(y = latitude, x = longitude), color = "#443A83FF")+
-  #geom_sf(data = flm_df, color = "#443A83FF", alpha = .2) +
-  ylab("Latitude")+
-  xlab("Longitude")+
-  scale_x_continuous("Longitude", breaks = xr, labels = xlabels) +
-  scale_y_continuous("Latitude", breaks = yr, labels = ylabels)
-
-map
-
-##exported dim 4x7
-
-
-# map <- ggplot() +
-#   geom_map(data = world, map = world,
-#            aes(x=long, y=lat, map_id = region),
-#            color = "black", fill = "lightgray", size = 0.1,alpha=.7) +
-#   theme_bw(base_size =35)+
-#   theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
-#   geom_sf(data = flm_df, color = "#443A83FF", alpha = .2) +
-#   ylab("Latitude")+
-#   xlab("Longitude")
-# map
-
-
-
-#ggsave(paste0(wdir, 'figures\\1a_itrdb_map.svg'), plot = map, width = 9, height = 6, units = "in")
-# 
-# mean(flm_df$cwd.ave)
-# range(flm_df$cwd.ave)
-# mean(flm_df$pet.ave)
-# range(flm_df$pet.ave)
-# 
-# ggplot(flm_df)
-# 
-# histogram_conceptual <- ggplot(flm_df, aes(x = cwd.spstd)) + 
-#   geom_histogram(bins = 40, alpha=0.5, fill = "#404788FF") +
-#   xlim(c(-2.5, 2.5)) +
-#   theme_bw(base_size = 22) + 
-#   ylab("Number of sites")+
-#   theme(legend.position = c(.1,.5),legend.title = element_blank(),
-#         panel.grid.major = element_blank(), 
-#         panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"),
-#         panel.border = element_blank())+
-#   xlab("")+
-#   ylab("")+
-#   scale_y_continuous(position = "right")
-# 
-# histogram_conceptual
-#ggsave(paste0(wdir, 'figures\\1c_hist_conceptual.svg'), plot = histogram_conceptual, width = 9, height = 6, units = "in")
-
-
-# range_sf %>% ggplot() +
-#   geom_sf() +
-#   ylab("Latitude") +
-#   xlab("Longitude")
-# 
-# cwd_clip <- cwd_historic %>% 
-#   raster::mask(range_sf)
-# 
-# plot(cwd_clip)
-
-
-### Generate plot illustrating range maps against historic CWD
-sp_codes <- list("pipo", "tsca", "tadi", "qust", "qual")
-sp_range <- range_sf %>% 
-  filter(sp_code %in% sp_codes)
-sp_bbox <- st_bbox(sp_range)
-lon_lims <- c(sp_bbox$xmin - 1, sp_bbox$xmax + 1)
-lat_lims <- c(sp_bbox$ymin - 1, sp_bbox$ymax + 1)
-
-cwd_historic_df <- as.data.frame(cwd_historic, xy = TRUE)
-
-cwd_historic_df <- cwd_historic_df %>% 
-  filter(x >= lon_lims[1],
-         x <= lon_lims[2],
-         y >= lat_lims[1],
-         y <= lat_lims[2])
-#world <- ne_coastline(scale = "medium", returnclass = "sf")
-
-range_map <- ggplot() +
-  #geom_tile(data = cwd_historic_df, aes(x = x, y = y, fill = layer)) +
-  #scale_fill_viridis_c(name = bquote('Historic CWD (mmH2O)')) +
-  #geom_sf(data = world, aes(fill ="lightgrey"), alpha=.9) +
-  #new_scale_fill() +
-  #geom_sf(data = sp_range, aes(colour = sp_code), fill = NA) +
-  geom_map(data = world, map = world,
-           aes(x=long, y=lat, map_id = region),
-           color = "black", fill = "lightgray",alpha=.3, size = 0.1) +
-  geom_sf(data = sp_range, aes(color = sp_code, fill = sp_code), alpha = .4) +
-  scale_fill_viridis_d(name = bquote('Species')) +
-  scale_color_viridis_d(name = bquote('Species')) +
-  #scale_colour_discrete(name = "Species") +
-  #scale_fill_discrete(name = "Species") +
-  ylab("Latitude")+
-  xlab("Longitude")+
-  coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)+
-  theme_bw(base_size = 20)+
-  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        plot.title = element_text(hjust = 0.5),
-        legend.position = c(0.90, 0.27),
-        legend.background=element_blank())
-
-
-range_map
-
-map/range_map + plot_layout(heights=c(1.3,2))
-
-mapsplot <- map/range_map + plot_layout(heights=c(1.3,2))
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Observation frequency plot --------------------------------------------------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-cwd_min <- flm_df$cwd.spstd %>% quantile(0.01) %>% print()
-cwd_max <- flm_df$cwd.spstd %>% quantile(0.99) %>% print()
-pet_min <- flm_df$pet.spstd %>% quantile(0.01) %>% print()
-pet_max <- flm_df$pet.spstd %>% quantile(0.99) %>% print()
-cwd_min_man <- -2
-cwd_max_man <- 4
-pet_min_man <- -4
-pet_max_man <- 2
-
-xmin <- -3
-xmax <- 4
-ymin <- -4
-ymax = 3
-
-base_text_size = 25
-### Summary plot of sample distribution
-# hex <- flm_df %>% ggplot(aes(x = cwd.spstd, y = pet.spstd, weight = nobs / 1000)) +
-hex <- flm_df %>% ggplot(aes(x = cwd.spstd, y = pet.spstd)) +
-  geom_hline(yintercept = 0, size = 1, linetype = 2) +
-  geom_vline(xintercept = 0, size = 1, linetype = 2) +
-  geom_point(alpha=.0)+
-  geom_hex() +
-  xlim(xmin, xmax) +
-  ylim(ymin, ymax) +
-  labs(fill = "Number of sites") +
-  ylab("Historic PET\n(Deviation from species mean)") +
-  xlab("Historic CWD\n(Deviation from species mean)") + 
-  coord_fixed() +
-  scale_fill_viridis_c() +
-  # scale_color_viridis_c(name = bquote('Species')) +
-  theme_bw(base_size = base_text_size)+
-  theme(legend.position = c(.24,.83),
-        legend.text = element_text(size=base_text_size - 6),
-        legend.title = element_text(size=base_text_size - 4),
-        legend.background = element_blank(),
-        panel.grid.major = element_blank(), panel.grid.minor = element_blank())
-hex
-
-  
-hex2 <- ggMarginal(hex, type="histogram", fill ="#404788FF", alpha=.5)
-hex2 <- hex2 %>% as.ggplot()
-hex2
-
-### REVIEW COMMENT 1.6 - add summary plot of sample distribution based on raw CWD/PET
-flm_df <- flm_df %>% 
-  left_join(ave_site_clim_df %>% select(collection_id, cwd.ave, pet.ave), by = "collection_id")
-hex_raw <- flm_df %>% ggplot(aes(x = cwd.ave, y = pet.ave)) +
-  geom_hline(yintercept = 0, size = 1, linetype = 2) +
-  geom_vline(xintercept = 0, size = 1, linetype = 2) +
-  geom_point(alpha=.0)+
-  geom_hex() +
-  xlim(-100, 2500) +
-  ylim(-100, 2500) +
-  labs(fill = "Number of sites") +
-  ylab(bquote("Historic PET (mm"*H[2]*"O)")) +
-  xlab(bquote("Historic CWD (mm"*H[2]*"O)")) +
-  coord_fixed() +
-  scale_fill_viridis_c() +
-  # scale_color_viridis_c(name = bquote('Species')) +
-  theme_bw(base_size = base_text_size)+
-  theme(legend.position = c(.27, .84),
-        legend.text = element_text(size=base_text_size - 6),
-        legend.title = element_text(size=base_text_size - 4),
-        legend.background = element_blank(),
-        panel.grid.major = element_blank(), panel.grid.minor = element_blank())
-hex_raw
-
-
-hex2_raw <- ggMarginal(hex_raw, type="histogram", fill ="#404788FF", alpha=.5)
-hex2_raw <- hex2_raw %>% as.ggplot()
-hex2_raw
-
-
-
-## Combine figures
-figs1 <- map/range_map+plot_layout(heights = c(1,1))
-figs1+
-  plot_annotation(tag_levels = 'A') & theme(
-    plot.tag = element_text(face = 'bold', size=12, family ="Helvetica"),
-    text=element_text(family ="Helvetica"))
-
-figs_maps <- mapsplot | hex2 
-figs_maps
-
-figs_maps + plot_layout(heights = c(1,2))+
-  plot_annotation(tag_levels = 'A') & theme(
-    plot.tag = element_text(face = 'bold', size=12, family ="Helvetica"),
-    text=element_text(family ="Helvetica"))
 
 
 
@@ -1263,51 +1034,51 @@ gen_plot
 ggsave(paste0(wdir, 'figures\\a3_genus_margins_nonlinear.svg'), gen_plot, width = 22, height = 12, units = "in")
 
 
-## Repeat with species
-coef_labels <- sp_models %>%
-  mutate(labels = map2(model_estimates, data, pull_coefs)) %>%
-  select(species_id, labels) %>%
-  unnest(labels) %>%
-  arrange(species_id)
-
-
-sp_predictions <- sp_models %>% 
-  mutate(predictions = map2(model_estimates, data, gen_marg_fx_df))
-
-sp_predictions <- sp_predictions %>% 
-  unnest(predictions) %>% 
-  select(-data, -model_estimates) %>% 
-  arrange(species_id)
-
-sp_plot <- sp_predictions %>% 
-  # filter(genus %in% genus_keep) %>%
-  ggplot(aes(x = cwd.spstd)) + 
-  geom_line(aes(y = estimate)) +
-  geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2) +
-  # geom_ribbon(aes(ymin=cwd_ci_min, ymax=cwd_ci_max), alpha=0.2, fill = "darkblue") +
-  theme_bw(base_size = 22) + 
-  facet_wrap(~species_id, scales = "free") +
-  theme(
-    # panel.grid.major = element_blank(),
-    # panel.grid.minor = element_blank(),
-    strip.background = element_blank(),
-    panel.border = element_rect(colour = "black", fill = NA)) +
-  geom_line(aes(y = conf.low), linetype = 3) +
-  geom_line(aes(y = conf.high), linetype = 3) +
-  geom_hline(yintercept = 0, linetype = 2) +
-  xlab("Historic CWD\n(Deviation from species mean)") + 
-  ylab("Predicted sensitivity to CWD") +
-  xlim(c(-3, 3))
-
-
-sp_plot <- sp_plot +
-  geom_text(data = coef_labels, aes(label = labels, x = -Inf, y = -Inf),
-            hjust = 0, vjust = 0)
-
-
-sp_plot
-ggsave(paste0(wdir, 'figures\\a6_species_margins_nonlinear.svg'), sp_plot, width = 22, height = 12, units = "in")
-
+# ## Repeat with species
+# coef_labels <- sp_models %>%
+#   mutate(labels = map2(model_estimates, data, pull_coefs)) %>%
+#   select(species_id, labels) %>%
+#   unnest(labels) %>%
+#   arrange(species_id)
+# 
+# 
+# sp_predictions <- sp_models %>% 
+#   mutate(predictions = map2(model_estimates, data, gen_marg_fx_df))
+# 
+# sp_predictions <- sp_predictions %>% 
+#   unnest(predictions) %>% 
+#   select(-data, -model_estimates) %>% 
+#   arrange(species_id)
+# 
+# sp_plot <- sp_predictions %>% 
+#   # filter(genus %in% genus_keep) %>%
+#   ggplot(aes(x = cwd.spstd)) + 
+#   geom_line(aes(y = estimate)) +
+#   geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2) +
+#   # geom_ribbon(aes(ymin=cwd_ci_min, ymax=cwd_ci_max), alpha=0.2, fill = "darkblue") +
+#   theme_bw(base_size = 22) + 
+#   facet_wrap(~species_id, scales = "free") +
+#   theme(
+#     # panel.grid.major = element_blank(),
+#     # panel.grid.minor = element_blank(),
+#     strip.background = element_blank(),
+#     panel.border = element_rect(colour = "black", fill = NA)) +
+#   geom_line(aes(y = conf.low), linetype = 3) +
+#   geom_line(aes(y = conf.high), linetype = 3) +
+#   geom_hline(yintercept = 0, linetype = 2) +
+#   xlab("Historic CWD\n(Deviation from species mean)") + 
+#   ylab("Predicted sensitivity to CWD") +
+#   xlim(c(-3, 3))
+# 
+# 
+# sp_plot <- sp_plot +
+#   geom_text(data = coef_labels, aes(label = labels, x = -Inf, y = -Inf),
+#             hjust = 0, vjust = 0)
+# 
+# 
+# sp_plot
+# ggsave(paste0(wdir, 'figures\\a6_species_margins_nonlinear.svg'), sp_plot, width = 22, height = 12, units = "in")
+# 
 
 
 
@@ -1713,7 +1484,7 @@ transect_0 <- plot_dat %>%
               alpha = 0.2) +
   geom_line(size = 2) +
   theme_bw(base_size = 20)+
-  ylim(c(-0.4, 0.3)) +
+  ylim(c(-0.3, 0.2)) +
   xlim(c(-2, 2)) +
   # ggtitle("Historic PET = historic species mean") +
   # ylab("Predicted difference in RWI change - neutral model vs ourse") +
