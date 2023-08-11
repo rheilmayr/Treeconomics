@@ -23,7 +23,7 @@ library(viridis)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-wdir <- 'NewRemote/'
+wdir <- 'remote/'
 
 
 # 1. Prediction rasters
@@ -31,7 +31,7 @@ rwi_list <- list.files(paste0(wdir, "out/predictions/pred_10000/sp_rwi/"), patte
 sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
 
 theme_set(
-  theme_bw(base_size = 20)+
+  theme_bw(base_size = 12)+
     theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
 )
 
@@ -89,11 +89,11 @@ discrete_pal_sens <- c("#1e9c89","#472e7c","darkgrey")
 panel1 <- sens_df %>% 
   ggplot(aes(x = labels, y = sens, fill = name, group = name, color = name)) +
   geom_smooth() +
-  scale_fill_manual(values = discrete_pal_sens,labels=c("Consistent","Drought-naive", "Range-edge"))+
-  scale_color_manual(values = discrete_pal_sens, labels=c("Consistent","Drought-naive", "Range-edge"))+
+  scale_fill_manual(values = discrete_pal_sens,labels=c("Consistent","Drought-naive", "Dry-range"))+
+  scale_color_manual(values = discrete_pal_sens, labels=c("Consistent","Drought-naive", "Dry-range"))+
   theme(legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
-  ylab("RWI response to CWD")+
-  xlab("Standardized aridity")+
+  ylab("Sensitivity (Δ RWI / Δ CWD)")+
+  xlab("Standardized aridity\n(Deviation from species mean)")+
   guides(fill="none", color="none")+
   ggtitle("Sensitivity")
 
@@ -103,7 +103,7 @@ panel2 <- exp_df %>%
   ggplot(aes(x = labels, y = cwd_change)) +
   geom_col(position = "dodge", alpha=.4)+
   ylab("Change in CWD")+
-  xlab("Standardized aridity")+
+  xlab("Standardized aridity\n(Deviation from species mean)")+
   ggtitle("Exposure")+
   theme(plot.title = element_text(hjust = 0.5))
 
@@ -113,16 +113,24 @@ panel3 <- vuln_df %>%
   ggplot(aes(x = labels, y = rwi_change, fill = name, group = name)) +
   geom_col(position = "dodge", width =.2, alpha=.4)+
   geom_smooth(aes(color=name), se=F, method="gam")+
-  scale_fill_manual(values = discrete_pal_sens,labels=c("Consistent","Drought-naive", "Range-edge"))+
-  scale_color_manual(values = discrete_pal_sens, labels=c("Consistent","Drought-naive", "Range-edge"))+
+  scale_fill_manual(values = discrete_pal_sens,labels=c("Consistent","Drought-naive", "Dry-range"))+
+  scale_color_manual(values = discrete_pal_sens, labels=c("Consistent","Drought-naive", "Dry-range"))+
   theme(legend.title = element_blank(),plot.title = element_text(hjust = 0.5), legend.position = "bottom")+
   ylab("Change in RWI")+
-  xlab("Standardized aridity")+
+  xlab("Standardized aridity\n(Deviation from species mean)")+
   ggtitle("Vulnerability")
 panel3
 
   
 
-panel1 + panel2 + panel3 + plot_layout(guides = "collect") &  theme(legend.position = 'bottom') & plot_annotation(tag_levels="A") & theme(plot.tag = element_text(face = 'bold', size=19))
+full_fig <- panel1 + panel2 + panel3 + 
+  plot_layout(guides = "collect") &  
+  theme(legend.position = 'bottom') & 
+  plot_annotation(tag_levels="A") & 
+  theme(plot.tag = element_text(face = 'bold', size=12))
+
+full_Fig
+
+ggsave(paste0(wdir, 'figures/Fig1.png'), plot = full_fig, bg= 'transparent', width = 8, height = 5)
 
 #dims 15x6
