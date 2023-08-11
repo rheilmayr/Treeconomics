@@ -36,7 +36,7 @@ library(profvis)
 library(tmap)
 library(tidylog)
 
-n_cores <- availableCores() - 6
+n_cores <- availableCores() - 12
 future::plan(multisession, workers = n_cores)
 
 my_seed <- 5597
