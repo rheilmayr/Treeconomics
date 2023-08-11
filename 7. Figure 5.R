@@ -2,18 +2,12 @@
 # Authors: Robert Heilmayr, Joan Dudney, Frances Moore
 # Project: Treeconomics
 # Date: 8/7/23
-# Purpose: Create figure S1 illustrating data context
+# Purpose: Create figure 5 illustrating predicted changes in RWI
 #
 # Input files:
-# - clim_niche.csv: Data documenting historic climate across each species range
-#     Generated using species_niche.R
-# - tree_ring_data_V2.db: Compiled database of ITRDB observations 
-# - essentialcwd_data.csv: File detailing plot-level weather history
 #
-# ToDo:
-# - Think through places where Monte carlo uncertainties can be added to figures
-# - track down lost observations - currently dropping a lot due to NAN or failed RWI generation
-#
+# 
+# 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
