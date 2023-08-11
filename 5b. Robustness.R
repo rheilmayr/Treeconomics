@@ -799,9 +799,10 @@ gymno_key <- sp_info %>%
 
 
 # N = 10: 16 genera; 26: 12 genera; 50: 9 genera
-genus_keep <- genus_freq %>% 
-  filter(n_collections>50) %>%
+genus_keep <- genus_freq %>%
+  top_n(9,n_collections) %>% 
   pull(genus)
+  
 
 genus_df <- trim_df %>% 
   mutate(int_coef = estimate_intercept,
