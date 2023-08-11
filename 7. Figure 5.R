@@ -245,6 +245,7 @@ rwi_bin <- plot_dat %>%
 rwi_bin
 
 lgd_pos <- c(.15, .78)
+annot_pos <- c(.05, 1.035)
 cwd_sens_bin <- cwd_sens_bin +
   theme(
     legend.position = c(lgd_pos),
@@ -254,7 +255,8 @@ cwd_sens_bin <- cwd_sens_bin +
     axis.title.x = element_blank(),
     axis.ticks.x = element_blank(),
     # plot.margin = margin(t=0, r=0, b=0, l=0, "cm"),
-    legend.key.size = unit(10, "pt"))
+    legend.key.size = unit(10, "pt"),
+    plot.tag.position  = annot_pos)
 
 pet_sens_bin <- pet_sens_bin +
   theme(
@@ -262,13 +264,16 @@ pet_sens_bin <- pet_sens_bin +
     legend.position = c(lgd_pos),
     legend.key = element_blank(),
     legend.background = element_blank(),
-    legend.key.size = unit(10, "pt"))
+    legend.key.size = unit(10, "pt"),
+    plot.tag.position  = annot_pos
+    )
 
 sens_plot <- cwd_sens_bin / pet_sens_bin
 #ggsave(paste0(wdir, "figures\\", "pred_full_a.svg"), sens_plot, width = 9, height = 15)
 
 
 lgd_pos <- c(.25, .8)
+annot_pos <- c(.03, 1.035)
 cwd_change_bin <- cwd_change_bin +
   theme(
     legend.position = c(lgd_pos),
@@ -281,7 +286,9 @@ cwd_change_bin <- cwd_change_bin +
     axis.text.y = element_blank(),
     axis.title.y = element_blank(),
     axis.ticks.y = element_blank(),
-    legend.key.size = unit(10, "pt"))
+    legend.key.size = unit(10, "pt"),
+    plot.tag.position  = annot_pos
+    )
 
 
 pet_change_bin <- pet_change_bin + 
@@ -293,22 +300,29 @@ pet_change_bin <- pet_change_bin +
     axis.text.y = element_blank(),
     axis.title.y = element_blank(),
     axis.ticks.y = element_blank(),
-    legend.key.size = unit(10, "pt"))
+    legend.key.size = unit(10, "pt"),
+    plot.tag.position  = annot_pos
+    )
 
 
 lgd_pos <- c(.1, .9)
+annot_pos <- c(.04, 1.005)
 rwi_bin <- rwi_bin +
   theme(
     legend.position = c(lgd_pos),
     legend.key = element_blank(),
     legend.background = element_blank(),
-    legend.key.size = unit(10, "pt")
-  )
+    legend.key.size = unit(10, "pt"),
+    plot.tag.position  = annot_pos)
 rwi_bin
 
 
 pred_full <- (cwd_sens_bin / pet_sens_bin) | plot_spacer() | (cwd_change_bin / pet_change_bin) | plot_spacer() |rwi_bin
 pred_full <- pred_full + plot_layout(widths = c(3, -1.01 , 4, -1.01, 6)) & 
   plot_annotation(tag_levels="A") & 
-  theme(plot.tag = element_text(face = 'bold', size=12))
+  theme(plot.tag = element_text(face = 'bold', size=12),
+        plot.tag.position  = c(.04, 1.015))
+
+pred_full
 ggsave(paste0(wdir, "figures\\", "Fig5_pred_full.svg"), pred_full, width = 14, height = 7)
+
