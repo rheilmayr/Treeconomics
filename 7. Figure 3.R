@@ -91,9 +91,7 @@ base_text_size = 12
 
 theme_set(
   theme_bw(base_size = base_text_size)+
-    theme(panel.grid.major = element_blank(), 
-          panel.grid.minor = element_blank(),
-          # text=element_text(family ="Helvetica"),
+    theme(text=element_text(family ="Helvetica"),
           panel.background = element_rect(fill='transparent'), 
           plot.background = element_rect(fill='transparent', color=NA), 
           legend.background = element_rect(fill='transparent')))
@@ -155,26 +153,24 @@ plot_dat_b <- plot_dat_a %>%
 cwd_binned_margins <- plot_dat_b %>%
   ggplot(aes(x = cwd.q, y = pet.q, z = cwd_sens)) +
   stat_summary_hex(fun = function(x) mean(x), bins=12)+
-  # scale_fill_gradient2(low = "#401552", mid = "grey93", high = "#82bead", midpoint = .98, 
-  #                      na.value = NA, name="Mean RWI")+
   scale_fill_continuous_diverging(rev = TRUE, mid = 0,
                                   limits = c(-.33, .05),
                                   oob = scales::squish) +
   labs(fill = "Marginal effect\nof CWD") +
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") +
-  theme(
+  theme(legend.position = c(0.18, 0.78),
     legend.key = element_blank(),
-    legend.background = element_blank())+
+    legend.background = element_blank(),
+    legend.key.size = unit(10, "pt"),
+    legend.title=element_text(size= 8),
+    legend.text = element_text(size = 8))+
   coord_fixed() +
   geom_hline(yintercept = 0, size = 1, linetype = 2) +
   geom_vline(xintercept = 0, size = 1, linetype = 2) +
   xlim(c(cwd_pred_min, cwd_pred_max)) +
   ylim(c(pet_pred_min, pet_pred_max))
-# 
-# , 
-# legend.title=element_text(size=base_text_size - 4),
-# legend.text = element_text(size = base_text_size - 6)
+
 
 cwd_binned_margins
 
@@ -269,9 +265,12 @@ pet_binned_margins <- plot_dat_b %>%
   ylab("Historic PET\n(Deviation from species mean)") +
   xlab("Historic CWD\n(Deviation from species mean)") +
   coord_fixed() +
-  theme(
+  theme(legend.position = c(0.18, 0.78),
     legend.key = element_blank(),
-    legend.background = element_blank())+
+    legend.background = element_blank(),
+    legend.key.size = unit(10, "pt"),
+    legend.title=element_text(size= 8),
+    legend.text = element_text(size = 8))+
   geom_hline(yintercept = 0, size = 1, linetype = 2) +
   geom_vline(xintercept = 0, size = 1, linetype = 2) +
   xlim(c(cwd_pred_min, cwd_pred_max)) +
@@ -318,13 +317,9 @@ pet_full_margins
 
 margins_plot <- cwd_full_margins | pet_full_margins
 margins_plot <- margins_plot +
-  plot_annotation(tag_levels="A") & theme(plot.tag = element_text(face = 'bold', size=12)) &
-  plot_layout(guides = "collect")
+  plot_annotation(tag_levels="A") & 
+  theme(plot.tag = element_text(face = 'bold', size=12))
+margins_plot
 
-ggsave(paste0(wdir, 'figures\\3_all_margins.svg'), plot = margins_plot, width = 15, height = 14, units = "in")
+ggsave(paste0(wdir, 'figures\\Fig3_all_margins.svg'), plot = margins_plot, width = 7.5, height = 10, units = "in")
 
-
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Create figure ------------------------------------
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
