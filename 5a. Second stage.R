@@ -22,22 +22,7 @@
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Package imports --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# library(MASS)
-# library(car)
-# library(patchwork)
-# library(dbplyr)
-# library(RSQLite)
-# library(lmtest)
-# library(sandwich)
-# library(prediction)
-# library(Hmisc)
-# library(hexbin)
-# library(ggpubr)
-# library(ggiraphExtra)
-# library(modi)
-# library(biglm)
-
-
+library(MASS)
 library(tidyverse)
 library(broom)
 library(purrr)
@@ -150,7 +135,7 @@ vg.range = vg.fit[2,3] * 1000
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Quick test of primary regression ---------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2)")
+formula = as.formula("estimate_cwd.an ~ cwd.spstd + (cwd.spstd^2) + pet.spstd + (pet.spstd^2)")
 mod_data <- trim_df
 cwd_mod <- feols(formula, data = mod_data, weights = mod_data$cwd_errorweights,
              vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
@@ -237,7 +222,7 @@ for (site in site_list){
     pull(collection_id)
   block_list[site] <- list(block_sites)
 }
-# save(block_list,file=paste0(wdir,"out/spatial_blocks.Rdat"))
+save(block_list,file=paste0(wdir,"out/spatial_blocks.Rdat"))
 # load(file=paste0(wdir,"out/spatial_blocks.Rdat"))
 
 
