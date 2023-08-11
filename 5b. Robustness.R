@@ -315,11 +315,6 @@ specs <- rbind(specs, new_row)
 
 
 
-
-
-
-
-
 ## Test alternate desplining
 # Negative binomial
 params <- list(despline_data = fs_nb,
@@ -528,36 +523,6 @@ new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
 specs <- rbind(specs, new_row)
 
 
-# # Species fixed effects
-# params <- list(despline_data = fs_spl,
-#                mod_type = "fe",
-#                formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2) | species_id"),
-#                t_x = FALSE,
-#                t_y = TRUE,
-#                weights = "cwd_errorweights")
-# mod_slopes <- robustness_test(params)
-# new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
-#                         se = mod_slopes %>% pull("std.error"),
-#                       pet = TRUE,
-#                       temp = FALSE,
-#                       tmprl = FALSE,
-#                         trim_x = params$t_x,
-#                         trim_y = params$t_y,
-#                         weight_se = params$weights == "cwd_errorweights",
-#                       contemp_rwi = TRUE,
-#                       two_stage = TRUE,
-#                       single_stage = FALSE,
-#                         species_control = TRUE,
-#                         squared_term = TRUE,
-#                       linear_mod = FALSE,
-#                       cum_dnlm = FALSE,
-#                       detrend_spline = TRUE, 
-#                         detrend_nb = FALSE,
-#                         detrend_ar = FALSE)
-# specs <- rbind(specs, new_row)
-
-
-
 ## Test alternate trimming or weighting
 # Don't drop any outliers
 params <- list(despline_data = fs_spl,
@@ -643,71 +608,12 @@ new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
                       detrend_ar = FALSE)
 specs <- rbind(specs, new_row)
 
-# ## Test model controlling for site-level SD of cwd and pet
-# params <- list(despline_data = fs_spl,
-#                formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2) + pet.sd + cwd.sd"),
-#                t_x = FALSE,
-#                t_y = TRUE,
-#                weights = "cwd_errorweights")
-# mod_slopes <- robustness_test(params)
-# new_row <- data_frame(coef = mod_slopes %>% pull("estimate"),
-#                       se = mod_slopes %>% pull("std.error"),
-#                       trim_x = params$t_x,
-#                       trim_y = params$t_y,
-#                       weight_se = params$weights == "cwd_errorweights",
-#                       species_control = FALSE,
-#                       squared_term = TRUE,
-#                       linear_mod = FALSE,
-#                       detrend_spline = TRUE, 
-#                       detrend_nb = FALSE,
-#                       cum_dnlm = FALSE,
-#                       detrend_ar = FALSE)
-# specs <- rbind(specs, new_row)
-# 
-# 
-# formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2) + cwd.sd + pet.sd")
-# data <- fs_spl %>% filter(outlier == 0)
-# mod <- feols(formula, weights = data$cwd_errorweights, data = data,
-#              vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
-# summary(mod)
-# 
-# fs_spl %>% ggplot(aes(x = cwd.spstd, y = cwd.sd)) +
-#   geom_point() +
-#   geom_smooth() +
-#   xlim(-10,10)
-# 
-# 
-# formula = as.formula("estimate_cwd.an ~ cwd.spstd + temp.spstd + (cwd.spstd^2) + (temp.spstd^2)")
-# data <- fs_temp %>% filter(outlier == 0)
-# mod <- feols(formula, weights = data$cwd_errorweights, data = data,
-#              vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
-# summary(mod)
-
-## Create figure
-highlight_n <- 1
 
 specs <- specs %>% 
   select(-species_control) %>% 
   drop_na()
+write_rds(specs, paste0(wdir, "out/second_stage/robustness_specs.rds"))
 
-labels <- list("Detrending" = c("Spline", "Negative binomial", "Autoregressive"),
-               "Energy control" = c("PET", "Mean temperature"),
-               "First stage" = c("Annual RWI", "Cumulative\ndynamic lag"),
-               "Model structure" = c("Two stage", "Single stage", "Squared\nCWD and PET", "Linear\nCWD and PET", "Temporally\ncorrelated error"),
-               "Trimming and weighting" = c("Weight by\ninverse of s.e.", "Trim\noutliers in y", "Trim\noutliers in X"))
-
-
-svg(paste0(wdir, 'figures\\a4_robustness.svg'), width = 9, height = 14)
-specs <- specs %>% drop_na()
-robustness_fig <- schart(specs, labels, highlight=highlight_n, order = "asis", 
-                         heights = c(.4,.6),
-                         n=c(1, 2, 1, 1, 3, 3), ci = c(.95), 
-                         ylab = "Slope of line relating sites' historic\nCWD to CWD's impact on growth\n(evaluated at median historic CWD)",
-                         col.est=c("grey80", "dodgerblue4"),
-                         col.dot=c("grey60","grey95","grey95","dodgerblue4"),
-                         bg.dot=c("grey60","grey95","grey95","dodgerblue4"),
-                         lwd.symbol=1)
-dev.off()
 
 ## Contrast Conley CI to bootstrapped confidence interval
 bs_df <- read_rds(paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
