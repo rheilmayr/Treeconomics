@@ -264,7 +264,7 @@ both_fig <- both_ex %>%
   geom_smooth(method="lm") +
   #theme_bw(base_size = 25) +
   #theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        #plot.title = element_text(hjust = 0.5))+
+  #plot.title = element_text(hjust = 0.5))+
   ylab("Ring width index")+
   xlab("Climatic water deficit") +
   ylim(c(0,3)) +
@@ -292,7 +292,7 @@ xy <- data.frame(x = x.fit, y = x$fit[closest(trans(x.fit), x$cwd)] + eff$residu
 partial_plot <- ggplot(filter(x,cwd <=1&fit<=1), aes(x = cwd, y = fit, color="black")) +
   #theme_bw(base_size = 20)+
   #theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
-        #plot.title = element_text(hjust = 0.5))+
+  #plot.title = element_text(hjust = 0.5))+
   geom_line(size = 1,color="#21908CFF", fill="#21908CFF") +
   #scale_color_gradient()+
   #geom_smooth(method="lm", color="#21908CFF", fill="#21908CFF")+
