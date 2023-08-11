@@ -132,7 +132,7 @@ xlabels <- parse(text=str_c(abs(xr), "^o"))
 yr <- seq(-90, 90, 35)
 ylabels <- parse(text=str_c(abs(yr), "^o"))
 
-map <-ggplot() +
+map <- ggplot() +
   geom_map(data = world, map = world,
            aes(map_id = region),
            color = "black", fill = "lightgray", linewidth = 0.1, alpha=.7) +
@@ -141,13 +141,13 @@ map <-ggplot() +
         axis.title.x=element_blank(),
         axis.title.y = element_blank())+
   geom_point(data = site_loc, aes(y = latitude, x = longitude), color = "#443A83FF", size = 0.5)+
-  #geom_sf(data = flm_df, color = "#443A83FF", alpha = .2) +
   ylab("Latitude")+
   xlab("Longitude")+
   scale_x_continuous("Longitude", breaks = xr, labels = xlabels) +
   scale_y_continuous("Latitude", breaks = yr, labels = ylabels) +
-  force_panelsizes(rows = unit(2, "in"),
-                   cols = unit(3, "in"))
+  force_panelsizes(rows = unit(1.5, "in"),
+                   cols = unit(2.5, "in")) +
+  coord_equal(ratio=1) # square plot to avoid the distortion
 
 map
 
@@ -166,36 +166,30 @@ lon_lims <- c(sp_bbox$xmin - 1, sp_bbox$xmax + 1)
 lat_lims <- c(sp_bbox$ymin - 1, sp_bbox$ymax + 1)
 
 range_map <- ggplot() +
-  #geom_tile(data = cwd_historic_df, aes(x = x, y = y, fill = layer)) +
-  #scale_fill_viridis_c(name = bquote('Historic CWD (mmH2O)')) +
-  #geom_sf(data = world, aes(fill ="lightgrey"), alpha=.9) +
-  #new_scale_fill() +
-  #geom_sf(data = sp_range, aes(colour = sp_code), fill = NA) +
   geom_map(data = world, map = world,
            aes(map_id = region),
            color = "black", fill = "lightgray",alpha=.3, size = 0.1) +
   geom_sf(data = sp_range, aes(color = sp_code, fill = sp_code), alpha = .4) +
   scale_fill_viridis_d(name = bquote('Species')) +
   scale_color_viridis_d(name = bquote('Species')) +
-  #scale_colour_discrete(name = "Species") +
-  #scale_fill_discrete(name = "Species") +
   ylab("Latitude")+
   xlab("Longitude")+
   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE)+
   theme(panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         plot.title = element_text(hjust = 0.5),
-        legend.position = c(0.90, 0.27),
+        legend.position = c(0.85, 0.27),
         legend.background=element_blank(),
         axis.title.x=element_blank(),
         axis.title.y = element_blank()) +
-  force_panelsizes(rows = unit(2, "in"),
-                   cols = unit(3, "in"))
+  force_panelsizes(rows = unit(1.5, "in"),
+                   cols = unit(2.5, "in"))
+
 
 
 range_map
 
-mapsplot <- map/range_map + plot_layout(heights=c(1.3,2))
+mapsplot <- map / range_map
 mapsplot
 
 
@@ -233,7 +227,9 @@ hex <- flm_df %>% ggplot(aes(x = cwd.spstd, y = pet.spstd)) +
   theme(legend.position = c(.24,.83),
         legend.background = element_blank(),
         panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank())
+        panel.grid.minor = element_blank())  +
+  force_panelsizes(rows = unit(3, "in"),
+                   cols = unit(3, "in"))
 hex
 
 
@@ -257,17 +253,51 @@ hex_raw <- flm_df %>% ggplot(aes(x = cwd.ave, y = pet.ave)) +
   # scale_color_viridis_c(name = bquote('Species')) +
   theme(legend.position = c(.2, .84),
         legend.background = element_blank(),
-        panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  force_panelsizes(rows = unit(3, "in"),
+                   cols = unit(3, "in"))
 hex_raw
 
 
 hex2_raw <- ggMarginal(hex_raw, type="histogram", fill ="#404788FF", alpha=.5)
-hex2_raw <- hex2_raw %>% as.ggplot()
+hex2_raw <- hex2_raw %>% as.ggplot() +
+  force_panelsizes(rows = unit(3, "in"),
+                   cols = unit(3, "in"))
 hex2_raw
 
 
 
 ## Combine figures
+fig <- (map / range_map) | hex2_raw | hex2
+fig
+
+layout <- "
+AACCDD
+BBCCDD
+"
+
+layout <- c(
+  area(t = 1, l = 1, b = 2, r = 2),
+  area(t = 2, l = 1, b = 3, r = 2),
+  area(t = 1, l = 2, b = 3, r = 4),
+  area(t = 1, l = 4, b = 3, r = 6)  
+)
+
+
+layout <- c(
+  area(t = 1, l = 1, b = 2, r = 2),
+  area(t = 3, l = 1, b = 4, r = 2),
+  area(t = 1, l = 3, b = 4, r = 7),
+  area(t = 1, l = 8, b = 4, r = 12)  
+)
+
+
+fig <- map + range_map + hex_raw + hex +
+  plot_layout(design = layout)
+
+fig
+ggsave(paste0(wdir, 'figures/FigS1.png'), plot = fig, bg= 'transparent', width = 13, height = 6, units = "in")
+
 figs1 <- map/range_map+plot_layout(heights = c(1,1))
 figs1+
   plot_annotation(tag_levels = 'A') & theme(
