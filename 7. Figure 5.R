@@ -318,7 +318,8 @@ rwi_bin
 
 
 pred_full <- (cwd_sens_bin / pet_sens_bin) | plot_spacer() | (cwd_change_bin / pet_change_bin) | plot_spacer() |rwi_bin
-pred_full <- pred_full + plot_layout(widths = c(3, -1.01 , 4, -1.01, 6)) & 
+pred_full <- pred_full + 
+  plot_layout(widths = c(3, -1.01 , 4, -1.01, 6)) & 
   plot_annotation(tag_levels="A") & 
   theme(plot.tag = element_text(face = 'bold', size=12),
         plot.tag.position  = c(.04, 1.015))
