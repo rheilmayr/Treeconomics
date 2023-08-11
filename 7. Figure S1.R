@@ -5,15 +5,9 @@
 # Purpose: Create figure S1 illustrating data context
 #
 # Input files:
-# - clim_niche.csv: Data documenting historic climate across each species range
-#     Generated using species_niche.R
-# - tree_ring_data_V2.db: Compiled database of ITRDB observations 
-# - essentialcwd_data.csv: File detailing plot-level weather history
 #
-# ToDo:
-# - Think through places where Monte carlo uncertainties can be added to figures
-# - track down lost observations - currently dropping a lot due to NAN or failed RWI generation
-#
+# 
+# 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
@@ -110,7 +104,7 @@ theme_set(
   theme_bw(base_size = 12)+
     theme(panel.grid.major = element_blank(), 
           panel.grid.minor = element_blank(),
-          # text=element_text(family ="Helvetica"),
+          text=element_text(family ="Helvetica"),
           panel.background = element_rect(fill='transparent'), 
           plot.background = element_rect(fill='transparent', color=NA), 
           legend.background = element_rect(fill='transparent')))
@@ -293,10 +287,12 @@ layout <- c(
 
 
 fig <- map + range_map + hex_raw + hex +
-  plot_layout(design = layout)
+  plot_layout(design = layout) &
+  plot_annotation(tag_levels="A") &
+  theme(plot.tag = element_text(face = 'bold', size=12))
 
 fig
-ggsave(paste0(wdir, 'figures/FigS1.png'), plot = fig, bg= 'transparent', width = 13, height = 6, units = "in")
+ggsave(paste0(wdir, 'figures/FigS1_data_summary.png'), plot = fig, bg= 'transparent', width = 13, height = 6, units = "in")
 
 figs1 <- map/range_map+plot_layout(heights = c(1,1))
 figs1+

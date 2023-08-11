@@ -52,10 +52,6 @@ summarize <- dplyr::summarize
 
 options(scipen=999)
 
-theme_set(
-  theme_bw(base_size = 25)+
-    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
-)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data ------------------------------------
@@ -81,7 +77,7 @@ theme_set(
   theme_bw(base_size = 12)+
     theme(panel.grid.major = element_blank(), 
           panel.grid.minor = element_blank(),
-          # text=element_text(family ="Helvetica"),
+          text=element_text(family ="Helvetica"),
           panel.background = element_rect(fill='transparent'), 
           plot.background = element_rect(fill='transparent', color=NA), 
           legend.background = element_rect(fill='transparent')))
@@ -161,4 +157,4 @@ gen_plot <- gen_plot +
             hjust = 0, vjust = 0)
 
 gen_plot
-ggsave(paste0(wdir, 'figures\\FigS3_genus_margins_nonlinear.svg'), gen_plot, width = 14, height = 7, units = "in")
+ggsave(paste0(wdir, 'figures\\FigS4_genus_margins_nonlinear.svg'), gen_plot, width = 14, height = 7, units = "in")
