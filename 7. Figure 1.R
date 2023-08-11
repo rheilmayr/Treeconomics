@@ -32,7 +32,9 @@ sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
 
 theme_set(
   theme_bw(base_size = 12)+
-    theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),text=element_text(family ="Helvetica"))
+    theme(panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          text=element_text(family ="Helvetica"))
 )
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
