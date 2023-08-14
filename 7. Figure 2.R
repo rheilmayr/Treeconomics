@@ -24,8 +24,10 @@ library(effects)
 library(dplR)
 select <- dplyr::select
 
+
+base_text_size = 12
 theme_set(
-  theme_bw(base_size = 8)+
+  theme_bw(base_size = base_text_size)+
     theme(panel.grid.major = element_blank(), 
           panel.grid.minor = element_blank(),
           # text=element_text(family ="Helvetica"),
@@ -149,6 +151,7 @@ low_lab <- paste0("sensitivity = ", as.character(low_val))
 
 high_color <- "#404788"
 low_color <- "#efca2a"
+low_color <- "#1b9e77"
 
 #440154FF
 
@@ -167,21 +170,48 @@ lat_lims <- c(sp_bbox$ymin - 1, sp_bbox$ymax + 1)
 
 # Plot species ranges
 world <- ne_coastline(scale = "medium", returnclass = "sf")
+map <- ggplot(trim_df, aes(x = Longitude, y = Latitude))
+  
+  
 map <- ggplot() +
   geom_sf(data = world) +
-  geom_sf(data = sp_range, fill = '#21908CFF', alpha = .5, colour = NA) +
-  geom_sf(data = trim_df, color = 'darkred', fill = 'darkred', alpha = .8) +
-  geom_point(aes(x = high_coords[[1]][1], y = high_coords[[1]][2]), color = high_color, size = 10) +
-  geom_label(aes(x = high_coords[[1]][1], y = high_coords[[1]][2], label = "A"), fill = high_color, color = "white", size = 5, label.size = NA) +
-  geom_point(aes(x = low_coords[[1]][1], y = low_coords[[1]][2]), color = low_color, size = 10) +
-  geom_label(aes(x = low_coords[[1]][1], y = low_coords[[1]][2], label = "B"), fill = low_color, color = "black", size = 5, label.size = NA) +
-  # ylab("Latitude")+
-  # xlab("Longitude")+
+  geom_sf(data = sp_range, fill = 'black', alpha = .2, colour = NA) +
+  geom_sf(data = trim_df, color = 'black', fill = 'black', alpha = .6) +
+  ylab("Latitude")+
+  xlab("Longitude")+
+  theme(axis.text.x=element_text(size=base_text_size - 6),
+        axis.text.y=element_text(size = base_text_size - 6))+
   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE) +
-  theme(axis.title.x=element_blank(),
-        axis.title.y = element_blank())
+  geom_point(aes(x = high_coords[[1]][1], y = high_coords[[1]][2]), color = high_color, size = 3) +
+  geom_point(aes(x = low_coords[[1]][1], y = low_coords[[1]][2]), color = low_color, size = 3) +
+  geom_segment(
+    data = trim_df,
+    x = -105, y = 50,
+    xend = high_coords[[1]][1], yend = high_coords[[1]][2] + 1,
+    lineend = "round",
+    linejoin = "round",
+    size = 1,
+    arrow = arrow(length = unit(0.05, "inches"), type = "closed"),
+    colour = high_color
+  ) +
+  geom_label(aes(x = -105, y = 50, label = "Site A"), fill = high_color, color = "white", size = 5, label.size = NA) +
+  geom_segment(
+    data = trim_df,
+    # x = -low_coords[[1]][1] - 20, y = low_coords[[1]][2],
+    x = -120, y = 25,
+    # x = -120, y = 25,
+    xend = low_coords[[1]][1], yend = low_coords[[1]][2] - 1,
+    lineend = "round",
+    linejoin = "round",
+    size = 1, 
+    arrow = arrow(length = unit(0.05, "inches"), type = "closed"),
+    colour = low_color
+  ) +
+  geom_label(aes(x = -119, y = 25, label = "Site B"), fill = low_color, color = "white", size = 5, label.size = NA)
+
 map
-ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/map_ex.png'), plot = map, bg= 'transparent', width = 2.25, height = 2.9)
+# ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/map_ex.png'), plot = map, bg= 'transparent', width = 2.25, height = 2.9)
+
 
 
 ### Illustrate detrending
@@ -197,7 +227,7 @@ detrend_df <- tibble("RWL" = rwl$PPP02B, "RWI" = rwi$PPP02B) %>%
 
 rwl_plot <- ggplot(data = detrend_df) +
   geom_line(aes(x = Age, y = RWL), size = 0.5) +
-  geom_line(aes(x = Age, y = Spline),linetype="dashed", size = 0.25) +
+  geom_line(aes(x = Age, y = Spline),linetype="dashed", linewidth = 0.25) +
   ylab("RWL (mm)") +
   theme(axis.title.x=element_blank(),
         axis.text.x=element_blank(),
@@ -211,8 +241,14 @@ rwi_plot <- ggplot(data = detrend_df) +
   xlab("Age (years)")
 
 despline_plot <- rwl_plot / rwi_plot
-ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/despline.png'), plot = despline_plot, bg= 'transparent', width = 2, height = 2.9)
+despline_plot
 
+# ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/despline.png'), plot = despline_plot, bg= 'transparent', width = 2, height = 2.9)
+
+
+panel_a <- map | despline_plot
+panel_a
+ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/panel_A.png'), plot = panel_a, bg= 'transparent', width = 4.25, height = 2.9)
 
 #===============================================================================
 # Step 2: Climatic range  ---------
@@ -222,7 +258,7 @@ xmin <- -1.5
 xmax <- 2
 hex <- spp_predictions %>% 
   ggplot(aes(x = cwd_hist, y = pet_hist)) +
-  geom_density_2d(color = '#21908CFF') +
+  geom_density_2d(color = 'black') +
   # geom_density_2d(colour = "black") +
   #geom_density_2d_filled(alpha = .6) +
   xlim(xmin, xmax) +
@@ -232,11 +268,29 @@ hex <- spp_predictions %>%
   xlab("Historic CWD\n(Deviation from species mean)") + 
   coord_fixed() +
   guides(fill=F, colour=F)+
-  geom_point(data = trim_df, aes(x = cwd.spstd, y = pet.spstd), colour = 'darkred', alpha = 0.7, size = 0.75) +
-  geom_point(aes(x = high_fs$cwd.spstd, y = high_fs$pet.spstd), color = high_color, size = 10) +
-  geom_label(aes(x = high_fs$cwd.spstd, y = high_fs$pet.spstd, label = "A"), fill = high_color, color = "white", size = 5, label.size = NA) +
-  geom_point(aes(x = low_fs$cwd.spstd, y = low_fs$pet.spstd), color = low_color, size = 10) +
-  geom_label(aes(x = low_fs$cwd.spstd, y = low_fs$pet.spstd, label = "B"), fill = low_color, color = "black", size = 5, label.size = NA)
+  geom_point(data = trim_df, aes(x = cwd.spstd, y = pet.spstd), colour = '#B0357B', alpha = 0.4, size = 0.75) +
+  geom_point(aes(x = high_fs$cwd.spstd, y = high_fs$pet.spstd), color = high_color, size = 3) +
+  geom_point(aes(x = low_fs$cwd.spstd, y = low_fs$pet.spstd), color = low_color, size = 3) +
+  geom_segment(
+    x = 0.5, y = -1.3,
+    xend = high_fs$cwd.spstd + 0.1, yend = high_fs$pet.spstd - 0.05,
+    lineend = "round",
+    linejoin = "round",
+    size = 1, 
+    arrow = arrow(length = unit(0.05, "inches"), type = "closed"),
+    colour = high_color
+  ) +
+  geom_label(aes(x = 0.5, y = -1.3, label = "Site A"), fill = high_color, color = "white", size = 5, label.size = NA) +
+  geom_segment(
+    x = 1, y = -0.8,
+    xend = low_fs$cwd.spstd + 0.1, yend = low_fs$pet.spstd - 0.08,
+    lineend = "round",
+    linejoin = "round",
+    size = 1, 
+    arrow = arrow(length = unit(0.05, "inches"), type = "closed"),
+    colour = low_color
+  ) +
+  geom_label(aes(x = 1, y = -0.8, label = "Site B"), fill = low_color, color = "white", size = 5, label.size = NA)
 hex
 
 ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/hex.png'), plot = hex, bg= 'transparent', width = 2.9, height = 2.9)
@@ -259,8 +313,8 @@ both_ex <- high_ex %>%
 both_fig <- both_ex %>%
   ggplot(aes(x = cwd.an.spstd, y = rwi, color=label, fill=label)) +
   geom_point( alpha=.1) +
-  scale_fill_manual(values = c("#404788", "#efca2a")) +
-  scale_color_manual(values = c("#404788", "#efca2a")) +
+  scale_fill_manual(values = c(high_color, low_color)) +
+  scale_color_manual(values = c(high_color, low_color)) +
   geom_smooth(method="lm") +
   #theme_bw(base_size = 25) +
   #theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
@@ -270,8 +324,11 @@ both_fig <- both_ex %>%
   ylim(c(0,3)) +
   xlim(c(-1.25, 0))+
   guides(fill=F, color=F)+
-  annotate("text", x = -1, y = 2.75, label = paste("Site A"), size = 7/ pt_size)+
-  annotate("text", x = -0.4, y = 2.5, label = paste("Site B"), size = 7/ pt_size)
+  geom_label(aes(x = -1.05, y = 2.5, label = "Site A"), fill = high_color, color = "white", size = 5, label.size = NA) +
+  geom_label(aes(x = -0.4, y = 2.5, label = "Site B"), fill = low_color, color = "white", size = 5, label.size = NA)
+# 
+#   annotate("text", x = -1.05, y = 2.5, label = paste("Site A"), color = high_color, size = 12/ pt_size)+
+#   annotate("text", x = -0.4, y = 2.5, label = paste("Site B"), color = low_color, size = 12/ pt_size)
 
 both_fig
 ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/both_fig.png'), plot = both_fig, bg= 'transparent', width = 3.5, height = 2.9)
@@ -293,20 +350,38 @@ partial_plot <- ggplot(filter(x,cwd <=1&fit<=1), aes(x = cwd, y = fit, color="bl
   #theme_bw(base_size = 20)+
   #theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank(),
   #plot.title = element_text(hjust = 0.5))+
-  geom_line(size = 1,color="#21908CFF", fill="#21908CFF") +
+  geom_line(size = 1,color="black", fill="black") +
   #scale_color_gradient()+
   #geom_smooth(method="lm", color="#21908CFF", fill="#21908CFF")+
   geom_point(data = filter(xy, x<=1&y<=1), aes(x = x, y = y, color= "black"), alpha=.5) +
-  scale_colour_manual(values = "#21908CFF")+
-  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.3, fill = "#21908CFF") +
+  scale_colour_manual(values = "black")+
+  geom_ribbon(aes(ymin = lower, ymax = upper), alpha = 0.3, fill = "black") +
   xlab("Historic CWD\n(Deviation from species mean)") +
   ylab("Partial effect of CWD\non CWD sensitivity")+
   guides(scale = "none", color=F) +
-  geom_point(aes(x = high_fs$cwd.spstd, y = high_fs$estimate_cwd.an), color = high_color, size = 10) +
-  geom_label(aes(x = high_fs$cwd.spstd, y = high_fs$estimate_cwd.an, label = "A"), fill = high_color, color = "white", size = 5, label.size = NA) +
-  geom_point(aes(x = low_fs$cwd.spstd, y = low_fs$estimate_cwd.an), color = low_color, size = 10) +
-  geom_label(aes(x = low_fs$cwd.spstd, y = low_fs$estimate_cwd.an, label = "B"), fill = low_color, color = "black", size = 5, label.size = NA)
-# geom_smooth(data = xy, aes(x = trans(x), y = y), 
+  geom_point(aes(x = high_fs$cwd.spstd, y = high_fs$estimate_cwd.an), color = high_color, size = 3) +
+  geom_point(aes(x = low_fs$cwd.spstd, y = low_fs$estimate_cwd.an), color = low_color, size = 3) +
+  geom_segment(
+    x = -0.2, y = -2.4,
+    xend = high_fs$cwd.spstd + 0.1, yend = high_fs$estimate_cwd.an - 0.05,
+    lineend = "round",
+    linejoin = "round",
+    size = 1, 
+    arrow = arrow(length = unit(0.05, "inches"), type = "closed"),
+    colour = high_color
+  ) +
+  geom_label(aes(x = -0.2, y = -2.4, label = "Site A"), fill = high_color, color = "white", size = 5, label.size = NA) +
+  geom_segment(
+    x = -1, y = 0.8,
+    xend = low_fs$cwd.spstd - 0.08, yend = low_fs$estimate_cwd.an + 0.08,
+    lineend = "round",
+    linejoin = "round",
+    size = 1, 
+    arrow = arrow(length = unit(0.05, "inches"), type = "closed"),
+    colour = low_color
+  ) +
+  geom_label(aes(x = -1, y = 0.7, label = "Site B"), fill = low_color, color = "white", size = 5, label.size = NA)
+  # geom_smooth(data = xy, aes(x = trans(x), y = y), 
 #             method = "loess", span = 2/3, linetype = "dashed", se = FALSE)
 partial_plot
 
@@ -335,9 +410,14 @@ cwd_sens_map <- ggplot() +
   #scale_fill_viridis_c(direction = -1) +
   scale_fill_viridis(option="mako", direction = -1)+
   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE) +
-  theme(axis.title.x=element_blank(),
+  theme(axis.text.x=element_text(size=base_text_size - 6),
+        axis.text.y=element_text(size = base_text_size - 6),
+        axis.title.x=element_blank(),
         axis.title.y = element_blank(),
-        legend.key.size = unit(10, "pt"))
+        legend.key.size = unit(8, "pt"),
+        legend.title=element_text(size=base_text_size - 2), 
+        legend.text=element_text(size=base_text_size - 4))+
+  theme()
 cwd_sens_map
 
 ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/cwd_sens_map.png'), plot = cwd_sens_map, bg= 'transparent', width = 2.25, height = 2.9)
@@ -362,9 +442,13 @@ cwd_change_map <- ggplot() +
   #scale_fill_viridis_c(direction = -1) +
   scale_fill_viridis(option="magma")+
   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE) +
-  theme(axis.title.x=element_blank(),
+  theme(axis.text.x=element_text(size=base_text_size - 6),
+        axis.text.y=element_text(size = base_text_size - 6),
+        axis.title.x=element_blank(),
         axis.title.y = element_blank(),
-        legend.key.size = unit(10, "pt"))
+        legend.key.size = unit(8, "pt"),
+        legend.title=element_text(size=base_text_size - 2), 
+        legend.text=element_text(size=base_text_size - 4))
 cwd_change_map
 
 ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/cwd_change_map.png'), plot = cwd_change_map, bg= 'transparent', width = 2.25, height = 2.9)
@@ -382,9 +466,13 @@ rwi_map <- ggplot() +
   guides(fill=guide_legend(title="Δ RWI"))+
   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE) +
   theme(legend.position = c(.18,.15),
+        axis.text.x=element_text(size=base_text_size - 6),
+        axis.text.y=element_text(size = base_text_size - 6),
         axis.title.x=element_blank(),
         axis.title.y = element_blank(),
-        legend.key.size = unit(10, "pt"))
+        legend.key.size = unit(8, "pt"),
+        legend.title=element_text(size=base_text_size - 2), 
+        legend.text=element_text(size=base_text_size - 4))
 rwi_map
 
 ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/rwi_map.png'), plot = rwi_map, bg= 'transparent', width = 2.25, height = 2.9)
