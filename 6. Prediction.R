@@ -340,7 +340,9 @@ calc_rwi_quantiles <- function(spp_code, mc_data, parallel = TRUE){
     group_by(x, y) %>% 
     summarise(rwi_pred_mean = mean(rwi_pred_end),
               rwi_pred_025 = quantile(rwi_pred_end, 0.025),
+              rwi_pred_050 = quantile(rwi_pred_end, 0.05),
               rwi_pred_975 = quantile(rwi_pred_end, 0.975),
+              rwi_pred_950 = quantile(rwi_pred_end, 0.95),
               rwi_pclim_mean = mean(rwi_pclim_end),
               rwi_pclim_025 = quantile(rwi_pclim_end, 0.025),
               rwi_pclim_975 = quantile(rwi_pclim_end, 0.975),
