@@ -40,8 +40,7 @@ itrdb_df <- read_csv(paste0(wdir, "/out/dendro/site_summary.csv"))
 
 
 # 2. Species climates
-niche_df <- read_csv(paste0(wdir, "out/climate/clim_niche.csv")) %>% 
-  select(-X1)
+niche_df <- read_csv(paste0(wdir, "out/climate/clim_niche.csv"))
 
 
 # # 3. Species ranges
@@ -109,7 +108,7 @@ n_included[1,2] / sum(n_included$n_sites)
 # Format appendix table --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 species_df <- species_df %>% 
-  filter(n_sites > 2) %>% 
+  filter(n_sites > 0) %>% 
   drop_na()
 
 species_df <- species_df %>%
@@ -128,5 +127,5 @@ species_df <- species_df %>%
          "S.d. PET" = pet_sd)
 
 species_df %>% 
-  write_csv(paste0(wdir, "tables/a1_sp_summary.csv"))
+  write_csv(paste0(wdir, "tables/s1_sp_summary.csv"))
                

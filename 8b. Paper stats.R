@@ -51,24 +51,23 @@ range_file <- paste0(wdir, 'in/species_ranges/merged_ranges.shp')
 range_sf <- st_read(range_file)
 
 # 3. Site information
-site_smry <- read_csv(paste0(wdir, 'out/dendro/site_summary.csv'))
-site_smry <- site_smry %>% 
-  select(collection_id, sp_id, latitude, longitude) %>% 
-  mutate(species_id = tolower(sp_id)) %>% 
-  select(-sp_id)
-site_loc <- site_smry %>% 
-  select(collection_id, latitude, longitude)
+# site_smry <- read_csv(paste0(wdir, 'out/dendro/site_summary.csv'))
+# site_smry <- site_smry %>% 
+#   select(collection_id, sp_id, latitude, longitude) %>% 
+#   mutate(species_id = tolower(sp_id)) %>% 
+#   select(-sp_id)
+# site_loc <- site_smry %>% 
+#   select(collection_id, latitude, longitude)
 flm_df <- flm_df %>% 
-  left_join(site_loc, by = "collection_id") %>% 
   st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
 
 
-# 4. Species information
-sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
-sp_info <- sp_info %>% 
-  select(species_id, genus, gymno_angio, family)
-site_smry <- site_smry %>% 
-  left_join(sp_info, by = c("species_id"))
+## 4. Species information
+# sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
+# sp_info <- sp_info %>% 
+#   select(species_id, genus, gymno_angio, family)
+# site_smry <- site_smry %>% 
+#   left_join(sp_info, by = c("species_id"))
 
 trim_df <- flm_df %>% 
   filter(outlier==0) %>% 
@@ -489,6 +488,7 @@ sp_plot_dat %>%
   mutate(freq = n / sum(n)) %>% 
   print()
 
+
 extreme_sp_change <- sp_plot_dat %>%
   ungroup() %>% 
   group_by(sp_code, cwd_end_bin) %>% 
@@ -498,6 +498,8 @@ extreme_sp_change <- sp_plot_dat %>%
   arrange(desc(freq)) %>% 
   print()
 
+
+extreme_sp_change %>% pull(freq) %>% mean()
 
 # # When compared to a species’ historic climatic distribution, 84 percent of the 
 # # area of species’ historic range is forecasted to have a higher average annual 
