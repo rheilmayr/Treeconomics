@@ -25,96 +25,29 @@ options(scipen=999)
 ### Define path
 wdir <- 'remote/'
 
-# 1. Site-level regressions
-flm_df <- read_csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv"))
+# 1. CMIP climate predictions
+sp_clim <- read_rds(paste0(wdir, "out/climate/sp_clim_predictions.gz"))
 
-# 3. Site information
-# site_smry <- read_csv(paste0(wdir, 'out/dendro/site_summary.csv'))
-# site_smry <- site_smry %>% 
-#   select(collection_id, sp_id, latitude, longitude) %>% 
-#   mutate(species_id = tolower(sp_id)) %>% 
-#   select(-sp_id)
-# site_loc <- site_smry %>% 
-#   select(collection_id, latitude, longitude)
+# 2. Site-level regressions
+flm_df <- read_csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv"))
 flm_df <- flm_df %>% 
   st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
-
-
-## 4. Species information
-# sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
-# sp_info <- sp_info %>% 
-#   select(species_id, genus, gymno_angio, family)
-# site_smry <- site_smry %>% 
-#   left_join(sp_info, by = c("species_id"))
-
 trim_df <- flm_df %>% 
   filter(outlier==0) %>% 
   drop_na()
 
-# 5. Prediction rasters
-rwi_list <- list.files(paste0(wdir, "out/predictions/pred_10000/sp_rwi/"), pattern = ".gz", full.names = TRUE)
-sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
-# sp_predictions <- readRDS(paste0(wdir, "out/predictions/sp_predictions.rds"))
+# 3. First stage block bootstraps
+block_draw_df <- read_rds(paste0(wdir, "out/second_stage/mc_sample.gz"))
 
-hot_cell_list <- list.files(paste0(wdir, "out/predictions/pred_10000/sp_hot_cells/"), pattern = ".gz", full.names = TRUE)
-hot_cells <- do.call('rbind', lapply(hot_cell_list, readRDS))
-
-
-
-# 6. Second stage model
+# 4. Second stage model
 ss_df <- read_rds(paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
 
-# mod_df <- trim_df
-# cwd_mod <- readRDS(paste0(wdir, "out/second_stage/cwd_mod.rds"))
-# cwd_vcov <- readRDS(paste0(wdir, "out/second_stage/cwd_mod_vcov.rds"))
-# pet_mod <- readRDS(paste0(wdir, "out/second_stage/pet_mod.rds"))
-# int_mod <- readRDS(paste0(wdir, "out/second_stage/int_mod.rds"))
-
-constant_sensitivities <- 
-  read_rds(paste0(wdir, "out/first_stage/constant_sensitivities.rds"))
-
-
-# 7. Genus model predictions
-genus_predictions <- readRDS(paste0(wdir, "out/second_stage/genus_mods.rds"))
-
-
-# 8. Historic climate raster
-clim_file <- paste0(wdir, 'in/CRUData/historic_raster/HistoricCWD_AETGrids.Rdat')
-load(clim_file)
-cwd_historic <- sum(cwd_historic)
-names(cwd_historic) = "cwd"
-
-
-# 8. Change in CWD
-cmip_end <- load(paste0(wdir, 'in\\CMIP5 CWD\\cmip5_cwdaet_end.Rdat'))
-cwd_cmip_end <- cwd_raster %>% mean()
-pet_cmip_end <- (aet_raster + cwd_raster) %>% mean()
-rm(cwd_raster)
-rm(aet_raster)
-
-cmip_start <- load(paste0(wdir, 'in\\CMIP5 CWD\\cmip5_cwdaet_start.Rdat'))
-cwd_cmip_start <- cwd_raster %>% mean()
-pet_cmip_end <- (aet_raster + cwd_raster) %>% mean()
-rm(cwd_raster)
-rm(aet_raster)
-
-cwd_cmip_change <- (cwd_cmip_end - cwd_cmip_start) %>% as.data.frame() %>% drop_na()
-pet_cmip_change <- (pet_cmip_end - cwd_cmip_start) %>% as.data.frame() %>% drop_na()
-
-
-
+# 5. Prediction results
+rwi_list <- list.files(paste0(wdir, "out/predictions/pred_10000/sp_rwi/"), pattern = ".gz", full.names = TRUE)
+sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
 agg_stats <- read_rds(file = paste0(wdir, "out/predictions/pred_10000/mc_agg_stats.gz"))
 
 
-
-
-block_draw_df <- read_rds(paste0(wdir, "out/second_stage/mc_sample.gz"))
-
-gen_dat <- read_csv(paste0(wdir, "out/species_gen_gr.csv")) %>% 
-  rename(sp_code = "species_id")
-
-
-sp_clim <- read_rds(paste0(wdir, "out/climate/sp_clim_predictions.gz"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -256,131 +189,12 @@ ss_df %>%
 
 
 
-
-
-
-
-# # pet_high_fs_bs <- block_draw_df %>% 
-# #   filter(pet.spstd > 0) %>% 
-# #   group_by(boot_id) %>% 
-# #   summarise(pet_coef = mean(pet_coef))
-# # 
-# # pet_high_fs_bs %>%
-# #   pull(pet_coef) %>% 
-# #   mean()
-# # 
-# # pet_high_fs_bs %>%
-# #   pull(pet_coef) %>% 
-# #   quantile(c(0.025, 0.975))
-# # 
-# # pet_low_fs_bs <- block_draw_df %>% 
-# #   filter(pet.spstd <= 0) %>% 
-# #   group_by(boot_id) %>% 
-# #   summarise(pet_coef = mean(pet_coef))
-# # 
-# # pet_low_fs_bs %>%
-# #   pull(pet_coef) %>% 
-# #   mean() 
-# # 
-# # pet_low_fs_bs %>%
-# #   pull(pet_coef) %>% 
-# #   quantile(c(0.025, 0.975))
-# # 
-# # 
-# # 
-# # 
-# # 
-# # mod_df <- trim_df %>% 
-# #   filter(cwd.spstd > 0)
-# # cwd_high_mod <- feols(estimate_cwd.an ~ 1,
-# #                        weights = mod_df$cwd_errorweights, data = mod_df,
-# #                        vcov = conley(cutoff = 363, distance = "spherical")) %>% 
-# #   tidy(conf.int = TRUE, conf.level = 0.95) %>% 
-# #   mutate(ci_dif = estimate - conf.low) %>% 
-# #   print()
-# 
-# # # In contrast, sites with a lower than average historic CWD (i.e., relatively cooler 
-# # # and wetter regions of a species’ niche) experienced an 8.5+/-4.2 percent decline 
-# # # in growth from a one standard deviation increase in CWD.
-# # mod_df <- trim_df %>% 
-# #   filter(cwd.spstd < 0)
-# # cwd_low_mod <- feols(estimate_cwd.an ~ 1,
-# #                        weights = mod_df$cwd_errorweights, data = mod_df,
-# #                        vcov = conley(cutoff = 363, distance = "spherical")) %>% 
-# #   tidy(conf.int = TRUE, conf.level = 0.95) %>% 
-# #   mutate(ci_dif = estimate - conf.low) %>% 
-# #   print()
-# 
-# # After controlling for the correlation between historic CWD and PET, we estimate that 
-# # the slope of the line describing the relationship between historic CWD and sensitivity 
-# # to CWD is XX (Figure 2B). 
-# 
-# # In other words, while a one standard deviation shock to CWD 
-# # is anticipated to lead to an XX% decline in growth in sites located at a species’ mean 
-# # CWD, a comparable shock to CWD would lead to only an XX% decline in growth for sites 
-# # that are historically one standard deviation dryer than the species mean.
-# pull_marg_fx <- function(at_pet, at_cwd, mod_df){
-#   cwd_me_predictions <- mod_df$cwd_int + (at_cwd * mod_df$cwd_cwd) + (at_cwd^2 * mod_df$cwd_cwd2) + (at_pet * mod_df$cwd_pet) + (at_pet^2 * mod_df$cwd_pet2)
-#   cwd_ci_min <- cwd_me_predictions %>% quantile(0.025)
-#   cwd_ci_max <- cwd_me_predictions %>% quantile(0.975)
-#   cwd_mean <- cwd_me_predictions %>% mean()
-#   
-#   pet_me_predictions <- mod_df$pet_int + (at_cwd * mod_df$pet_cwd) + (at_cwd^2 * mod_df$pet_cwd2) + (at_pet * mod_df$pet_pet) + (at_pet^2 * mod_df$pet_pet2)
-#   pet_ci_min <- pet_me_predictions %>% quantile(0.025)
-#   pet_ci_max <- pet_me_predictions %>% quantile(0.975)
-#   pet_mean <- pet_me_predictions %>% mean()
-#   return(tibble(cwd_mean = cwd_mean, cwd_ci_min = cwd_ci_min, cwd_ci_max = cwd_ci_max,
-#                 pet_mean = pet_mean, pet_ci_min = pet_ci_min, pet_ci_max = pet_ci_max))
-# }
-# 
-# 
-# at_pet <- 0
-# init_pull_marg_fx = partial(.f = pull_marg_fx, mod_df = ss_df)
-# cwd_me_df <- tibble(at_cwd = c(-2,-1,0, 1, 2))
-# cwd_me_df <- cwd_me_df %>%
-#   mutate(cwd_me = pmap(list(at_pet = at_pet,
-#                             at_cwd = cwd_me_df$at_cwd),
-#                        .f = init_pull_marg_fx)) %>% 
-#   unnest(cwd_me) %>% 
-#   mutate(cwd_ci_dif = cwd_mean - cwd_ci_min,
-#          cwd_ci_dif2 = cwd_ci_max - cwd_mean) %>% 
-#   print()
-# 
-# 
-# 
-# # For example, ITRDB sites located below their species’ mean, historic PET 
-# # experienced an average 7.2+/-4.9 percent increase in annual growth in response 
-# # to a single-year, one standard deviation increase in PET.
-# mod_df <- trim_df %>% 
-#   filter(pet.spstd < 0)
-# pet_low_mod <- feols(estimate_pet.an ~ 1,
-#                       weights = mod_df$pet_errorweights, data = mod_df,
-#                       vcov = conley(cutoff = 363, distance = "spherical")) %>% 
-#   tidy(conf.int = TRUE, conf.level = 0.95) %>% 
-#   mutate(ci_dif = estimate - conf.low) %>% 
-#   print()
-# 
-# # In contrast, increases in PET in sites falling above their species’ historic mean PET 
-# # were, on average, not associated with a significant change in growth.
-# mod_df <- trim_df %>% 
-#   filter(pet.spstd > 0)
-# pet_low_mod <- feols(estimate_pet.an ~ 1,
-#                      weights = mod_df$pet_errorweights, data = mod_df,
-#                      vcov = conley(cutoff = 363, distance = "spherical")) %>% 
-#   tidy(conf.int = TRUE, conf.level = 0.95) %>% 
-#   mutate(ci_dif = estimate - conf.low) %>% 
-#   print()
-
-
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Climatic changes across species ranges  --------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # CMIP5 model ensembles predict that the entirety of every species’ range 
 # analyzed will experience increases in both mean PET and CWD 
-sp_predictions_gen <- sp_predictions %>% 
-  left_join(gen_dat)
-
-sp_plot_dat <- sp_predictions_gen %>% 
+sp_plot_dat <- sp_predictions %>% 
   group_by(sp_code) %>% 
   mutate(beyond_max_cwd = cwd_cmip_end_mean > max(cwd_hist),
          beyond_max_pet = pet_cmip_end_mean > max(pet_hist)) %>% 
@@ -522,148 +336,15 @@ sp_predictions %>%
   filter(cwd_hist<0, pet_hist >0) %>% 
   summarise(mean(rwi_pred_change_mean),
             mean(rwi_pred_change_025),
-            mean(rwi_pred_change_975))
+            mean(rwi_pred_change_975)) %>% 
+  print()
 
 sp_predictions %>%
   filter(cwd_hist>0, pet_hist<0) %>% 
   summarise(mean(rwi_pred_change_mean),
             mean(rwi_pred_change_025),
-            mean(rwi_pred_change_975))
+            mean(rwi_pred_change_975)) %>% 
+  print()
 
 
 
-# # In contrast to a neutral model in which predicted sensitivity to PET and CWD 
-# # are constant across species’ historic, climatic ranges, our model predicts 
-# # that the wettest 10% of grid cells will experience XX percentage point larger 
-# # declines in growth (XX-XX), while the dryest 10% of grid cells will experience 
-# # XX percentage point smaller declines in growth (XX-XX).
-# 
-# 
-# pet_band_bounds <- c(.9, 1.1)
-# subset <- sp_predictions %>%
-#   filter(pet_hist > pet_band_bounds[1], pet_hist < pet_band_bounds[2])
-# 
-#   
-# cwd_quantiles <- subset %>% 
-#   pull(cwd_hist) %>% 
-#   quantile(c(0.05, 0.95)) %>% 
-#   print()
-# 
-# subset <- subset %>% 
-#   mutate(extremes = ifelse(cwd_hist < cwd_quantiles[1], "wet", ifelse(cwd_hist > cwd_quantiles[2], "dry", "neither")))
-# 
-# subset %>%
-#   filter(extremes != "neither") %>%
-#   group_by(extremes) %>%
-#   summarise(rwi_pred_pclim_change_dif_mean = mean(rwi_pred_pclim_change_dif_mean),
-#             rwi_pred_pclim_change_dif_025 = mean(rwi_pred_pclim_change_dif_025),
-#             rwi_pred_pclim_change_dif_975 = mean(rwi_pred_pclim_change_dif_975),
-#             baseline = mean(rwi_pred_change_mean))
-# 
-# 
-# 
-# subset <- sp_predictions %>%
-#   filter(pet_hist > 0, cwd_hist < 0)
-# subset$rwi_pred_pclim_change_dif_mean %>% hist()
-# 
-# subset %>%
-#   # filter(extremes != "neither") %>% 
-#   # group_by(extremes) %>% 
-#   summarise(rwi_pred_pclim_change_dif_mean = mean(rwi_pred_pclim_change_dif_mean),
-#             rwi_pred_pclim_change_dif_025 = mean(rwi_pred_pclim_change_dif_025),
-#             rwi_pred_pclim_change_dif_975 = mean(rwi_pred_pclim_change_dif_975),
-#             baseline = mean(rwi_pred_change_mean))
-# 
-# 
-# 
-# pet_bins <- seq(-2.5, 2.5, 0.2)
-# test <- sp_predictions %>% 
-#   mutate(pet_group = cut(pet_hist, pet_bins))
-# wet_edge_thresh <- test %>% 
-#   group_by(sp_code, pet_group) %>% 
-#   summarize(wet_edge = quantile(cwd_hist, 0.1),
-#             dry_edge = quantile(cwd_hist, 0.9))
-# 
-# test <- test %>% 
-#   left_join(wet_edge_thresh, by = c("sp_code", "pet_group"))
-# 
-# subset <- test %>% 
-#   filter(cwd_hist > dry_edge)
-# 
-# dry_edge_result <- test %>%
-#   filter(cwd_hist > dry_edge) %>% 
-#   group_by(pet_group) %>% 
-#   summarise(rwi_pred_pclim_change_dif_mean = mean(rwi_pred_pclim_change_dif_mean),
-#             rwi_pred_pclim_change_dif_025 = mean(rwi_pred_pclim_change_dif_025),
-#             rwi_pred_pclim_change_dif_975 = mean(rwi_pred_pclim_change_dif_975),
-#             baseline = mean(rwi_pred_change_mean),
-#             neutral = mean(rwi_pclim_change_mean))
-# 
-# wet_edge_result <- test %>%
-#   filter(cwd_hist < wet_edge) %>% 
-#   group_by(pet_group) %>% 
-#   summarise(rwi_pred_pclim_change_dif_mean = mean(rwi_pred_pclim_change_dif_mean),
-#             rwi_pred_pclim_change_dif_025 = mean(rwi_pred_pclim_change_dif_025),
-#             rwi_pred_pclim_change_dif_975 = mean(rwi_pred_pclim_change_dif_975),
-#             baseline = mean(rwi_pred_change_mean),
-#             neutral = mean(rwi_pclim_change_mean))
-# 
-# # # pet_band_bounds <- c(0.9, 1.1)
-# # # cwd_quantiles <- sp_predictions %>% 
-# # #   filter(pet_hist > pet_band_bounds[1], pet_hist < pet_band_bounds[2]) %>% 
-# # #   pull(cwd_hist) %>% 
-# # #   quantile(c(0.01, 0.99)) %>% 
-# # #   print()
-# # # 
-# # # sp_predictions %>% 
-# # #   filter(pet_hist > pet_band_bounds[1], pet_hist < pet_band_bounds[2]) %>% 
-# # #   filter(cwd_hist < cwd_quantiles[1]) %>% 
-# # #   select(rwi_pred_change_mean, rwi_pred_change_025, rwi_pred_change_975) %>% 
-# # #   summary()
-# # # 
-# # # sp_predictions %>% 
-# # #   filter(pet_hist > pet_band_bounds[1], pet_hist < pet_band_bounds[2]) %>% 
-# # #   filter(cwd_hist > cwd_quantiles[2]) %>% 
-# # #   select(rwi_pred_change_mean, rwi_pred_change_025, rwi_pred_change_975) %>% 
-# # #   summary()
-# # # 
-# # # sp_predictions %>% filter(cwd_hist > 1) %>% select(rwi_pred_change_mean) %>% summary()
-# # # sp_predictions %>% filter(cwd_hist < -0) %>% select(rwi_pred_change_mean) %>% summary()
-# # # sp_predictions$rwi_pred_change_mean %>% quantile(.5)
-# # # sp_predictions %>% filter(rwi_pred_change_mean < -0.1) %>% select(cwd_hist) %>% summary()
-# # # # Proportion of grid cells forecasted to experience significant increase in growth
-# # 
-# # 
-# # # For example, among the grid cells with a historic PET ranging from 0.9 to 1.1, 
-# # # the wettest 1% of grid cells (historic CWD < -0.41) are predicted to experience 
-# # # a mean decline in growth of 25.0%. In contrast, the driest 1% of grid cells 
-# # # (historic CWD > 2.02) are predicted to experience a mean decline in growth of 18.5%.  
-# # 
-# # 
-# hot_cells$pet_hist %>% summary()
-# 
-# cwd_quantiles <- hot_cells %>%
-#   pull(cwd_hist) %>%
-#   quantile(c(0.01, 0.99)) %>%
-#   print()
-# 
-# hot_cells <- hot_cells %>%
-#   mutate(wet = ifelse(cwd_hist < cwd_quantiles[1], "wet", ifelse(cwd_hist > cwd_quantiles[2], "dry", "neither")))
-# 
-# hot_cell_comparison <- hot_cells %>%
-#   filter(wet != "neither") %>%
-#   group_by(iter_idx, wet) %>%
-#   summarise(rwi_pred_change = mean(rwi_pred_change)) %>%
-#   pivot_wider(names_from = wet, values_from = rwi_pred_change) %>%
-#   mutate(difference = dry - wet)
-# 
-# hot_cell_comparison$wet %>% mean()
-# hot_cell_comparison$wet %>% quantile(c(0.025, 0.975))
-# 
-# hot_cell_comparison$dry %>% mean()
-# hot_cell_comparison$dry %>% quantile(c(0.025, 0.975))
-# 
-# hot_cell_comparison$difference %>% mean()
-# hot_cell_comparison$difference %>% quantile(c(0.025, 0.975))
-# 
-# t.test(hot_cell_comparison$wet, hot_cell_comparison)
