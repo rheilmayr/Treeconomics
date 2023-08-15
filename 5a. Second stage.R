@@ -223,7 +223,7 @@ for (site in site_list){
   block_list[site] <- list(block_sites)
 }
 save(block_list,file=paste0(wdir,"out/spatial_blocks.Rdat"))
-# load(file=paste0(wdir,"out/spatial_blocks.Rdat"))
+# load(file=paste0(wdir,"out/second_stage/spatial_blocks.Rdat"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
