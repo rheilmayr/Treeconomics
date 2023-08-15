@@ -27,13 +27,14 @@ library(tidyverse)
 # Load and merge data ----------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Create file list
-wdir <- 'remote\\in\\species_ranges\\'
-ranges_dir <- paste0(wdir, 'processed_data\\')
-species_list <- list.files(ranges_dir)
+wdir <- 'remote/in/species_ranges/'
+ranges_dir <- paste0(wdir, 'processed_data/')
+species_list <- list.files(ranges_dir, full.names = FALSE)
+species_list <- species_list[which(species_list!="desktop.ini")]
 
 new_crs <- 4326
 load_shp <- function(sp_name){
-  file_name <- paste0(ranges_dir, "\\", sp_name, "\\", sp_name, ".shp")
+  file_name <- paste0(ranges_dir, "/", sp_name, "/", sp_name, ".shp")
   sp_sf <- st_read(file_name)
   sp_sf <- sp_sf %>%
     st_transform(new_crs) %>% 
@@ -51,7 +52,7 @@ merged_sf <- do.call(rbind, sp_sf_list)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 leslie_shp <- paste0(wdir, 'raw_data\\conifers_of_the_world\\ranges\\coniferranges.shp')
 leslie_idx <- paste0(wdir, 'leslie_index.csv')
-leslie_idx <- read.csv(leslie_idx) %>% 
+leslie_idx <- read_csv(leslie_idx) %>% 
   filter(source=="leslie")
 
 leslie_list <- leslie_idx %>% 
@@ -61,10 +62,13 @@ leslie_ranges <- st_read(leslie_shp)
 select_ranges <- leslie_ranges %>% 
   left_join(leslie_idx, by = c("species" = "conifersoftheworld_taxon"))
 
+select_ranges <- select_ranges %>% 
+  drop_na()
+
 print(paste0("All records matched: ", dim(leslie_idx)[1]==dim(select_ranges)[1]))
 
 select_ranges <- select_ranges %>% 
-  rename(sp_code = ï..species_id) %>% 
+  rename(sp_code = species_id) %>% 
   select(sp_code, geometry)
 
 select_ranges <- select_ranges %>% 
@@ -76,4 +80,4 @@ merged_sf <- rbind(merged_sf, select_ranges)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Export new file --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-st_write(merged_sf, paste0(wdir, 'merged_ranges.shp'), overwrite = TRUE)
+st_write(merged_sf, paste0(wdir, 'merged_ranges.shp'), overwrite = TRUE, append = FALSE)
