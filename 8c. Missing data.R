@@ -19,6 +19,7 @@ library(RSQLite)
 library(sf)
 library(naniar)
 library(stringr)
+summarize <- dplyr::summarize
 
 
 # Convert site summary valid values to na/1
@@ -146,8 +147,8 @@ dendro_df %>%
   unique() %>% 
   length()
 
-# Sites dropped due to missing range maps: 447
-# Sites remaining for anlaysis: 3865
+# Sites dropped due to missing range maps: 448
+# Sites remaining for anlaysis: 3864
 data_inventory %>% 
   filter(valid_dates == 1, valid_parse == 1, valid_rwl == 1) %>% 
   group_by(valid_range) %>% 
@@ -155,7 +156,7 @@ data_inventory %>%
 
 
 # Sites dropped due to missing raw climate/topo data: 20
-# Sites remaining for analysis: 3845
+# Sites remaining for analysis: 3844
 data_inventory %>% 
   filter(valid_dates == 1, valid_parse == 1, valid_rwl == 1, valid_range == 1) %>% 
   group_by(valid_clim) %>% 
@@ -163,7 +164,7 @@ data_inventory %>%
 
 
 # Sites dropped due to missing species-standardized climate data: None
-# Sites remaining for analysis: 3845
+# Sites remaining for analysis: 3844
 data_inventory %>% 
   filter(valid_dates == 1, valid_parse == 1, valid_rwl == 1, valid_range == 1, valid_clim==1) %>% 
   group_by(valid_ave_clim, valid_an_clim, valid_fut_clim) %>% 
@@ -173,11 +174,18 @@ data_inventory %>%
 # Sites dropped due to errors in first stage regression: 
 # - Error 1: No variation in PET or CWD: 61
 # - Error 2: Too few observations to identify regression: 8
-# Sites remaining for analysis: 3776
+# Sites remaining for analysis: 3775
 data_inventory %>% 
   filter(valid_dates == 1, valid_parse == 1, valid_rwl == 1, valid_range == 1, valid_clim==1) %>% 
   group_by(valid_fs, valid_weather_vary) %>% 
   tally()
+
+
+# Number of species / trees / observations included
+flm_df$collection_id %>% unique() %>%  length()
+flm_df$species_id %>% unique() %>% length()
+flm_df$ntrees %>% sum()
+flm_df$nobs %>% sum()
 
 
 # Sites dropped in primary specification as outliers in first stage regression estimates:
