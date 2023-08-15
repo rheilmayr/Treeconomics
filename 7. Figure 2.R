@@ -176,7 +176,7 @@ map <- ggplot(trim_df, aes(x = Longitude, y = Latitude))
 map <- ggplot() +
   geom_sf(data = world) +
   geom_sf(data = sp_range, fill = 'black', alpha = .2, colour = NA) +
-  geom_sf(data = trim_df, color = 'black', fill = 'black', alpha = .6) +
+  geom_sf(data = trim_df, color = '#B0357B', fill = '#B0357B', alpha = .4) +
   ylab("Latitude")+
   xlab("Longitude")+
   # theme(axis.text.x=element_text(size=base_text_size - 2),
@@ -211,7 +211,7 @@ map <- ggplot() +
   geom_label(aes(x = -119, y = 25, label = "Site B"), fill = low_color, color = "white", size = 5, label.size = NA)
 
 map
-# ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/map_ex.png'), plot = map, bg= 'transparent', width = 2.25, height = 2.9)
+ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/map_ex.png'), plot = map, bg= 'transparent', width = 2.25, height = 2.9)
 
 
 
@@ -259,7 +259,7 @@ xmin <- -1.5
 xmax <- 2
 hex <- spp_predictions %>% 
   ggplot(aes(x = cwd_hist, y = pet_hist)) +
-  geom_density_2d(color = 'black') +
+  geom_density_2d(color = 'grey') +
   # geom_density_2d(colour = "black") +
   #geom_density_2d_filled(alpha = .6) +
   xlim(xmin, xmax) +
