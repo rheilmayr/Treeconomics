@@ -179,9 +179,10 @@ map <- ggplot() +
   geom_sf(data = trim_df, color = 'black', fill = 'black', alpha = .6) +
   ylab("Latitude")+
   xlab("Longitude")+
-  theme(axis.text.x=element_text(size=base_text_size - 6),
-        axis.text.y=element_text(size = base_text_size - 6))+
+  # theme(axis.text.x=element_text(size=base_text_size - 2),
+  #       axis.text.y=element_text(size = base_text_size - 2))+
   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE) +
+  scale_x_continuous(breaks=seq(-120,100,10)) +
   geom_point(aes(x = high_coords[[1]][1], y = high_coords[[1]][2]), color = high_color, size = 3) +
   geom_point(aes(x = low_coords[[1]][1], y = low_coords[[1]][2]), color = low_color, size = 3) +
   geom_segment(
@@ -190,7 +191,7 @@ map <- ggplot() +
     xend = high_coords[[1]][1], yend = high_coords[[1]][2] + 1,
     lineend = "round",
     linejoin = "round",
-    size = 1,
+    linewidth = 1,
     arrow = arrow(length = unit(0.05, "inches"), type = "closed"),
     colour = high_color
   ) +
@@ -203,7 +204,7 @@ map <- ggplot() +
     xend = low_coords[[1]][1], yend = low_coords[[1]][2] - 1,
     lineend = "round",
     linejoin = "round",
-    size = 1, 
+    linewidth = 1, 
     arrow = arrow(length = unit(0.05, "inches"), type = "closed"),
     colour = low_color
   ) +
@@ -385,7 +386,7 @@ partial_plot <- ggplot(filter(x,cwd <=1&fit<=1), aes(x = cwd, y = fit, color="bl
 #             method = "loess", span = 2/3, linetype = "dashed", se = FALSE)
 partial_plot
 
-ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/partial_plot.png'), plot = partial_plot, bg= 'transparent', width = 3.5, height = 3.05)
+ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/partial_plot.png'), plot = partial_plot, bg= 'transparent', width = 3.75, height = 3.05)
 
 # combined_plot <- (map_ex | both_fig) / (sens_niche | partial_plot)+ plot_layout(widths = c(1,4))
 # combined_plot
@@ -410,10 +411,11 @@ cwd_sens_map <- ggplot() +
   #scale_fill_viridis_c(direction = -1) +
   scale_fill_viridis(option="mako", direction = -1)+
   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE) +
-  theme(axis.text.x=element_text(size=base_text_size - 6),
-        axis.text.y=element_text(size = base_text_size - 6),
-        axis.title.x=element_blank(),
+  scale_x_continuous(breaks=seq(-120,100,10)) +
+  theme(axis.title.x=element_blank(),
         axis.title.y = element_blank(),
+        # axis.text.x=element_text(size=base_text_size - 6),
+        # axis.text.y=element_text(size = base_text_size - 6),
         legend.key.size = unit(8, "pt"),
         legend.title=element_text(size=base_text_size - 2), 
         legend.text=element_text(size=base_text_size - 4))+
@@ -442,10 +444,11 @@ cwd_change_map <- ggplot() +
   #scale_fill_viridis_c(direction = -1) +
   scale_fill_viridis(option="magma")+
   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE) +
-  theme(axis.text.x=element_text(size=base_text_size - 6),
-        axis.text.y=element_text(size = base_text_size - 6),
-        axis.title.x=element_blank(),
+  scale_x_continuous(breaks=seq(-120,100,10)) +
+  theme(axis.title.x=element_blank(),
         axis.title.y = element_blank(),
+        # axis.text.x=element_text(size=base_text_size - 6),
+        # axis.text.y=element_text(size = base_text_size - 6),
         legend.key.size = unit(8, "pt"),
         legend.title=element_text(size=base_text_size - 2), 
         legend.text=element_text(size=base_text_size - 4))
@@ -465,9 +468,10 @@ rwi_map <- ggplot() +
   #scale_fill_viridis(option="mako")+
   guides(fill=guide_legend(title="Δ RWI"))+
   coord_sf(xlim = lon_lims, ylim = lat_lims, expand = FALSE) +
+  scale_x_continuous(breaks=seq(-120,100,10)) +
   theme(legend.position = c(.18,.15),
-        axis.text.x=element_text(size=base_text_size - 6),
-        axis.text.y=element_text(size = base_text_size - 6),
+        # axis.text.x=element_text(size=base_text_size - 6),
+        # axis.text.y=element_text(size = base_text_size - 6),
         axis.title.x=element_blank(),
         axis.title.y = element_blank(),
         legend.key.size = unit(8, "pt"),
