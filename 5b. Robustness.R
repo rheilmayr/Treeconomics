@@ -253,7 +253,7 @@ robustness_test <- function(params){
     }
     }
   if (params$mod_type == "re") {
-    mod <- lmer(formula, data = data)
+    mod <- lmer(formula, data = data, control = lmerControl(optimizer ="Nelder_Mead"))
     test_str <- paste0("cwd.an.spstd:cwd.spstd + (2 * cwd.an.spstd:I(cwd.spstd^2) * ", as.character(cwd_median), ") = 0")
   }
   lincom <- glht(mod, linfct = c(test_str))
