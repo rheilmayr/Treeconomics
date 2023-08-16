@@ -215,7 +215,7 @@ first_stage_effects <- first_stage_effects  +
 
 
 first_stage_effects
-ggsave(paste0(wdir, 'figures\\s3_first_stage_effects.svg'), plot = first_stage_effects,
+ggsave(paste0(wdir, 'figures\\FigS3_first_stage_effects.svg'), plot = first_stage_effects,
        width = 15, height = 8, units = "in")
 
 
