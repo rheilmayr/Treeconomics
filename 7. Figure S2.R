@@ -136,8 +136,8 @@ qq_plot <- quantile_df %>%
   theme_bw() +
   coord_fixed() +
   ggtitle("QQ-plot comparing\nCWD distributions") +
-  xlab("CWD quantiles across species ranges") +
-  ylab("CWD quantiles across ITRDB sites")
+  xlab("CWD quantiles in species ranges") +
+  ylab("CWD quantiles in ITRDB sites")
 
 cwd_qqplot <- (itrdb_hist / fullrange_hist) | qq_plot
 
@@ -182,8 +182,8 @@ pet_qq_plot <- pquantile_df %>%
   theme_bw() +
   coord_fixed() +
   ggtitle("QQ-plot comparing\nPET distributions") +
-  xlab("PET quantiles across species ranges") +
-  ylab("PET quantiles across ITRDB sites")
+  xlab("PET quantiles in species ranges") +
+  ylab("PET quantiles in ITRDB sites")
 
 pet_qqplot <- (itrdb_pet_hist / fullrange_pet_hist) | pet_qq_plot
 
@@ -192,4 +192,4 @@ qqplot <- qqplot &
   plot_annotation(tag_levels="A") & 
   theme(plot.tag = element_text(face = 'bold', size=12))
 qqplot
-ggsave(paste0(wdir, 'figures\\s2_qqplots.svg'), plot = qqplot, width = 11, height = 7, units = "in")
+ggsave(paste0(wdir, 'figures\\FigS2_qqplots.svg'), plot = qqplot, width = 11, height = 7, units = "in")
