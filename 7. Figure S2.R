@@ -135,9 +135,9 @@ qq_plot <- quantile_df %>%
   geom_abline(intercept = 0, slope = 1) +
   theme_bw() +
   coord_fixed() +
-  ggtitle("QQ-plot comparing CWD distributions") +
-  xlab("Species ranges") +
-  ylab("ITRDB sites")
+  ggtitle("QQ-plot comparing\nCWD distributions") +
+  xlab("CWD quantiles across species ranges") +
+  ylab("CWD quantiles across ITRDB sites")
 
 cwd_qqplot <- (itrdb_hist / fullrange_hist) | qq_plot
 
@@ -181,9 +181,9 @@ pet_qq_plot <- pquantile_df %>%
   geom_abline(intercept = 0, slope = 1) +
   theme_bw() +
   coord_fixed() +
-  ggtitle("QQ-plot comparing PET distributions") +
-  xlab("Species ranges") +
-  ylab("ITRDB sites")
+  ggtitle("QQ-plot comparing\nPET distributions") +
+  xlab("PET quantiles across species ranges") +
+  ylab("PET quantiles across ITRDB sites")
 
 pet_qqplot <- (itrdb_pet_hist / fullrange_pet_hist) | pet_qq_plot
 
