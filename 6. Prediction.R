@@ -65,9 +65,6 @@ mod_df <- mod_df %>%
 sp_clim <- read_rds(paste0(wdir, "out/climate/sp_clim_predictions.gz"))
 species_list <- sp_clim %>% select(sp_code)
 
-# # 3. Constant sensitivites (median of first stage, rather than running 2nd stage)
-# constant_sensitivities <- read_rds(paste0(wdir, "out/first_stage/constant_sensitivities.rds"))
-
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Assign MC coefs and CMIP models  ---------------

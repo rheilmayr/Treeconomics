@@ -2,17 +2,10 @@
 # Authors: Robert Heilmayr, Joan Dudney, Frances Moore
 # Project: Treeconomics
 # Date: 5/17/20
-# Purpose: Run regressions to explore impact of historical climate on weather sensitivity
+# Purpose: Run alternate specifications of second stage model
 #
 # Input files:
-# - clim_niche.csv: Data documenting historic climate across each species range
-#     Generated using species_niche.R
-# - tree_ring_data_V2.db: Compiled database of ITRDB observations 
-# - essentialcwd_data.csv: File detailing plot-level weather history
 #
-# ToDo:
-# - Update / finalize genus analyses
-# - Rebuild robustness tests based on final baseline model
 #
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -85,10 +78,6 @@ sp_info <- sp_info %>%
   select(species_id, genus, gymno_angio, family)
 site_df <- site_df %>% 
   left_join(sp_info, by = "species_id")
-
-
-niche_df <- read.csv(paste0(wdir, "out/climate/clim_niche.csv")) %>%
-  select(-X)
 
 
 # 5. Dendrochronologies - used for single-stage model comparison

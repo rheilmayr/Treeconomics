@@ -6,7 +6,7 @@
 #
 # Input files:
 # - site_pet_cwd_std.csv: Table of first stage regression parameters for baseline specification. Generated in "4a. First stage.R"
-# - site_an_clim.gz: Site-level climate parameters. Generated using "3b. Species_niche.R"
+# - site_ave_clim.gz: Site-level climate parameters. Generated using "3b. Species_niche.R"
 # - site_summary.csv: Summary data about each site. Generated using "1b. Parse ITRDB.R"
 # - species_gen_gr.csv: Lookup key for angiosperm / gymnosperm differentiation
 # 
