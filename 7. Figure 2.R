@@ -188,7 +188,7 @@ map <- ggplot() +
   geom_segment(
     data = trim_df,
     x = -105, y = 50,
-    xend = high_coords[[1]][1], yend = high_coords[[1]][2] + 1,
+    xend = high_coords[[1]][1], yend = high_coords[[1]][2] + 1.3,
     lineend = "round",
     linejoin = "round",
     linewidth = 1,
@@ -201,7 +201,7 @@ map <- ggplot() +
     # x = -low_coords[[1]][1] - 20, y = low_coords[[1]][2],
     x = -120, y = 25,
     # x = -120, y = 25,
-    xend = low_coords[[1]][1], yend = low_coords[[1]][2] - 1,
+    xend = low_coords[[1]][1], yend = low_coords[[1]][2] - 1.3,
     lineend = "round",
     linejoin = "round",
     linewidth = 1, 
@@ -274,7 +274,7 @@ hex <- spp_predictions %>%
   geom_point(aes(x = low_fs$cwd.spstd, y = low_fs$pet.spstd), color = low_color, size = 3) +
   geom_segment(
     x = 0.5, y = -1.3,
-    xend = high_fs$cwd.spstd + 0.1, yend = high_fs$pet.spstd - 0.05,
+    xend = high_fs$cwd.spstd + 0.2, yend = high_fs$pet.spstd - 0.04,
     lineend = "round",
     linejoin = "round",
     size = 1, 
@@ -284,7 +284,7 @@ hex <- spp_predictions %>%
   geom_label(aes(x = 0.5, y = -1.3, label = "Site A"), fill = high_color, color = "white", size = 5, label.size = NA) +
   geom_segment(
     x = 1, y = -0.8,
-    xend = low_fs$cwd.spstd + 0.1, yend = low_fs$pet.spstd - 0.08,
+    xend = low_fs$cwd.spstd + 0.2, yend = low_fs$pet.spstd - 0.04,
     lineend = "round",
     linejoin = "round",
     size = 1, 
@@ -374,7 +374,7 @@ partial_plot <- ggplot(filter(x,cwd <=1&fit<=1), aes(x = cwd, y = fit, color="bl
   geom_label(aes(x = -0.2, y = -2.4, label = "Site A"), fill = high_color, color = "white", size = 5, label.size = NA) +
   geom_segment(
     x = -1, y = 0.8,
-    xend = low_fs$cwd.spstd - 0.08, yend = low_fs$estimate_cwd.an + 0.08,
+    xend = low_fs$cwd.spstd - 0.1, yend = low_fs$estimate_cwd.an + 0.1,
     lineend = "round",
     linejoin = "round",
     size = 1, 
