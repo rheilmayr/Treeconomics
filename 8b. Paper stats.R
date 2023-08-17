@@ -395,7 +395,7 @@ growth_cells <- sp_predictions %>%
 
 growth_cells %>% 
   pull(pet_hist) %>% 
-  quantile(c(0.25, 0.5, 0.75, 0.8, 0.85,  0.9))
+  quantile(c(0.25, 0.5, 0.75, 0.8))
 
 
 # 
