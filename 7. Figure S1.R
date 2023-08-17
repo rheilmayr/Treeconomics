@@ -139,8 +139,9 @@ map <- ggplot() +
   xlab("Longitude")+
   scale_x_continuous("Longitude", breaks = xr, labels = xlabels) +
   scale_y_continuous("Latitude", breaks = yr, labels = ylabels) +
-  force_panelsizes(rows = unit(1.5, "in"),
-                   cols = unit(2.5, "in")) +
+# +
+#   force_panelsizes(rows = unit(1.5, "in"),
+#                    cols = unit(2.5, "in")) +
   coord_equal(ratio=1) # square plot to avoid the distortion
 
 map
@@ -175,9 +176,10 @@ range_map <- ggplot() +
         legend.position = c(0.85, 0.27),
         legend.background=element_blank(),
         axis.title.x=element_blank(),
-        axis.title.y = element_blank()) +
-  force_panelsizes(rows = unit(1.5, "in"),
-                   cols = unit(2.5, "in"))
+        axis.title.y = element_blank())
+# +
+#   force_panelsizes(rows = unit(1.5, "in"),
+#                    cols = unit(2.5, "in"))
 
 
 
@@ -218,12 +220,16 @@ hex <- flm_df %>% ggplot(aes(x = cwd.spstd, y = pet.spstd)) +
   xlab("Historic CWD\n(Deviation from species mean)") + 
   coord_fixed() +
   scale_fill_viridis_c() +
-  theme(legend.position = c(.24,.83),
+  theme(legend.position = c(.24,.84),
         legend.background = element_blank(),
+        legend.key.size = unit(10, "pt"),
+        legend.text = element_text(size=8),
+        legend.title = element_text(size=10),
         panel.grid.major = element_blank(), 
-        panel.grid.minor = element_blank())  +
-  force_panelsizes(rows = unit(3, "in"),
-                   cols = unit(3, "in"))
+        panel.grid.minor = element_blank())
+# +
+#   force_panelsizes(rows = unit(3, "in"),
+#                    cols = unit(3, "in"))
 hex
 
 
@@ -245,18 +251,23 @@ hex_raw <- flm_df %>% ggplot(aes(x = cwd.ave, y = pet.ave)) +
   coord_fixed() +
   scale_fill_viridis_c() +
   # scale_color_viridis_c(name = bquote('Species')) +
-  theme(legend.position = c(.2, .84),
+  theme(legend.position = c(.24, .84),
         legend.background = element_blank(),
-        panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
-  force_panelsizes(rows = unit(3, "in"),
-                   cols = unit(3, "in"))
+        legend.key.size = unit(10, "pt"),
+        legend.text = element_text(size=8),
+        legend.title = element_text(size=10),
+        panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+# +
+#   force_panelsizes(rows = unit(3, "in"),
+#                    cols = unit(3, "in"))
 hex_raw
 
 
 hex2_raw <- ggMarginal(hex_raw, type="histogram", fill ="#404788FF", alpha=.5)
-hex2_raw <- hex2_raw %>% as.ggplot() +
-  force_panelsizes(rows = unit(3, "in"),
-                   cols = unit(3, "in"))
+hex2_raw <- hex2_raw %>% as.ggplot()
+# +
+#   force_panelsizes(rows = unit(3, "in"),
+#                    cols = unit(3, "in"))
 hex2_raw
 
 
@@ -265,46 +276,48 @@ hex2_raw
 fig <- (map / range_map) | hex2_raw | hex2
 fig
 
-layout <- "
-AACCDD
-BBCCDD
-"
-
-layout <- c(
-  area(t = 1, l = 1, b = 2, r = 2),
-  area(t = 2, l = 1, b = 3, r = 2),
-  area(t = 1, l = 2, b = 3, r = 4),
-  area(t = 1, l = 4, b = 3, r = 6)  
-)
+ggsave(paste0(wdir, 'figures/FigS1_data_summary.pdf'), plot = fig, bg= 'transparent', width = 15, height = 8, units = "in")
 
 
-layout <- c(
-  area(t = 1, l = 1, b = 2, r = 2),
-  area(t = 3, l = 1, b = 4, r = 2),
-  area(t = 1, l = 3, b = 4, r = 7),
-  area(t = 1, l = 8, b = 4, r = 12)  
-)
+# fig
+# 
+# layout <- "
+# AACCDD
+# BBCCDD
+# "
+# 
+# layout <- c(
+#   area(t = 1, l = 1, b = 2, r = 2),
+#   area(t = 2, l = 1, b = 3, r = 2),
+#   area(t = 1, l = 2, b = 3, r = 4),
+#   area(t = 1, l = 4, b = 3, r = 6)  
+# )
+# 
+# 
+# layout <- c(
+#   area(t = 1, l = 1, b = 2, r = 2),
+#   area(t = 3, l = 1, b = 4, r = 2),
+#   area(t = 1, l = 3, b = 4, r = 7),
+#   area(t = 1, l = 8, b = 4, r = 12)  
+# )
+# 
+# 
+# fig <- map + range_map + hex_raw + hex +
+#   plot_layout(design = layout) &
+#   plot_annotation(tag_levels="A") &
+#   theme(plot.tag = element_text(face = 'bold', size=12))
 
-
-fig <- map + range_map + hex_raw + hex +
-  plot_layout(design = layout) &
-  plot_annotation(tag_levels="A") &
-  theme(plot.tag = element_text(face = 'bold', size=12))
-
-fig
-ggsave(paste0(wdir, 'figures/FigS1_data_summary.png'), plot = fig, bg= 'transparent', width = 13, height = 6, units = "in")
-
-figs1 <- map/range_map+plot_layout(heights = c(1,1))
-figs1+
-  plot_annotation(tag_levels = 'A') & theme(
-    plot.tag = element_text(face = 'bold', size=12, family ="Helvetica"),
-    text=element_text(family ="Helvetica"))
-
-figs_maps <- mapsplot | hex2_raw | hex2
-figs_maps
-
-figs_maps + plot_layout(heights = c(1,2))+
-  plot_annotation(tag_levels = 'A') & theme(
-    plot.tag = element_text(face = 'bold', size=12, family ="Helvetica"),
-    text=element_text(family ="Helvetica"))
-
+# figs1 <- map/range_map+plot_layout(heights = c(1,1))
+# figs1+
+#   plot_annotation(tag_levels = 'A') & theme(
+#     plot.tag = element_text(face = 'bold', size=12, family ="Helvetica"),
+#     text=element_text(family ="Helvetica"))
+# 
+# figs_maps <- mapsplot | hex2_raw | hex2
+# figs_maps
+# 
+# figs_maps + plot_layout(heights = c(1,2))+
+#   plot_annotation(tag_levels = 'A') & theme(
+#     plot.tag = element_text(face = 'bold', size=12, family ="Helvetica"),
+#     text=element_text(family ="Helvetica"))
+# 

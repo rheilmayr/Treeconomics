@@ -18,6 +18,7 @@
 library(tidyverse)
 library(patchwork)
 library(viridis)
+library(forcats)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -58,14 +59,15 @@ exposure_df <- sp_predictions %>%
   mutate(labels = labels)
 
 exposure_df <- exposure_df %>% 
-  mutate(dn_sens = dn_sens,
-         cons_sens = cons_sens,
-         res_sens = res_sens)
+  mutate(dn = dn_sens,
+         cons = cons_sens,
+         res = res_sens)
 
 # Sensitivity
 sens_df <- exposure_df  %>% 
-  pivot_longer(cols = c("dn_sens", "cons_sens", "res_sens")) %>% 
-  select(cwd_bin, labels, name, sens = value)
+  pivot_longer(cols = c("dn", "cons", "res")) %>% 
+  select(cwd_bin, labels, name, sens = value) %>% 
+  mutate(name = fct_relevel(name, "cons", "res", "dn"))
 
 # Exposure
 exp_df <- exposure_df %>% 
@@ -73,11 +75,12 @@ exp_df <- exposure_df %>%
 
 # Vulnerability
 vuln_df <- exposure_df  %>% 
-  mutate(dn_vuln = (dn_sens * cwd_end) - (dn_sens * cwd_start),
-         cons_vuln = (cons_sens * cwd_end) - (cons_sens * cwd_start),
-         res_vuln = (res_sens * cwd_end) - (res_sens * cwd_start)) %>% 
-  pivot_longer(cols = c("dn_vuln", "cons_vuln", "res_vuln")) %>% 
-  select(cwd_bin, labels, name, rwi_change = value)
+  mutate(dn = (dn * cwd_end) - (dn * cwd_start),
+         cons = (cons * cwd_end) - (cons * cwd_start),
+         res = (res * cwd_end) - (res * cwd_start)) %>% 
+  pivot_longer(cols = c("dn", "cons", "res")) %>% 
+  select(cwd_bin, labels, name, rwi_change = value) %>% 
+  mutate(name = fct_relevel(name, "cons", "res", "dn"))
 
 
 
@@ -86,13 +89,14 @@ vuln_df <- exposure_df  %>%
 # Plots --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-discrete_pal_sens <- c("#1e9c89","#472e7c","darkgrey")
+discrete_pal <- c("#1e9c89","darkgrey", "#472e7c")
+labels = c("H0: Consistent","H1: Drought-naive", "H2: Dry-range")
 
 panel1 <- sens_df %>% 
   ggplot(aes(x = labels, y = sens, fill = name, group = name, color = name)) +
   geom_smooth() +
-  scale_fill_manual(values = discrete_pal_sens,labels=c("Consistent","Drought-naive", "Dry-range"))+
-  scale_color_manual(values = discrete_pal_sens, labels=c("Consistent","Drought-naive", "Dry-range"))+
+  scale_fill_manual(values = discrete_pal,labels=c("H0: Consistent","H1: Dry-range ", "H2: Drought-naïve"))+
+  scale_color_manual(values = discrete_pal, labels=c("H0: Consistent","H1: Dry-range ", "H2: Drought-naïve"))+
   theme(legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
   ylab("Sensitivity (Δ RWI / Δ CWD)")+
   xlab("Standardized aridity\n(Deviation from species mean)")+
@@ -109,14 +113,13 @@ panel2 <- exp_df %>%
   ggtitle("Exposure")+
   theme(plot.title = element_text(hjust = 0.5))
 
-discrete_pal <- c("#1e9c89","#472e7c","darkgrey")
 
 panel3 <- vuln_df %>%
   ggplot(aes(x = labels, y = rwi_change, fill = name, group = name)) +
   geom_col(position = "dodge", width =.2, alpha=.4)+
   geom_smooth(aes(color=name), se=F, method="gam")+
-  scale_fill_manual(values = discrete_pal_sens,labels=c("Consistent","Drought-naive", "Dry-range"))+
-  scale_color_manual(values = discrete_pal_sens, labels=c("Consistent","Drought-naive", "Dry-range"))+
+  scale_fill_manual(values = discrete_pal_sens,labels=c("H0: Consistent","H1: Dry-range ", "H2: Drought-naïve"))+
+  scale_color_manual(values = discrete_pal_sens, labels=c("H0: Consistent","H1: Dry-range ", "H2: Drought-naïve"))+
   theme(legend.title = element_blank(),plot.title = element_text(hjust = 0.5), legend.position = "bottom")+
   ylab("Change in RWI")+
   xlab("Standardized aridity\n(Deviation from species mean)")+
@@ -131,8 +134,8 @@ full_fig <- panel1 + panel2 + panel3 +
   plot_annotation(tag_levels="A") & 
   theme(plot.tag = element_text(face = 'bold', size=12))
 
-full_Fig
+full_fig
 
-ggsave(paste0(wdir, 'figures/Fig1.png'), plot = full_fig, bg= 'transparent', width = 8, height = 5)
+ggsave(paste0(wdir, 'figures/Fig1_conceptual.svg'), plot = full_fig, bg= 'transparent', width = 10, height = 4)
 
 #dims 15x6

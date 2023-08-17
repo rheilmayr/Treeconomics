@@ -319,5 +319,6 @@ pred_full <- pred_full +
         plot.tag.position  = c(.04, 1.015))
 
 pred_full
-ggsave(paste0(wdir, "figures\\", "Fig5_pred_full.svg"), pred_full, width = 14, height = 7)
+ggsave(paste0(wdir, "figures/", "Fig5_pred_full.pdf"), pred_full, width = 14, height = 7)
 
+## Small formatting changes to be made in Illustrator

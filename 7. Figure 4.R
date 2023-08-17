@@ -179,7 +179,7 @@ cwd_change <- sp_plot_dat %>%
   ylim(-5, 20) +
   xlab("Mean CWD in 1970-2000\n(Deviation from species mean)") +
   ylab("Mean CWD in 2091-2100\n(Deviation from species mean)") +
-  labs(fill = "Count of\ngrid cells")
+  labs(fill = "Count of grid\ncells")
 
 pet_change <- sp_plot_dat %>% 
   ggplot(aes(x = pet_cmip_start_mean, y = pet_cmip_end_mean)) +
@@ -191,7 +191,7 @@ pet_change <- sp_plot_dat %>%
   ylim(-5, 18) +
   xlab("Mean PET in 1970-2000\n(Deviation from species mean)") +
   ylab("Mean PET in 2091-2100\n(Deviation from species mean)") +
-  labs(fill = "Count of\ngrid cells")
+  labs(fill = "Count of grid\ncells")
 # +
 #   theme(legend.position = c(.9,.2),
 #         legend.background = element_blank())
@@ -220,10 +220,10 @@ genus_cwd_change
 #   plot_layout(heights = c(1.4, 1.7, 1))
 
 cwd_change_fig <- cwd_map / change_plot / genus_cwd_change  +
-  plot_layout(heights = c(2, 2.5, 3)) &
+  plot_layout(heights = c(2.3, 2.5, 3)) &
   plot_annotation(tag_levels="A") & 
   theme(plot.tag = element_text(face = 'bold', size=12))
 
 cwd_change_fig
 
-ggsave(paste0(wdir, "figures/", "Fig4_cwd_change.svg"), cwd_change_fig, width = 10, height = 11)
+ggsave(paste0(wdir, "figures/", "Fig4_cwd_change.pdf"), cwd_change_fig, width = 10, height = 11.3)
