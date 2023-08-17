@@ -178,6 +178,46 @@ cwd_low_fs_bs %>%
   quantile(c(0.025, 0.975))
 
 
+# Trees also exhibited heterogeneity in their responses to annual increases in 
+# energy availability (Figure 3, D-F). In the most energy limited portions of 
+# species’ range, trees often experienced large increases in growth in response 
+# to elevated PET. For example, in the coldest 10% of sites (<1.5 SD below the 
+# species’ historic mean PET), growth increased 18.5% (8.4% to 25.0%) in response 
+# to a 1 SD increase in PET. However, this positive growth response to elevated 
+# annual PET declined across a gradient of historic PET (Figure 3, F). 
+# In sites with above-average PET, tree growth was not significantly associated with changes in PET.
+pet_q10 <- flm_df$pet.spstd %>% 
+  quantile(c(0.1)) %>% 
+  print()
+
+pet_low_fs_bs <- block_draw_df %>% 
+  filter(pet.spstd < pet_q10) %>%
+  group_by(boot_id) %>% 
+  summarise(pet_coef = mean(pet_coef))
+
+pet_low_fs_bs %>%
+  pull(pet_coef) %>% 
+  mean() 
+
+pet_low_fs_bs %>%
+  pull(pet_coef) %>% 
+  quantile(c(0.025, 0.975))
+
+
+pet_high_fs_bs <- block_draw_df %>% 
+  filter(pet.spstd > 0 ) %>%
+  group_by(boot_id) %>% 
+  summarise(pet_coef = mean(pet_coef))
+
+pet_high_fs_bs %>%
+  pull(pet_coef) %>% 
+  mean() 
+
+pet_high_fs_bs %>%
+  pull(pet_coef) %>% 
+  quantile(c(0.025, 0.975))
+
+
 # To characterize this variability in CWD sensitivity, we modeled sensitivity as a 
 # quadratic function of historic CWD and PET (Figure 4, Panels B and C). The regression 
 # results highlight that observed sensitivity declined with increasing CWD (slope at 
@@ -348,3 +388,35 @@ sp_predictions %>%
 
 
 
+## Grid cells predicted to experience increases in growth are located almost 
+## entirely in the most energy-limited parts of species’ historic ranges.
+growth_cells <- sp_predictions %>%
+  filter(rwi_pred_change_050>0) 
+
+growth_cells %>% 
+  pull(pet_hist) %>% 
+  quantile(c(0.25, 0.5, 0.75, 0.8, 0.85,  0.9))
+
+
+# 
+# 
+# library(janitor)
+# species_df <- species_df %>%
+#   clean_names() %>%
+#   select(-range_map_source)
+# 
+# species_summary <- species_df %>%
+#   mutate(gen_code = substr(species_code, 1, 2)) %>%
+#   group_by(gen_code) %>%
+#   summarise(n = sum(number_of_sites),
+#             mean_pet = weighted.mean(mean_pet, number_of_sites),
+#             mean_cwd = weighted.mean(mean_cwd, number_of_sites)) %>%
+#   mutate(aet_estimate = mean_pet - mean_cwd,
+#          aet_pct = aet_estimate / mean_pet)
+# 
+# species_summary <- species_summary %>%
+#   filter(n > 50) %>%
+#   arrange(desc(mean_pet))
+# species_summary %>% arrange(desc(mean_cwd))
+# 
+# 
