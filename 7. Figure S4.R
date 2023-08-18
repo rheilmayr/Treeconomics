@@ -138,7 +138,7 @@ gen_plot <- genus_predictions %>%
   geom_line(aes(y = estimate)) +
   geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2) +
   # geom_ribbon(aes(ymin=cwd_ci_min, ymax=cwd_ci_max), alpha=0.2, fill = "darkblue") +
-  facet_wrap(~genus, scales = "free", ncol = 3) +
+  facet_wrap(~genus, scales = "free", ncol = 2) +
   theme(
     # panel.grid.major = element_blank(),
     # panel.grid.minor = element_blank(),
@@ -149,7 +149,7 @@ gen_plot <- genus_predictions %>%
   geom_hline(yintercept = 0, linetype = 2) +
   xlab("Historic CWD\n(Deviation from species mean)") + 
   ylab("Predicted sensitivity to CWD") +
-  xlim(c(-3, 3))
+  xlim(c(-4, 3))
 
 
 gen_plot <- gen_plot +
@@ -157,5 +157,5 @@ gen_plot <- gen_plot +
             hjust = 0, vjust = 0)
 
 gen_plot
-ggsave(paste0(wdir, '3_results/figures/FigS4_genus_margins_nonlinear.svg'), gen_plot, width = 14, height = 7, units = "in")
+ggsave(paste0(wdir, '3_results/figures/FigS4_genus_margins_nonlinear.svg'), gen_plot, width = 10, height = 11, units = "in")
 

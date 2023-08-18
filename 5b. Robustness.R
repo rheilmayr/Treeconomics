@@ -695,7 +695,7 @@ gymno_key <- sp_info %>%
 
 # N = 10: 16 genera; 26: 12 genera; 50: 9 genera
 genus_keep <- genus_freq %>%
-  top_n(9,n_collections) %>% 
+  top_n(10,n_collections) %>% 
   pull(genus)
   
 
