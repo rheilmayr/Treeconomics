@@ -65,7 +65,8 @@ fs_cum <- read_rds(paste0(wdir, '2_output/first_stage/dnlm_cum_effects.rds'))
 ave_site_clim <- read_rds(paste0(wdir, "2_output/climate/site_ave_clim.gz"))
 
 # 3. Site information
-site_df <- read_csv(paste0(wdir, '1_processed_input/dendro/site_summary.csv'))
+dendro_dir <- paste0(wdir, "1_input_processed/dendro/")
+site_df <- read_csv(paste0(dendro_dir, 'site_summary.csv'))
 site_df <- site_df %>% 
   select(collection_id, sp_id, latitude, longitude)
 site_df <- site_df %>% 
@@ -81,7 +82,6 @@ site_df <- site_df %>%
 
 
 # 5. Dendrochronologies - used for single-stage model comparison
-dendro_dir <- paste0(wdir, "1_processed_input/dendro/")
 dendro_df <- read_csv(paste0(dendro_dir, "rwi_long.csv"))
 dendro_df <- dendro_df %>% 
   select(-core_id)

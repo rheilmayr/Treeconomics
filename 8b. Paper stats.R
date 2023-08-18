@@ -26,10 +26,10 @@ options(scipen=999)
 wdir <- 'remote/'
 
 # 1. CMIP climate predictions
-sp_clim <- read_rds(paste0(wdir, "out/climate/sp_clim_predictions.gz"))
+sp_clim <- read_rds(paste0(wdir, "2_output/climate/sp_clim_predictions.gz"))
 
 # 2. Site-level regressions
-flm_df <- read_csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv"))
+flm_df <- read_csv(paste0(wdir, "2_output/first_stage/site_pet_cwd_std_augmented.csv"))
 flm_df <- flm_df %>% 
   st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
 trim_df <- flm_df %>% 
@@ -37,15 +37,15 @@ trim_df <- flm_df %>%
   drop_na()
 
 # 3. First stage block bootstraps
-block_draw_df <- read_rds(paste0(wdir, "out/second_stage/mc_sample.gz"))
+block_draw_df <- read_rds(paste0(wdir, "2_output/second_stage/mc_sample.gz"))
 
 # 4. Second stage model
-ss_df <- read_rds(paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
+ss_df <- read_rds(paste0(wdir, "2_output/second_stage/ss_bootstrap.rds"))
 
 # 5. Prediction results
-rwi_list <- list.files(paste0(wdir, "out/predictions/pred_10000/sp_rwi/"), pattern = ".gz", full.names = TRUE)
+rwi_list <- list.files(paste0(wdir, "2_output/predictions/sp_rwi/"), pattern = ".gz", full.names = TRUE)
 sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
-agg_stats <- read_rds(file = paste0(wdir, "out/predictions/pred_10000/mc_agg_stats.gz"))
+agg_stats <- read_rds(file = paste0(wdir, "out/predictions/mc_agg_stats.gz"))
 
 
 

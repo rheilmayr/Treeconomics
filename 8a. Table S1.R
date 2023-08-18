@@ -36,19 +36,14 @@ select <- dplyr::select
 wdir <- 'remote/'
 
 # 1. ITRDB data
-itrdb_df <- read_csv(paste0(wdir, "/out/dendro/site_summary.csv"))
-
+itrdb_df <- read_csv(paste0(wdir, "1_input_processed/dendro/site_summary.csv"))
 
 # 2. Species climates
-niche_df <- read_csv(paste0(wdir, "out/climate/clim_niche.csv"))
+niche_df <- read_csv(paste0(wdir, "2_output/climate/clim_niche.csv"))
 
+# 3. Range metadata
+source_df <- read_csv(paste0(wdir, "1_input_processed/species_ranges/species_metadata.csv"))
 
-# # 3. Species ranges
-# range_file <- paste0(wdir, 'in//species_ranges//merged_ranges.shp')
-# range_sf <- st_read(range_file)
-
-# 4. Range metadata
-source_df <- read_excel(paste0(wdir, "in/species_ranges/species_summary.xlsx"), sheet = "sources")
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Summarize ITRDB sites and merge to range metadata  --------------------------------------------------------
@@ -127,5 +122,5 @@ species_df <- species_df %>%
          "S.d. PET" = pet_sd)
 
 species_df %>% 
-  write_csv(paste0(wdir, "tables/s1_sp_summary.csv"))
+  write_csv(paste0(wdir, "3_results/tables/s1_sp_summary.csv"))
                

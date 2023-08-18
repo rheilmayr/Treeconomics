@@ -36,14 +36,14 @@ replace_valids = function(value){
 wdir <- 'remote\\'
 
 # Load list of ITRDB sites
-itrdb_sites <- read_csv(paste0(wdir, 'out/dendro/site_summary.csv')) %>% 
+itrdb_sites <- read_csv(paste0(wdir, '1_input_processed/dendro/site_summary.csv')) %>% 
   mutate(sp_id = str_to_lower(sp_id))
 
 itrdb_sites <- itrdb_sites %>% 
   filter(datasource %in% c("ritrdb_7.13", "itrdb_7.22"))  # Narrow to set of sites included in ITRDB or rITRDB
 
 # Load species ranges
-range_file <- paste0(wdir, 'in/species_ranges/merged_ranges.shp')
+range_file <- paste0(wdir, '1_input_processed/species_ranges/merged_ranges_dissolve.shp')
 range_sf <- st_read(range_file)
 st_geometry(range_sf) = NULL
 range_species <- range_sf %>%
@@ -53,13 +53,13 @@ range_species <- range_sf %>%
   drop_na()
 
 # Identify valid dendrochronologies
-dendro_df <- read_csv(paste0(wdir, 'out/dendro/rwi_long.csv')) %>% 
+dendro_df <- read_csv(paste0(wdir, '2_output/dendro/rwi_long.csv')) %>% 
   select(collection_id) %>% 
   distinct() %>% 
   mutate(valid_dendro = 1)
 
 # Load cwd data
-cwd_csv = paste0(wdir, 'out/climate/essentialcwd_data.csv')
+cwd_csv = paste0(wdir, '2_output/climate/essentialcwd_data.csv')
 cwd_df <- read_csv(cwd_csv)
 cwd_df <- cwd_df %>% 
   mutate("collection_id" = as.character(site))
@@ -69,7 +69,7 @@ cwd_sites <- cwd_df %>%
   mutate(valid_clim = 1)
 
 # Load site annual climate
-an_clim <- read_rds(paste0(wdir, "out/climate/site_an_clim.gz"))
+an_clim <- read_rds(paste0(wdir, "2_output/climate/site_an_clim.gz"))
 vary_clim <- an_clim %>% 
   group_by(collection_id) %>% 
   summarize(cwd_n = n_distinct(cwd.an.spstd),
@@ -84,21 +84,21 @@ an_clim <- an_clim %>%
   mutate(valid_an_clim = 1)
 
 # Load site average past climate
-ave_clim <- read_rds(paste0(wdir, "out/climate/site_ave_clim.gz"))
+ave_clim <- read_rds(paste0(wdir, "2_output/climate/site_ave_clim.gz"))
 ave_clim <- ave_clim %>% 
   select(collection_id) %>%
   distinct() %>% 
   mutate(valid_ave_clim = 1)
 
 # Load first stage results
-first_stage <- read_csv(paste0(wdir, 'out/first_stage/site_pet_cwd_std.csv'))
+first_stage <- read_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_std.csv'))
 first_stage <- first_stage %>% 
   select(collection_id) %>%
   distinct() %>% 
   mutate(valid_fs = 1)
 
 # Load site future climate
-fut_clim <- read_rds(paste0(wdir, "out/climate/sp_clim_predictions.", compress = "gz"))
+fut_clim <- read_rds(paste0(wdir, "2_output/climate/sp_clim_predictions.", compress = "gz"))
 fut_clim <- fut_clim %>% 
   select(sp_id = sp_code) %>%
   distinct() %>% 
