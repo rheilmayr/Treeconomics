@@ -107,7 +107,7 @@ source("7. Figure S5.R")
 ## Fig. S6: Comparison of FIA and ITRDB results
 ## Note: Access to FIA data is not public. As a result, we are unable to share the 
 ## necessary input data to run script "7. Figure S6.R"
-source("7. Figure S6.R")
+# source("7. Figure S6.R")
 
 ## Fig. S7: Prediction comparison across hypothesized patterns of sensitivity
 source("7. Figure S7.R")
