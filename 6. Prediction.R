@@ -52,7 +52,7 @@ wdir <- 'remote/'
 
 # Create output directories
 out_dir <- paste0(wdir,"2_output/predictions/")
-dir.create(file.path(out_dir), showWarnings = FALSE)
+# dir.create(file.path(out_dir), showWarnings = FALSE)
 dir.create(file.path(paste0(out_dir, "sp_rwi/")), showWarnings = FALSE)
 # dir.create(file.path(paste0(out_dir, "sp_hot_cells/")), showWarnings = FALSE)
                       
