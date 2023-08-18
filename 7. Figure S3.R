@@ -82,7 +82,7 @@ trim_df <- flm_df %>%
   drop_na()
 
 # 3. DNLM results
-dnlm_results <- read_rds(paste0(wdir, "2_output/first_stage/dnlm_lagged_effects"))
+dnlm_results <- read_rds(paste0(wdir, "2_output/first_stage/dnlm_lagged_effects.rmd"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

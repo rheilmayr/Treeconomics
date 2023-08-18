@@ -73,7 +73,7 @@ rwi_list <- list.files(paste0(wdir, "2_output/predictions/sp_rwi/"), pattern = "
 sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
 
 # 6. Dendro examples - note: exporting two pipo sites in first stage script
-dendro_ex <- read_csv(paste0(wdir, "1_input_processed/dendro/example_sites.csv"))
+dendro_ex <- read_csv(paste0(wdir, "2_output/first_stage/example_sites.csv"))
 
 # 7. Raw dendro file for one site
 rwl_path <- paste0(wdir, "1_input_processed/dendro/ca585.rwl")
