@@ -91,7 +91,7 @@ site_smry_fia <- site_smry_fia %>%
 site_smry <- rbind(site_smry, site_smry_fia)
 
 # 5. Species range maps
-range_file <- paste0(wdir, 'in/species_ranges/merged_ranges.shp')
+range_file <- paste0(wdir, 'in/species_ranges/merged_ranges_dissolve.shp')
 range_sf <- st_read(range_file)
 
 # 6. Climate projections from CMIP5
@@ -185,8 +185,8 @@ niche_df <- clim_df %>%
 
 
 ## Export species niche description
-write.csv(niche_df, paste0(wdir, "out//climate//clim_niche.csv"))
-# niche_df <- read.csv(paste0(wdir, "out//climate//clim_niche.csv")) %>%
+write.csv(niche_df, paste0(wdir, "out/climate/clim_niche.csv"))
+# niche_df <- read.csv(paste0(wdir, "out/climate/clim_niche.csv")) %>%
 #   select(-X)
 
 
