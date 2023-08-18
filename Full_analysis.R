@@ -10,7 +10,7 @@ source("0_init.R")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Steps 1-2: Process data and standardize climate and weather data -------
+# Steps 1-2: Process data and clean data -------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ## Note: Raw data for these scripts are large and often require a cluster to 
 ## process efficiently. As a result, we  do not provide the input data in our
@@ -27,6 +27,13 @@ source("0_init.R")
 # source("2d. Historic cwdraster.R")
 # source("2e. cmip5 cwd projections.R")
 # source("3a. Collate ranges.R")
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Step 2: Standardize climate and weather data -----------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+## Use species ranges to standardize CRU and CMIP climate and weather data
+source("3b. Species niche.R")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
