@@ -50,10 +50,10 @@ future::plan(multisession, workers = n_cores)
 # Load data --------------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define path
-wdir <- 'remote\\'
+wdir <- 'remote/'
 
 # 1. Historic climate raster
-clim_file <- paste0(wdir, 'in/CRUData/historic_raster/HistoricCWD_AETGrids_Annual.Rdat')
+clim_file <- paste0(wdir, '1_input_processed/climate/HistoricCWD_AETGrids_Annual.Rdat')
 load(clim_file)
 cwd_historic <- mean(cwd_historic)
 aet_historic <- mean(aet_historic)
@@ -62,47 +62,49 @@ names(cwd_historic) = "cwd"
 names(pet_historic) = "pet"
 
 # 2. Data on historic baseline temp and precip
-temps_historic <- raster(paste0(wdir, "in/CRUData/monthlycrubaseline_tas"))
+temps_historic <- raster(paste0(wdir, "1_input_processed/climate/monthlycrubaseline_tas"))
 names(temps_historic) = "temp"
 temps_historic <- resample(temps_historic, cwd_historic)
 clim_historic <- raster::brick(list(cwd_historic, pet_historic, temps_historic))
 
 # 3. Site-specific historic climate data
-site_clim_csv <- paste0(wdir, 'out/climate/essentialcwd_data.csv')
+site_clim_csv <- paste0(wdir, '1_input_processed/climate/essentialcwd_data.csv')
 site_clim_df <- read_csv(site_clim_csv)
 site_clim_df <- site_clim_df %>% 
   mutate("site_id" = as.character(site)) %>% 
   rename(location_id = site_id)
 
 # 4. Load species information for sites
-site_smry <- read_csv(paste0(wdir, 'out/dendro/site_summary.csv'))
+site_smry <- read_csv(paste0(wdir, '1_input_processed/dendro/site_summary.csv'))
 site_smry <- site_smry %>%
   select(collection_id, sp_id) %>% 
   mutate(location_id = collection_id) %>% 
   mutate(sp_code = tolower(sp_id)) %>% 
   select(-sp_id)
 
-site_smry_fia <- read_csv(paste0(wdir, 'out/dendro/site_summary_fia.csv'))
-site_smry_fia <- site_smry_fia %>% 
-  select(collection_id, location_id = plot_cn, sp_id = species_id) %>% 
-  mutate(sp_code = tolower(sp_id)) %>% 
-  select(-sp_id)
 
-site_smry <- rbind(site_smry, site_smry_fia)
+## NOTE: FIA data not included in replication data repository
+# site_smry_fia <- read_csv(paste0(wdir, 'out/dendro/site_summary_fia.csv'))
+# site_smry_fia <- site_smry_fia %>% 
+#   select(collection_id, location_id = plot_cn, sp_id = species_id) %>% 
+#   mutate(sp_code = tolower(sp_id)) %>% 
+#   select(-sp_id)
+# site_smry <- rbind(site_smry, site_smry_fia)
+
 
 # 5. Species range maps
-range_file <- paste0(wdir, 'in/species_ranges/merged_ranges_dissolve.shp')
+range_file <- paste0(wdir, '1_input_processed/species_ranges/merged_ranges_dissolve.shp')
 range_sf <- st_read(range_file)
 
 # 6. Climate projections from CMIP5
-cmip_end <- load(paste0(wdir, 'in/CMIP5 CWD/cmip5_cwdaet_end.Rdat'))
+cmip_end <- load(paste0(wdir, '1_input_processed/climate/cmip5_cwdaet_end.Rdat'))
 pet_cmip_end <- aet_raster + cwd_raster
 cwd_cmip_end <- cwd_raster
 names(cwd_cmip_end) <- NULL # Resetting this due to strange names in file from CMIP processing
 rm(cwd_raster)
 rm(aet_raster)
 
-cmip_start <- load(paste0(wdir, 'in/CMIP5 CWD/cmip5_cwdaet_start.Rdat'))
+cmip_start <- load(paste0(wdir, '1_input_processed/climate/cmip5_cwdaet_start.Rdat'))
 pet_cmip_start <- aet_raster + cwd_raster
 cwd_cmip_start <- cwd_raster
 names(cwd_cmip_start) <- NULL # Resetting this due to strange names in file from CMIP processing
@@ -185,13 +187,7 @@ niche_df <- clim_df %>%
 
 
 ## Export species niche description
-write.csv(niche_df, paste0(wdir, "out/climate/clim_niche.csv"))
-# niche_df <- read.csv(paste0(wdir, "out/climate/clim_niche.csv")) %>%
-#   select(-X)
-
-
-# ## Export historic climates
-# write_rds(clim_df, paste0(wdir, "out//climate//sp_clim_historic.gz"), compress = "gz")
+write.csv(niche_df, paste0(wdir, "2_output/climate/clim_niche.csv"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -351,7 +347,7 @@ sp_cmip_clim <- sp_cmip_clim %>%
 
 
 ## Export predictions
-write_rds(sp_cmip_clim, paste0(wdir, "out/climate/sp_clim_predictions.", compress = "gz"))
+write_rds(sp_cmip_clim, paste0(wdir, "2_output/climate/sp_clim_predictions.", compress = "gz"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -421,7 +417,7 @@ spstd_site_clim_df <- spstd_site_clim_df %>%
   select(-location_id)
 
 write_rds(spstd_site_clim_df, 
-          paste0(wdir, "out/climate/site_ave_clim.", compress = "gz"))
+          paste0(wdir, "2_output/climate/site_ave_clim.", compress = "gz"))
 
 
 
@@ -456,7 +452,7 @@ an_site_clim_df <- an_site_clim_df %>%
   select(-location_id)
 
 write_rds(an_site_clim_df, 
-          paste0(wdir, "out/climate/site_an_clim.", compress = "gz"))
+          paste0(wdir, "2_output/climate/site_an_clim.", compress = "gz"))
 
 
 # ## Exploring source of dropped sites - seems to be entirely driven by sites for species with no range maps
