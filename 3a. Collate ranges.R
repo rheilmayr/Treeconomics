@@ -20,14 +20,29 @@
 # Packages
 library(raster)
 library(sf)
+library(readxl)
 library(tidyverse)
+
+
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load and merge data ----------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Create file list
 wdir <- 'remote/in/species_ranges/'
+
+## 1. Range metadata
+source_df <- read_excel(paste0(wdir, "species_summary.xlsx"), sheet = "sources")
+
+## 2. Genus labels
+sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
+
+source_df <- source_df %>% 
+  select(-spp) %>% 
+  left_join(sp_info, by = "species_id")
+
+## 3. Load range shapefiles
+# Create file list
 ranges_dir <- paste0(wdir, 'processed_data/')
 species_list <- list.files(ranges_dir, full.names = FALSE)
 species_list <- species_list[which(species_list!="desktop.ini")]
@@ -45,6 +60,7 @@ load_shp <- function(sp_name){
 
 sp_sf_list <- lapply(species_list, load_shp)
 merged_sf <- do.call(rbind, sp_sf_list)
+
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -76,8 +92,13 @@ select_ranges <- select_ranges %>%
 
 merged_sf <- rbind(merged_sf, select_ranges)
 
+merged_sf <- merged_sf %>% 
+  left_join(source_df, by = c("sp_code" = "species_id"))
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Export new file --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 st_write(merged_sf, paste0(wdir, 'merged_ranges.shp'), overwrite = TRUE, append = FALSE)
+## Note: Using ArcGIS to dissolve due to sf bugs
+
+source_df %>% write_csv(paste0(wdir, 'species_metadata.csv'))
