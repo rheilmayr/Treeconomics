@@ -51,18 +51,18 @@ n_mc <- 10000
 wdir <- 'remote/'
 
 # Create output directories
-out_dir <- paste0(wdir,"out/predictions/pred_", as.character(n_mc), "/")
+out_dir <- paste0(wdir,"2_output/predictions/")
 dir.create(file.path(out_dir), showWarnings = FALSE)
 dir.create(file.path(paste0(out_dir, "sp_rwi/")), showWarnings = FALSE)
-dir.create(file.path(paste0(out_dir, "sp_hot_cells/")), showWarnings = FALSE)
+# dir.create(file.path(paste0(out_dir, "sp_hot_cells/")), showWarnings = FALSE)
                       
 # 1. Second stage model
-mod_df <- read_rds(paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
+mod_df <- read_rds(paste0(wdir, "2_output/second_stage/ss_bootstrap.rds"))
 mod_df <- mod_df %>% 
   rename(iter_idx = boot_id)
 
 # 2. Species-standardized historic and future climate
-sp_clim <- read_rds(paste0(wdir, "out/climate/sp_clim_predictions.gz"))
+sp_clim <- read_rds(paste0(wdir, "2_output/climate/sp_clim_predictions.gz"))
 species_list <- sp_clim %>% select(sp_code)
 
 
@@ -269,17 +269,17 @@ calc_rwi_quantiles <- function(spp_code, mc_data, parallel = TRUE){
     rename(cwd_hist = cwd,
            pet_hist = pet)
   
-  ## Write out full mc rwi change results for subset of hot cells (pet ~= 1)
-  hot_cells <- sp_hist %>% filter(pet_hist > 0.9, pet_hist < 1.1)
-  hot_cells <- hot_cells %>% 
-    lazy_dt() %>% 
-    left_join(sp_predictions, by = c("x", "y")) %>% 
-    mutate(sp_code = spp_code) %>% 
-    select(sp_code, iter_idx, x, y, cwd_hist, pet_hist, rwi_pred_change) %>% 
-    as.data.frame()
-  hot_cells %>% 
-    write_rds(file = paste0(out_dir, "sp_hot_cells/", spp_code, ".gz"), compress = "gz")
-  
+  # ## Write out full mc rwi change results for subset of hot cells (pet ~= 1)
+  # hot_cells <- sp_hist %>% filter(pet_hist > 0.9, pet_hist < 1.1)
+  # hot_cells <- hot_cells %>% 
+  #   lazy_dt() %>% 
+  #   left_join(sp_predictions, by = c("x", "y")) %>% 
+  #   mutate(sp_code = spp_code) %>% 
+  #   select(sp_code, iter_idx, x, y, cwd_hist, pet_hist, rwi_pred_change) %>% 
+  #   as.data.frame()
+  # hot_cells %>% 
+  #   write_rds(file = paste0(out_dir, "sp_hot_cells/", spp_code, ".gz"), compress = "gz")
+  # 
   # ## Contrast RWI change in wettest and dryest sites (all warm)
   # pet_range <- sp_hist %>% pull(pet_hist) %>% quantile(c(0.75, 1))
   # hot_cells <- sp_hist %>% filter(pet_hist > pet_range[1], pet_hist < pet_range[2])

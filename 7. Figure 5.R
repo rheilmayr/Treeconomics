@@ -61,7 +61,7 @@ options(scipen=999)
 wdir <- 'remote/'
 
 # 1. Prediction rasters
-rwi_list <- list.files(paste0(wdir, "out/predictions/pred_10000/sp_rwi/"), pattern = ".gz", full.names = TRUE)
+rwi_list <- list.files(paste0(wdir, "2_output/predictions/sp_rwi/"), pattern = ".gz", full.names = TRUE)
 sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
 
 
@@ -319,6 +319,6 @@ pred_full <- pred_full +
         plot.tag.position  = c(.04, 1.015))
 
 pred_full
-ggsave(paste0(wdir, "figures/", "Fig5_pred_full.pdf"), pred_full, width = 14, height = 7)
+ggsave(paste0(wdir, "3_results/figures/Fig5_pred_full.pdf"), pred_full, width = 14, height = 7)
 
 ## Small formatting changes to be made in Illustrator

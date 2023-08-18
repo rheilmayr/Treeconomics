@@ -68,13 +68,13 @@ options(scipen=999)
 wdir <- 'remote/'
 
 # 1. Site-level regressions
-flm_df <- read_csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv"))
+flm_df <- read_csv(paste0(wdir, "2_output/first_stage/site_pet_cwd_std_augmented.csv"))
 trim_df <- flm_df %>% 
   filter(outlier==0) %>% 
   drop_na()
 
 ## 2. Second stage model
-mod_df <- read_rds(paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
+mod_df <- read_rds(paste0(wdir, "2_output/second_stage/ss_bootstrap.rds"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -321,5 +321,5 @@ margins_plot <- margins_plot +
   theme(plot.tag = element_text(face = 'bold', size=12))
 margins_plot
 
-ggsave(paste0(wdir, 'figures\\Fig3_all_margins.svg'), plot = margins_plot, width = 7.5, height = 10, units = "in")
+ggsave(paste0(wdir, '3_results/figures/Fig3_all_margins.svg'), plot = margins_plot, width = 7.5, height = 10, units = "in")
 

@@ -44,7 +44,7 @@ wdir <- 'remote/'
 
 
 # 1. Dendrochronologies
-dendro_dir <- paste0(wdir, "out/dendro/")
+dendro_dir <- paste0(wdir, "1_input_processed/dendro/")
 dendro_df <- read_csv(paste0(dendro_dir, "rwi_long.csv"))
 dendro_df <- dendro_df %>% 
   select(-core_id)
@@ -61,13 +61,13 @@ dendro_df <- dendro_df %>%
   as_tibble()
 
 # 2. Historic site-level climate
-an_site_clim <- read_rds(paste0(wdir, "out/climate/site_an_clim.gz"))
+an_site_clim <- read_rds(paste0(wdir, "2_output/climate/site_an_clim.gz"))
 dendro_df <- dendro_df %>% 
   left_join(an_site_clim, by = c("collection_id", "year"))
 
 
 # 3. Site information
-site_smry <- read_csv(paste0(wdir, 'out/dendro/site_summary.csv'))
+site_smry <- read_csv(paste0(dendro_dir, 'site_summary.csv'))
 site_smry <- site_smry %>% 
   select(collection_id, sp_id) %>% 
   mutate(species_id = tolower(sp_id)) %>% 
@@ -78,7 +78,7 @@ dendro_df <- dendro_df %>%
 
 
 # 4. Drop data from species without range maps and resulting climatic niche data
-niche_df <- read.csv(paste0(wdir, "out/climate/clim_niche.csv")) %>%
+niche_df <- read.csv(paste0(wdir, "2_output/climate/clim_niche.csv")) %>%
   select(-X)
 niche_species <- niche_df %>% pull(sp_code) %>% unique()
 dendro_species <- dendro_df %>% pull(species_id) %>% unique()
@@ -93,7 +93,7 @@ dendro_df <- dendro_df %>%
 ex_sites <- c("CO559", "CA585")
 dendro_df %>% 
   filter(collection_id %in% ex_sites) %>% 
-  write.csv(paste0(wdir, "out\\dendro\\example_sites.csv"))
+  write.csv(paste0(wdir, "2_output/first_stage/example_sites.csv"))
 
 
 
@@ -201,7 +201,7 @@ fs_df <- fs_df %>%
 fs_df <- fs_df %>% 
   select(-error)
 
-fs_df %>% write_csv(paste0(wdir, 'out/first_stage/site_pet_cwd_std.csv'))
+fs_df %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_std.csv'))
 
 
 ## Repeat using results from nb detrended data
@@ -212,7 +212,7 @@ fs_nb <- fs_nb[which(!(fs_nb %>% pull(mod) %>% is.na())),]
 fs_nb <- fs_nb %>% 
   unnest(mod) %>% 
   select(-error)
-fs_nb %>% write_csv(paste0(wdir, 'out/first_stage/site_pet_cwd_std_nb.csv'))
+fs_nb %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_std_nb.csv'))
 
 
 ## Repeat using results from ar detrended data
@@ -223,7 +223,7 @@ fs_ar <- fs_ar[which(!(fs_ar %>% pull(mod) %>% is.na())),]
 fs_ar <- fs_ar %>% 
   unnest(mod) %>% 
   select(-error)
-fs_ar %>% write_csv(paste0(wdir, 'out/first_stage/site_pet_cwd_std_ar.csv'))
+fs_ar %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_std_ar.csv'))
 
 
 ## Repeat using results from temp model
@@ -234,7 +234,7 @@ fs_temp <- fs_temp[which(!(fs_temp %>% pull(mod) %>% is.na())),]
 fs_temp <- fs_temp %>% 
   unnest(mod) %>% 
   select(-error)
-fs_temp %>% write_csv(paste0(wdir, 'out/first_stage/site_temp_cwd_std.csv'))
+fs_temp %>% write_csv(paste0(wdir, '2_output/first_stage/site_temp_cwd_std.csv'))
 
 
 ## Repeat using results from re model
@@ -245,5 +245,5 @@ fs_re <- fs_re[which(!(fs_re %>% pull(mod) %>% is.na())),]
 fs_re <- fs_re %>% 
   unnest(mod) %>% 
   select(-error)
-fs_re %>% write_csv(paste0(wdir, 'out/first_stage/site_pet_cwd_std_re.csv'))
+fs_re %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_std_re.csv'))
 

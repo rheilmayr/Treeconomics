@@ -65,18 +65,18 @@ select <- dplyr::select
 wdir <- 'remote/'
 
 # 1. Site-level regressions from ITRDB
-flm_itrdb <- read_csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv"))
+flm_itrdb <- read_csv(paste0(wdir, "2_output/first_stage/site_pet_cwd_std_augmented.csv"))
 
 # 2. Site-level regressions from FIA
-flm_fia <- read_csv(paste0(wdir, "out/first_stage/fia_pet_cwd_std.csv"))
+flm_fia <- read_csv(paste0(wdir, "2_output/first_stage/fia_pet_cwd_std.csv"))
 
 # 3. Average site climates
-ave_site_clim_df <- read_rds(paste0(wdir, "out/climate/site_ave_clim.gz"))
+ave_site_clim_df <- read_rds(paste0(wdir, "2_output/climate/site_ave_clim.gz"))
 flm_fia <- flm_fia %>% 
   left_join(ave_site_clim_df, by = c("collection_id"))
 
 # 3. Site information
-site_df <- read_csv(paste0(wdir, 'out/dendro/site_summary_fia.csv'))
+site_df <- read_csv(paste0(wdir, '2_output/dendro/site_summary_fia.csv'))
 site_df <- site_df %>% 
   select(collection_id, species_id, latitude, longitude)
 site_df <- site_df %>% 
@@ -317,4 +317,4 @@ combined_plot <- combined_plot +
 
 combined_plot
 
-ggsave(paste0(wdir, 'figures/FigS6_fia_compare.svg'), plot = combined_plot, bg= 'transparent', width = 10, height = 7)
+ggsave(paste0(wdir, '3_results/figures/FigS6_fia_compare.svg'), plot = combined_plot, bg= 'transparent', width = 10, height = 7)

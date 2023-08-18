@@ -2,7 +2,7 @@
 # Authors: Robert Heilmayr, Joan Dudney, Frances Moore
 # Project: Treeconomics
 # Date: 8/7/23
-# Purpose: Create figure S1 illustrating data context
+# Purpose: Create figure 4 highlighting predicted changes in CWD
 #
 # Input files:
 # - clim_niche.csv: Data documenting historic climate across each species range
@@ -67,20 +67,20 @@ options(scipen=999)
 wdir <- 'remote/'
 
 # 1. Prediction rasters
-rwi_list <- list.files(paste0(wdir, "out/predictions/pred_10000/sp_rwi/"), pattern = ".gz", full.names = TRUE)
+rwi_list <- list.files(paste0(wdir, "2_output/predictions/sp_rwi/"), pattern = ".gz", full.names = TRUE)
 sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
-gen_dat <- read_csv(paste0(wdir, "out/species_gen_gr.csv")) %>% 
+gen_dat <- read_csv(paste0(wdir, "1_input_processed/species_ranges/species_metadata.csv")) %>% 
   rename(sp_code = "species_id")
 sp_predictions_gen <- sp_predictions %>% 
   left_join(gen_dat)
 
 
 # 2. Change in CWD
-cmip_end <- load(paste0(wdir, 'in/CMIP5 CWD/cmip5_cwdaet_end.Rdat'))
+cmip_end <- load(paste0(wdir, '1_input_processed/climate/cmip5_cwdaet_end.Rdat'))
 cwd_cmip_end <- cwd_raster %>% mean()
 rm(cwd_raster)
 rm(aet_raster)
-cmip_start <- load(paste0(wdir, 'in/CMIP5 CWD/cmip5_cwdaet_start.Rdat'))
+cmip_start <- load(paste0(wdir, '1_input_processed/climate/cmip5_cwdaet_start.Rdat'))
 cwd_cmip_start <- cwd_raster %>% mean()
 rm(cwd_raster)
 rm(aet_raster)
@@ -226,4 +226,4 @@ cwd_change_fig <- cwd_map / change_plot / genus_cwd_change  +
 
 cwd_change_fig
 
-ggsave(paste0(wdir, "figures/", "Fig4_cwd_change.pdf"), cwd_change_fig, width = 10, height = 11.3)
+ggsave(paste0(wdir, "3_results/figures/Fig4_cwd_change.pdf"), cwd_change_fig, width = 10, height = 11.3)

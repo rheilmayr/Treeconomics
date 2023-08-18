@@ -49,27 +49,27 @@ n_mc <- 10000
 wdir <- 'remote/'
 
 # 1. Site-level regressions
-flm_df <- read_csv(paste0(wdir, 'out/first_stage/site_pet_cwd_std.csv'))
+flm_df <- read_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_std.csv'))
 
 # 2. Historic site-level climate
-ave_site_clim <- read_rds(paste0(wdir, "out/climate/site_ave_clim.gz"))
+ave_site_clim <- read_rds(paste0(wdir, "2_output/climate/site_ave_clim.gz"))
 flm_df <- flm_df %>% 
   left_join(ave_site_clim, by = c("collection_id"))
 
 # 3. Site information
-site_df <- read_csv(paste0(wdir, 'out/dendro/site_summary.csv'))
+site_df <- read_csv(paste0(wdir, '1_input_processed/dendro/site_summary.csv'))
 site_df <- site_df %>% 
   select(collection_id, sp_id, latitude, longitude)
 site_df <- site_df %>% 
   rename(species_id = sp_id) %>% 
   mutate(species_id = str_to_lower(species_id))
 
-# 4. Species information
-sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
-sp_info <- sp_info %>% 
-  select(species_id, genus, gymno_angio, family)
-site_df <- site_df %>% 
-  left_join(sp_info, by = "species_id")
+# # 4. Species information
+# sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
+# sp_info <- sp_info %>% 
+#   select(species_id, genus, gymno_angio, family)
+# site_df <- site_df %>% 
+#   left_join(sp_info, by = "species_id")
 
 # Merge back into main flm_df
 flm_df <- flm_df %>% 
@@ -111,7 +111,7 @@ flm_df <- flm_df %>%
                    (estimate_pet.an>pet_est_bounds[2]))
 
 # Save out full flm_df to simplify downstream scripts and ensure consistency
-flm_df %>% write.csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv"))
+flm_df %>% write.csv(paste0(wdir, "2_output/first_stage/site_pet_cwd_std_augmented.csv"))
 
 # Trim outliers
 trim_df <- flm_df %>% 
@@ -222,7 +222,7 @@ for (site in site_list){
     pull(collection_id)
   block_list[site] <- list(block_sites)
 }
-save(block_list,file=paste0(wdir,"out/spatial_blocks.Rdat"))
+save(block_list,file=paste0(wdir,"2_output/second_stage/spatial_blocks.Rdat"))
 # load(file=paste0(wdir,"out/second_stage/spatial_blocks.Rdat"))
 
 
@@ -327,7 +327,7 @@ block_draw_df <- block_draw_df %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 block_draw_df %>% 
   # select(boot_id, collection_id, cwd_coef, pet_coef, int_coef, cwd.spstd, pet.spstd) %>% 
-  write_rds(paste0(wdir, "out/second_stage/mc_sample.gz"), compress = "gz")
+  write_rds(paste0(wdir, "2_output/second_stage/mc_sample.gz"), compress = "gz")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -412,5 +412,5 @@ boot_df <- boot_df %>%
 
 
 ## Save out bootstrapped coefficients
-write_rds(boot_df, paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
+write_rds(boot_df, paste0(wdir, "2_output/second_stage/ss_bootstrap.rds"))
 

@@ -23,7 +23,7 @@ source("f_spec_chart_function.R")
 wdir <- 'remote/'
 
 # 1. Specification comparisons
-specs <- read_rds(paste0(wdir, "out/second_stage/robustness_specs.rds"))
+specs <- read_rds(paste0(wdir, "2_output/second_stage/robustness_specs.rds"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -40,7 +40,7 @@ labels <- list("Detrending" = c("Spline", "Negative binomial", "Autoregressive")
                "Trimming and weighting" = c("Weight by\ninverse of s.e.", "Trim\noutliers in y", "Trim\noutliers in X"))
 
 
-svg(paste0(wdir, 'figures\\FigS5_robustness.svg'), width = 9, height = 14)
+svg(paste0(wdir, '3_results/figures/FigS5_robustness.svg'), width = 9, height = 14)
 robustness_fig <- schart(specs, labels, highlight=highlight_n, order = "asis", 
                          heights = c(.4,.6),
                          n=c(1, 2, 1, 1, 3, 3), ci = c(.95), 

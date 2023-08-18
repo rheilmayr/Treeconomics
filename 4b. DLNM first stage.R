@@ -48,7 +48,7 @@ library(ggplotify)
 wdir <- 'remote\\'
 
 # 1. Dendrochronologies
-dendro_dir <- paste0(wdir, "out/dendro/")
+dendro_dir <- paste0(wdir, "1_input_processed/dendro/")
 dendro_df <- read_csv(paste0(dendro_dir, "rwi_long.csv"))
 dendro_df <- dendro_df %>% 
   select(-core_id)
@@ -65,13 +65,13 @@ dendro_df <- dendro_df %>%
 
 
 # 2. Historic site-level climate
-an_site_clim <- read_rds(paste0(wdir, "out/climate/site_an_clim.gz"))
+an_site_clim <- read_rds(paste0(wdir, "2_output/climate/site_an_clim.gz"))
 # dendro_df <- dendro_df %>% 
 #   left_join(an_site_clim, by = c("collection_id", "year"))
 
 
 # 3. Site information
-site_smry <- read_csv(paste0(wdir, 'out/dendro/site_summary.csv'))
+site_smry <- read_csv(paste0(wdir, '1_input_processed/dendro/site_summary.csv'))
 site_smry <- site_smry %>% 
   select(collection_id, sp_id, latitude, longitude) %>% 
   mutate(species_id = tolower(sp_id)) %>% 
@@ -81,7 +81,7 @@ dendro_df <- dendro_df %>%
 
 
 # 5. Historic site-level climate
-ave_site_clim <- read_rds(paste0(wdir, "out/climate/site_ave_clim.gz"))
+ave_site_clim <- read_rds(paste0(wdir, "2_output/climate/site_ave_clim.gz"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -234,7 +234,7 @@ cum_mod_df <- cum_effects %>%
   mutate(errorweights = 1 / cwd_cum_se)
 
 cum_mod_df %>% 
-  write_rds(paste0(wdir, "out/first_stage/dnlm_cum_effects.rds"))
+  write_rds(paste0(wdir, "2_output/first_stage/dnlm_cum_effects.rds"))
 
 
 
@@ -251,7 +251,7 @@ lagged_effects$cwd_quantile <- ntile(lagged_effects$cwd.spstd, 3) %>% as.factor(
 lagged_effects$pet_quantile = ntile(lagged_effects$pet.spstd, 3) %>% as.factor()
 
 lagged_effects %>% 
-  write_rds(paste0(wdir, "out/first_stage/dnlm_lagged_effects.rmd"))
+  write_rds(paste0(wdir, "2_output/first_stage/dnlm_lagged_effects.rmd"))
 
 
 

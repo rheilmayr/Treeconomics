@@ -63,12 +63,12 @@ options(scipen=999)
 wdir <- 'remote/'
 
 # 1. Site-level regressions
-flm_df <- read_csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv"))
+flm_df <- read_csv(paste0(wdir, "2_output/first_stage/site_pet_cwd_std_augmented.csv"))
 flm_df <- flm_df %>% 
   st_as_sf(coords = c("longitude", "latitude"), crs = 4326)
 
 # 2. Site information
-site_smry <- read_csv(paste0(wdir, 'out/dendro/site_summary.csv'))
+site_smry <- read_csv(paste0(wdir, '1_input_processed/dendro/site_summary.csv'))
 site_smry <- site_smry %>% 
   select(collection_id, sp_id, latitude, longitude) %>% 
   mutate(species_id = tolower(sp_id)) %>% 
@@ -82,11 +82,11 @@ trim_df <- flm_df %>%
   drop_na()
 
 # 3. Species range maps
-range_file <- paste0(wdir, 'in/species_ranges/merged_ranges.shp')
+range_file <- paste0(wdir, '1_input_processed/species_ranges/merged_ranges_dissolve.shp')
 range_sf <- st_read(range_file)
 
 # 4. Average site conditions
-ave_site_clim_df <- read_rds(paste0(wdir, "out/climate/site_ave_clim.gz"))
+ave_site_clim_df <- read_rds(paste0(wdir, "2_output/climate/site_ave_clim.gz"))
 
 
 
@@ -276,7 +276,7 @@ hex2_raw
 fig <- (map / range_map) | hex2_raw | hex2
 fig
 
-ggsave(paste0(wdir, 'figures/FigS1_data_summary.pdf'), plot = fig, bg= 'transparent', width = 15, height = 8, units = "in")
+ggsave(paste0(wdir, '3_results/figures/FigS1_data_summary.pdf'), plot = fig, bg= 'transparent', width = 15, height = 8, units = "in")
 
 
 # fig

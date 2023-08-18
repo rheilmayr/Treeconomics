@@ -60,7 +60,7 @@ options(scipen=999)
 wdir <- 'remote/'
 
 # 1. Genus second stage model
-genus_models <- readRDS(paste0(wdir, "out/second_stage/ss_conley_genus.rds"))
+genus_models <- readRDS(paste0(wdir, "2_output/second_stage/ss_conley_genus.rds"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -157,5 +157,5 @@ gen_plot <- gen_plot +
             hjust = 0, vjust = 0)
 
 gen_plot
-ggsave(paste0(wdir, 'figures\\FigS4_genus_margins_nonlinear.svg'), gen_plot, width = 14, height = 7, units = "in")
+ggsave(paste0(wdir, '3_results/figures/FigS4_genus_margins_nonlinear.svg'), gen_plot, width = 14, height = 7, units = "in")
 

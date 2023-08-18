@@ -64,10 +64,10 @@ theme_set(
 wdir <- 'remote/'
 
 # 1. Site-level regressions
-flm_df <- read_csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv"))
+flm_df <- read_csv(paste0(wdir, "2_output/first_stage/site_pet_cwd_std_augmented.csv"))
 
 # 2. Prediction rasters
-rwi_list <- list.files(paste0(wdir, "out/predictions/pred_10000/sp_rwi/"), pattern = ".gz", full.names = TRUE)
+rwi_list <- list.files(paste0(wdir, "2_output/predictions/sp_rwi/"), pattern = ".gz", full.names = TRUE)
 sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
 
 
@@ -192,4 +192,4 @@ qqplot <- qqplot &
   plot_annotation(tag_levels="A") & 
   theme(plot.tag = element_text(face = 'bold', size=12))
 qqplot
-ggsave(paste0(wdir, 'figures\\FigS2_qqplots.svg'), plot = qqplot, width = 11, height = 7, units = "in")
+ggsave(paste0(wdir, '3_results/figures/FigS2_qqplots.svg'), plot = qqplot, width = 11, height = 7, units = "in")

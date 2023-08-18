@@ -53,19 +53,19 @@ select <- dplyr::select
 wdir <- 'remote/'
 
 # 1. Site-level regressions
-fs_spl <- read_csv(paste0(wdir, 'out/first_stage/site_pet_cwd_std.csv'))
-fs_nb <- read_csv(paste0(wdir, 'out/first_stage/site_pet_cwd_std_nb.csv'))
-fs_ar <- read_csv(paste0(wdir, 'out/first_stage/site_pet_cwd_std_ar.csv'))
+fs_spl <- read_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_std.csv'))
+fs_nb <- read_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_std_nb.csv'))
+fs_ar <- read_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_std_ar.csv'))
 
-fs_re <- read_csv(paste0(wdir, 'out/first_stage/site_pet_cwd_std_re.csv')) # Uses lme with AR-correlated standard errors
-fs_temp <- read_csv(paste0(wdir, 'out/first_stage/site_temp_cwd_std.csv'))
-fs_cum <- read_rds(paste0(wdir, 'out/first_stage/dnlm_cum_effects.rds'))
+fs_re <- read_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_std_re.csv')) # Uses lme with AR-correlated standard errors
+fs_temp <- read_csv(paste0(wdir, '2_output/first_stage/site_temp_cwd_std.csv'))
+fs_cum <- read_rds(paste0(wdir, '2_output/first_stage/dnlm_cum_effects.rds'))
 
 # 2. Historic site-level climate
-ave_site_clim <- read_rds(paste0(wdir, "out/climate/site_ave_clim.gz"))
+ave_site_clim <- read_rds(paste0(wdir, "2_output/climate/site_ave_clim.gz"))
 
 # 3. Site information
-site_df <- read_csv(paste0(wdir, 'out/dendro/site_summary.csv'))
+site_df <- read_csv(paste0(wdir, '1_processed_input/dendro/site_summary.csv'))
 site_df <- site_df %>% 
   select(collection_id, sp_id, latitude, longitude)
 site_df <- site_df %>% 
@@ -73,7 +73,7 @@ site_df <- site_df %>%
   mutate(species_id = str_to_lower(species_id))
 
 # 4. Species information
-sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
+sp_info <- read_csv(paste0(wdir, '1_input_processed/species_ranges/species_metadata.csv'))
 sp_info <- sp_info %>% 
   select(species_id, genus, gymno_angio, family)
 site_df <- site_df %>% 
@@ -81,7 +81,7 @@ site_df <- site_df %>%
 
 
 # 5. Dendrochronologies - used for single-stage model comparison
-dendro_dir <- paste0(wdir, "out/dendro/")
+dendro_dir <- paste0(wdir, "1_processed_input/dendro/")
 dendro_df <- read_csv(paste0(dendro_dir, "rwi_long.csv"))
 dendro_df <- dendro_df %>% 
   select(-core_id)
@@ -96,7 +96,7 @@ dendro_df <- dendro_df %>%
 
 
 # 6. Historic site-level climate
-an_site_clim <- read_rds(paste0(wdir, "out/climate/site_an_clim.gz"))
+an_site_clim <- read_rds(paste0(wdir, "2_output/climate/site_an_clim.gz"))
 dendro_df <- dendro_df %>% 
   left_join(an_site_clim, by = c("collection_id", "year"))
 
@@ -601,50 +601,50 @@ specs <- rbind(specs, new_row)
 specs <- specs %>% 
   select(-species_control) %>% 
   drop_na()
-write_rds(specs, paste0(wdir, "out/second_stage/robustness_specs.rds"))
+write_rds(specs, paste0(wdir, "2_output/second_stage/robustness_specs.rds"))
 
 
-## Contrast Conley CI to bootstrapped confidence interval
-bs_df <- read_rds(paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
-beta_1 <- bs_df %>% pull(cwd_cwd)
-beta_2 <- bs_df %>% pull(cwd_cwd2)
-cwd_median <- fs_spl %>% 
-  filter(outlier == 0) %>% 
-  pull(cwd.spstd) %>% 
-  median()
-bs_df$margfx <- beta_1 + (2 * beta_2 * cwd_median)
-bs_df$dummy = 1
-bs_df %>% 
-  ggplot(aes(x = dummy, y = margfx)) +
-  geom_boxplot(outlier.shape = NA) +
-  scale_y_continuous(limits = c(0, .1)) 
-
-bs_df %>% 
-  ggplot(aes(x = dummy, y = margfx)) +
-  geom_violin()
-  
-  
-### CIs for response to reviewers
-cis <- specs %>% 
-  mutate(ci = se * 1.96) 
-
-# baseline
-cis[1,]
-
-# temp (Comment 1.5)
-cis %>% 
-  filter(temp==1) %>% 
-  select(coef, ci)
-
-# temporal autocorrelation (Comment 3.2)
-cis %>% 
-  filter(tmprl==1) %>% 
-  select(coef, ci)
-
-# Single integrated model (Comment 3.3)
-cis %>% 
-  filter(single_stage==1) %>% 
-  select(coef, ci)
+# ## Contrast Conley CI to bootstrapped confidence interval
+# bs_df <- read_rds(paste0(wdir, "out/second_stage/ss_bootstrap.rds"))
+# beta_1 <- bs_df %>% pull(cwd_cwd)
+# beta_2 <- bs_df %>% pull(cwd_cwd2)
+# cwd_median <- fs_spl %>% 
+#   filter(outlier == 0) %>% 
+#   pull(cwd.spstd) %>% 
+#   median()
+# bs_df$margfx <- beta_1 + (2 * beta_2 * cwd_median)
+# bs_df$dummy = 1
+# bs_df %>% 
+#   ggplot(aes(x = dummy, y = margfx)) +
+#   geom_boxplot(outlier.shape = NA) +
+#   scale_y_continuous(limits = c(0, .1)) 
+# 
+# bs_df %>% 
+#   ggplot(aes(x = dummy, y = margfx)) +
+#   geom_violin()
+#   
+#   
+# ### CIs for response to reviewers
+# cis <- specs %>% 
+#   mutate(ci = se * 1.96) 
+# 
+# # baseline
+# cis[1,]
+# 
+# # temp (Comment 1.5)
+# cis %>% 
+#   filter(temp==1) %>% 
+#   select(coef, ci)
+# 
+# # temporal autocorrelation (Comment 3.2)
+# cis %>% 
+#   filter(tmprl==1) %>% 
+#   select(coef, ci)
+# 
+# # Single integrated model (Comment 3.3)
+# cis %>% 
+#   filter(single_stage==1) %>% 
+#   select(coef, ci)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -710,202 +710,6 @@ genus_df <- trim_df %>%
 
 genus_df$model_estimates
 
-write_rds(genus_df, paste0(wdir, "out/second_stage/ss_conley_genus.rds"))
-
-
-# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# # Investigate variation by species  ----------------------------------------
-# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# sp_lookup <- trim_df %>% select(collection_id, species_id)
-# sp_freq <- trim_df %>% 
-#   group_by(species_id) %>% 
-#   summarise(n_collections = n_distinct(collection_id),
-#             min_cwd = min(cwd.spstd),
-#             max_cwd = max(cwd.spstd),
-#             range_cwd = max_cwd - min_cwd) %>% 
-#   arrange(desc(n_collections))
-# 
-# gymno_key <- sp_info %>% 
-#   select(species_id, gymno_angio) %>% 
-#   unique()
-# 
-# sp_keep <- sp_freq %>% 
-#   filter(n_collections>50) %>%
-#   pull(species_id)
-# 
-# sp_df <- trim_df %>% 
-#   mutate(int_coef = estimate_intercept,
-#          pet_coef = estimate_pet.an, 
-#          cwd_coef = estimate_cwd.an) %>% 
-#   filter(species_id %in% sp_keep) %>% 
-#   group_by(species_id) %>% 
-#   nest() %>% 
-#   mutate(model_estimates = map(data, run_ss_conley))
-# 
-# sp_df$model_estimates
-# 
-# write_rds(sp_df, paste0(wdir, "out/second_stage/ss_conley_species.rds"))
-# 
-# 
-# 
-# 
-# ## REVIEW COMMENT 1.7 - assess association between gamma and species climate niche
-# ## Seems like species in high PET 
-# pull_me_median <- function(gen_mod, gen_dat){
-#   median_cwd <- gen_dat %>% pull(cwd.spstd) %>% median()
-#   lht <- linearHypothesis(gen_mod, c(paste0('cwd.spstd + ', as.character(median_cwd), ' * I(cwd.spstd^2) = 0')))
-#   pvalue <- lht$`Pr(>Chisq)`[2] %>% round(digits = 3)
-#   coefs = gen_mod$coefficients
-#   me <- (coefs['cwd.spstd'] + median_cwd * 2 * coefs['I(cwd.spstd^2)']) %>% round(digits = 3)
-#   return(me)
-# }
-# 
-# pull_sig <- function(gen_mod, gen_dat){
-#   median_cwd <- gen_dat %>% pull(cwd.spstd) %>% median()
-#   lht <- linearHypothesis(gen_mod, c(paste0('cwd.spstd + ', as.character(median_cwd), ' * I(cwd.spstd^2) = 0')))
-#   pvalue <- lht$`Pr(>Chisq)`[2] %>% round(digits = 3)
-#   return(pvalue)
-# }
-# 
-# me_median <- sp_df %>%
-#   mutate(me_median = map2(model_estimates, data, pull_coefs)) %>%
-#   mutate(me_sig = map2(model_estimates, data, pull_sig)) %>%
-#   select(species_id, me_median, me_sig) %>%
-#   unnest(me_median) %>%
-#   unnest(me_sig) %>% 
-#   arrange(species_id)
-# 
-# me_median <- me_median %>%
-#   filter(me_sig < 0.05) %>%
-#   left_join(niche_df, by = c("species_id" = "sp_code"))
-# 
-# 
-# me_median %>% ggplot(aes(x = pet_mean, y = me_median)) + geom_point()
-# me_median %>% ggplot(aes(x = cwd_mean, y = me_median)) + geom_point()
-# 
-# mod <- lm(me_median ~ cwd_mean + pet_mean, data = me_median)
-# summary(mod)
-
-# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# # Old version --------------------------------------------------------
-# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# 
-# 
-# trim_y <- list(TRUE, FALSE)
-# trim_x <- list(TRUE, FALSE)
-# 
-# # cluster_level <- list(list(TRUE, "species_id"), list(FALSE, "collection_id"))
-# cluster_level <- list(list(FALSE, "collection_id"))
-# weighting <- list(list(TRUE, FALSE, "cwd_errorweights"), list(FALSE, FALSE, "equalweights"))
-# #  list(FALSE, TRUE, "tree_errorweights"), 
-# 
-# # gymno_angio <- list(list(TRUE, FALSE, "gymno"), list(FALSE, TRUE, "angio"), list(TRUE, TRUE, c("gymno", "angio")))
-# gymno_angio <- list(list(TRUE, TRUE, c("gymno", "angio")))
-# equations <- list(list(FALSE, FALSE, "estimate_cwd.an ~ cwd.spstd + pet.spstd"), 
-#                   list(FALSE, TRUE, "estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2)"))
-# # list(TRUE, FALSE, "estimate_cwd.an ~ cwd.spstd + pet.spstd + factor(species_id)"),
-# # list(TRUE, TRUE, "estimate_cwd.an ~ cwd.spstd + pet.spstd + I(cwd.spstd**2) + I(pet.spstd**2) + factor(species_id)"))
-# detrend_method <- list(list(TRUE, FALSE, FALSE, fs_spl),
-#                        list(FALSE, TRUE, FALSE, fs_nb),
-#                        list(FALSE, FALSE, TRUE, fs_ar))
-# 
-# specs <- data.frame(coef=NaN, 
-#                     se=NaN, 
-#                     trim_x = NaN, trim_y = NaN, 
-#                     weight_se = NaN, weight_n = NaN,
-#                     include_gymno = NaN, include_angio = NaN,
-#                     species_control = NaN, squared_term = NaN,
-#                     species_cluster = NaN,
-#                     detrend_spline = NaN,
-#                     detrend_nb = NaN,
-#                     detrend_ar = NaN)
-# i = 1
-# for (t_y in trim_y){
-#   for (t_x in trim_x){
-#     for(wght in weighting){
-#       for (g_a in gymno_angio){
-#         for (eqn in equations){
-#           for(c_lvl in cluster_level){
-#             for(dtrnd in detrend_method){
-#               data <- dtrnd[[4]] %>% filter(gymno_angio %in% g_a[[3]])
-#               cwd_median <- data$cwd.spstd %>% median()
-#               if (t_x) {data <- data %>% filter(trim_x==TRUE)}
-#               if (t_y) {data <- data %>% filter(trim_y==TRUE)}
-#               formula <- eqn[[3]] %>% as.formula()
-#               error_weights <- data[[wght[[3]]]]
-#               # mod <- feols(formula, weights = data[[wght[[3]]]], data = data)
-#               mod <- feols(formula, weights = error_weights, data = data,
-#                            vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
-#               # mod <- lm(eqn[[3]], weights = data[[wght[[3]]]], data=data)
-#               # cluster_vcov <- vcovCL(mod, cluster = data[[c_lvl[[2]]]])
-#               # mod <- coeftest(mod, vcov = vcovCL, cluster = data[[c_lvl[[2]]]])
-#               print(mod)
-#               mod_slopes <- slopes(mod, newdata = datagrid(pet.spstd = 0, cwd.spstd = cwd_median))
-#               mod_slopes <- mod_slopes %>% 
-#                 as_tibble() %>% 
-#                 filter(term == "cwd.spstd")
-#               
-#               specs[i,] <- data_frame(coef = mod_slopes %>% pull("estimate"),
-#                                       se = mod_slopes %>% pull("std.error"),
-#                                       trim_x = t_x,
-#                                       trim_y = t_y,
-#                                       weight_se = wght[[1]],
-#                                       weight_n = wght[[2]],
-#                                       include_gymno = g_a[[1]],
-#                                       include_angio = g_a[[2]],
-#                                       species_control = eqn[[1]],
-#                                       squared_term = eqn[[2]],
-#                                       species_cluster = c_lvl[[1]],
-#                                       detrend_spline = dtrnd[[1]], 
-#                                       detrend_nb = dtrnd[[2]],
-#                                       detrend_ar = dtrnd[[3]])
-#               i <- i+1
-#               
-#             }
-#           }
-#         }
-#       }
-#     }
-#   }
-# }
-# 
-# 
-# specs <- specs %>% drop_na()
-# specs <- specs %>% 
-#   select(-include_gymno, -include_angio)
-# 
-# specs <- specs %>%
-#   select(-species_cluster)
-# 
-# highlight_n <- which(specs$trim_y == TRUE &
-#                        specs$trim_x == FALSE &
-#                        specs$weight_se == TRUE &
-#                        specs$weight_n == FALSE &
-#                        # specs$species_control == FALSE &
-#                        specs$squared_term == TRUE &
-#                        specs$detrend_spline == TRUE)
-# 
-# 
-# schart(specs, highlight=highlight_n, order = "increasing", ci = c(.95, .99))
-# 
-# 
-# labels <- list("Trimming:" = c("Trim outliers"),
-#                "Weighting:" = c("Inverse s.e.", "Square root of n"),
-#                "Controls" = c("Squared CWD and PET", "Species fixed effects"))
-# 
-# schart(specs, labels, highlight=highlight_n, order = "increasing", ci = c(.95, .99), adj=c(0,0), offset=c(5.5,5), ylab = "Slope of line relating\nsites' historic CWD to\nCWD's impact on growth")
-# 
-# 
-# 
-# despline_data <- fs_spl
-# formula <- as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2)")
-# t_x <- TRUE
-# t_y <- FALSE
-# weights <- "cwd_errorweights"
-# params <- list(despline_data = fs_spl,
-#                formula = as.formula("estimate_cwd.an ~ cwd.spstd + pet.spstd + (cwd.spstd^2) + (pet.spstd^2)"),
-#                t_x = TRUE,
-#                t_y = FALSE,
-#                weights = "cwd_errorweights")
+write_rds(genus_df, paste0(wdir, "2_output/second_stage/ss_conley_genus.rds"))
 
 

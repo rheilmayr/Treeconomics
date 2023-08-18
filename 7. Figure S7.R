@@ -60,7 +60,7 @@ options(scipen=999)
 wdir <- 'remote/'
 
 # 1. Prediction rasters
-rwi_list <- list.files(paste0(wdir, "out/predictions/pred_10000/sp_rwi/"), pattern = ".gz", full.names = TRUE)
+rwi_list <- list.files(paste0(wdir, "2_output/predictions/sp_rwi/"), pattern = ".gz", full.names = TRUE)
 sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
 
 
@@ -166,7 +166,7 @@ transect_0 <- plot_dat %>%
         legend.background = element_blank()) +
   geom_hline(yintercept = 0, linetype = "dashed", size = 1)
 transect_0
-ggsave(paste0(wdir, "figures\\", "FigS7_dif_pred.svg"), transect_0, width = 8, height = 6)
+ggsave(paste0(wdir, "3_results/figures/FigS7_dif_pred.svg"), transect_0, width = 8, height = 6)
 
 
 # ## Alternate version that plots difference in two models

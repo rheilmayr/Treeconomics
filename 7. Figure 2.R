@@ -44,14 +44,14 @@ pt_size = .pt
 wdir <- 'remote/'
 
 # 1. Site-level regressions
-flm_df <- read_csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv")) 
+flm_df <- read_csv(paste0(wdir, "2_output/first_stage/site_pet_cwd_std_augmented.csv")) 
 
 # 2. Species range maps
-range_file <- paste0(wdir, 'in/species_ranges/merged_ranges.shp')
+range_file <- paste0(wdir, '1_input_processed/species_ranges/merged_ranges_dissolve.shp')
 range_sf <- st_read(range_file)
 
 # 3. Site information
-site_smry <- read_csv(paste0(wdir, 'out/dendro/site_summary.csv'))
+site_smry <- read_csv(paste0(wdir, '1_input_processed/dendro/site_summary.csv'))
 site_smry <- site_smry %>% 
   select(collection_id, sp_id, latitude, longitude) %>% 
   mutate(species_id = tolower(sp_id)) %>% 
@@ -61,22 +61,22 @@ site_smry <- site_smry %>%
 # flm_df <- flm_df %>% 
 #   left_join(site_loc, by = "collection_id")
 
-# 4. Species information
-sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
-sp_info <- sp_info %>% 
-  select(species_id, genus, gymno_angio, family)
-site_smry <- site_smry %>% 
-  left_join(sp_info, by = c("species_id"))
+# # 4. Species information
+# sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
+# sp_info <- sp_info %>% 
+#   select(species_id, genus, gymno_angio, family)
+# site_smry <- site_smry %>% 
+#   left_join(sp_info, by = c("species_id"))
 
 # 5. Prediction rasters
-rwi_list <- list.files(paste0(wdir, "out/predictions/pred_10000/sp_rwi/"), pattern = ".gz", full.names = TRUE)
+rwi_list <- list.files(paste0(wdir, "2_output/predictions/sp_rwi/"), pattern = ".gz", full.names = TRUE)
 sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
 
-# 6. Dendro examples - note: currently just exporting two pipo sites in first stage script
-dendro_ex <- read_csv(paste0(wdir, "out/dendro/example_sites.csv"))
+# 6. Dendro examples - note: exporting two pipo sites in first stage script
+dendro_ex <- read_csv(paste0(wdir, "1_input_processed/dendro/example_sites.csv"))
 
 # 7. Raw dendro file for one site
-rwl_path <- paste0(wdir, "in/itrdb_zhao_corrected/AppendixS1/Cleaned datasets/itrdb-v713-cleaned-rwl/usa/ca585.rwl")
+rwl_path <- paste0(wdir, "1_input_processed/dendro/ca585.rwl")
 rwl_dat <- read.tucson(paste0(rwl_path))
 
 
@@ -211,7 +211,7 @@ map <- ggplot() +
   geom_label(aes(x = -119, y = 25, label = "Site B"), fill = low_color, color = "white", size = 5, label.size = NA)
 
 map
-ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/map_ex.png'), plot = map, bg= 'transparent', width = 2.25, height = 2.9)
+# ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/map_ex.png'), plot = map, bg= 'transparent', width = 2.25, height = 2.9)
 
 
 
@@ -249,7 +249,7 @@ despline_plot
 
 panel_a <- map | despline_plot
 panel_a
-ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/panel_A.png'), plot = panel_a, bg= 'transparent', width = 4.25, height = 2.9)
+ggsave(paste0(wdir, '3_results/figures/methods_panels/panel_A.png'), plot = panel_a, bg= 'transparent', width = 4.25, height = 2.9)
 
 #===============================================================================
 # Step 2: Climatic range  ---------
@@ -294,7 +294,7 @@ hex <- spp_predictions %>%
   geom_label(aes(x = 1, y = -0.8, label = "Site B"), fill = low_color, color = "white", size = 5, label.size = NA)
 hex
 
-ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/hex.png'), plot = hex, bg= 'transparent', width = 2.9, height = 2.9)
+ggsave(paste0(wdir, '3_results/figures/methods_panels/hex.png'), plot = hex, bg= 'transparent', width = 2.9, height = 2.9)
 
 
 
@@ -332,7 +332,7 @@ both_fig <- both_ex %>%
 #   annotate("text", x = -0.4, y = 2.5, label = paste("Site B"), color = low_color, size = 12/ pt_size)
 
 both_fig
-ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/both_fig.png'), plot = both_fig, bg= 'transparent', width = 3.5, height = 2.9)
+ggsave(paste0(wdir, '3_results/figures/methods_panels/both_fig.png'), plot = both_fig, bg= 'transparent', width = 3.5, height = 2.9)
 
 
 #===============================================================================
@@ -386,7 +386,7 @@ partial_plot <- ggplot(filter(x,cwd <=1&fit<=1), aes(x = cwd, y = fit, color="bl
 #             method = "loess", span = 2/3, linetype = "dashed", se = FALSE)
 partial_plot
 
-ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/partial_plot.png'), plot = partial_plot, bg= 'transparent', width = 3.75, height = 3.05)
+ggsave(paste0(wdir, '3_results/figures/methods_panels/partial_plot.png'), plot = partial_plot, bg= 'transparent', width = 3.75, height = 3.05)
 
 # combined_plot <- (map_ex | both_fig) / (sens_niche | partial_plot)+ plot_layout(widths = c(1,4))
 # combined_plot
@@ -422,7 +422,7 @@ cwd_sens_map <- ggplot() +
   theme()
 cwd_sens_map
 
-ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/cwd_sens_map.png'), plot = cwd_sens_map, bg= 'transparent', width = 2.25, height = 2.9)
+ggsave(paste0(wdir, '3_results/figures/methods_panels/cwd_sens_map.png'), plot = cwd_sens_map, bg= 'transparent', width = 2.25, height = 2.9)
 
 
 #===============================================================================
@@ -454,7 +454,7 @@ cwd_change_map <- ggplot() +
         legend.text=element_text(size=base_text_size - 4))
 cwd_change_map
 
-ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/cwd_change_map.png'), plot = cwd_change_map, bg= 'transparent', width = 2.25, height = 2.9)
+ggsave(paste0(wdir, '3_results/figures/methods_panels/cwd_change_map.png'), plot = cwd_change_map, bg= 'transparent', width = 2.25, height = 2.9)
 
 
 ### Map of predicted RWI
@@ -479,5 +479,5 @@ rwi_map <- ggplot() +
         legend.text=element_text(size=base_text_size - 4))
 rwi_map
 
-ggsave(paste0(wdir, 'figures/Methods figure/TransparentFigs/rwi_map.png'), plot = rwi_map, bg= 'transparent', width = 2.25, height = 2.9)
+ggsave(paste0(wdir, '3_results/figures/methods_panels/rwi_map.png'), plot = rwi_map, bg= 'transparent', width = 2.25, height = 2.9)
 

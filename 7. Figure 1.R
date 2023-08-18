@@ -26,9 +26,8 @@ library(forcats)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 wdir <- 'remote/'
 
-
 # 1. Prediction rasters
-rwi_list <- list.files(paste0(wdir, "out/predictions/pred_10000/sp_rwi/"), pattern = ".gz", full.names = TRUE)
+rwi_list <- list.files(paste0(wdir, "2_output/predictions/sp_rwi/"), pattern = ".gz", full.names = TRUE)
 sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
 
 theme_set(
@@ -136,6 +135,6 @@ full_fig <- panel1 + panel2 + panel3 +
 
 full_fig
 
-ggsave(paste0(wdir, 'figures/Fig1_conceptual.svg'), plot = full_fig, bg= 'transparent', width = 10, height = 4)
+ggsave(paste0(wdir, '3_results/figures/Fig1_conceptual.svg'), plot = full_fig, bg= 'transparent', width = 10, height = 4)
 
 #dims 15x6

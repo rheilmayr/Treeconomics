@@ -64,10 +64,10 @@ theme_set(
 wdir <- 'remote/'
 
 # 1. Site-level regressions
-flm_df <- read_csv(paste0(wdir, "out/first_stage/site_pet_cwd_std_augmented.csv"))
+flm_df <- read_csv(paste0(wdir, "2_output/first_stage/site_pet_cwd_std_augmented.csv"))
 
 # 2. Site information
-site_smry <- read_csv(paste0(wdir, 'out/dendro/site_summary.csv'))
+site_smry <- read_csv(paste0(wdir, '1_input_processed/dendro/site_summary.csv'))
 site_smry <- site_smry %>% 
   select(collection_id, sp_id, latitude, longitude) %>% 
   mutate(species_id = tolower(sp_id)) %>% 
@@ -82,7 +82,7 @@ trim_df <- flm_df %>%
   drop_na()
 
 # 3. DNLM results
-dnlm_results <- read_rds(paste0(wdir, "out/first_stage/dnlm_lagged_effects"))
+dnlm_results <- read_rds(paste0(wdir, "2_output/first_stage/dnlm_lagged_effects"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -215,7 +215,7 @@ first_stage_effects <- first_stage_effects  +
 
 
 first_stage_effects
-ggsave(paste0(wdir, 'figures\\FigS3_first_stage_effects.svg'), plot = first_stage_effects,
+ggsave(paste0(wdir, '3_results/figures/FigS3_first_stage_effects.svg'), plot = first_stage_effects,
        width = 15, height = 8, units = "in")
 
 
