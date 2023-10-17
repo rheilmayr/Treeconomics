@@ -49,19 +49,3 @@ The code in this repository reproduces the analysis conducted in Heilmayr, Dudne
 ## Helper functions
 - "f_cwd_function.R" - Functions to process monthly weather and soil data to generate annual PET, CWD and AET.
 - "f_spec_chart_function.R" - Function to run specification chart for robustness results
-
-
-
-
-## Data to provide (to run starting from script 3b)
-#   merged_ranges.shp:
-#   HistoricCWD_AETGrids.Rdat: Rasters describing historic CWD and AET
-#     Generated using historic_cwdraster.R
-#   monthlycrubaseline_tas:
-#   cmip5_cwdaet_start.Rdat:
-#   cmip5_cwdaet_end.Rdat:
-#   essentialcwd_data.csv:
-#   site_summary.csv:
-#   rwi_long.csv: Directory containing processed RWI data from "1b. Parse ITRDB.R"
-#   species_gen_gr.csv: Annotated data about species.
-
