@@ -36,14 +36,14 @@ highlight_n <- 1
 labels <- list("Detrending" = c("Spline", "Negative binomial", "Autoregressive"),
                "Energy control" = c("PET", "Mean temperature"),
                "First stage" = c("Annual RWI", "Cumulative\ndynamic lag"),
-               "Model structure" = c("Two stage", "Single stage", "Squared\nCWD and PET", "Linear\nCWD and PET", "Temporally\ncorrelated error"),
+               "Model structure" = c("Two stage", "Single stage", "Squared\nCWD and PET", "Linear\nCWD and PET", "Temporally\ncorrelated error", "Species-level\nrandom effects"),
                "Trimming and weighting" = c("Weight by\ninverse of s.e.", "Trim\noutliers in y", "Trim\noutliers in X"))
 
 
 svg(paste0(wdir, '3_results/figures/FigS5_robustness.svg'), width = 9, height = 14)
 robustness_fig <- schart(specs, labels, highlight=highlight_n, order = "asis", 
                          heights = c(.4,.6),
-                         n=c(1, 2, 1, 1, 3, 3), ci = c(.95), 
+                         n=c(1, 2, 1, 1, 4, 3), ci = c(.95), 
                          ylab = "Slope of line relating sites' historic\nCWD to CWD's impact on growth\n(evaluated at median historic CWD)",
                          col.est=c("grey80", "dodgerblue4"),
                          col.dot=c("grey60","grey95","grey95","dodgerblue4"),
@@ -90,7 +90,7 @@ text(x = 12, y = -.008, label = "8",
      font = 2,      # Bold face
      cex = 1)     # Size
 
-text(x = 14, y = -.008, label = "9",
+text(x = 13, y = -.008, label = "9",
      col = "black",   # Color of the text
      font = 2,      # Bold face
      cex = 1)     # Size
@@ -101,6 +101,11 @@ text(x = 15, y = -.008, label = "10",
      cex = 1)     # Size
 
 text(x = 16, y = -.008, label = "11",
+     col = "black",   # Color of the text
+     font = 2,      # Bold face
+     cex = 1)     # Size
+
+text(x = 17, y = -.008, label = "12",
      col = "black",   # Color of the text
      font = 2,      # Bold face
      cex = 1)     # Size
