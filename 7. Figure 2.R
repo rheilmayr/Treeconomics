@@ -249,7 +249,7 @@ despline_plot
 
 panel_a <- map | despline_plot
 panel_a
-ggsave(paste0(wdir, '3_results/figures/methods_panels/panel_A.png'), plot = panel_a, bg= 'transparent', width = 4.25, height = 2.9)
+ggsave(paste0(wdir, '3_results/figures/methods_panels/step_1.png'), plot = panel_a, bg= 'transparent', width = 4.25, height = 2.9, dpi = 600)
 
 #===============================================================================
 # Step 2: Climatic range  ---------
@@ -294,7 +294,7 @@ hex <- spp_predictions %>%
   geom_label(aes(x = 1, y = -0.8, label = "Site B"), fill = low_color, color = "white", size = 5, label.size = NA)
 hex
 
-ggsave(paste0(wdir, '3_results/figures/methods_panels/hex.png'), plot = hex, bg= 'transparent', width = 2.9, height = 2.9)
+ggsave(paste0(wdir, '3_results/figures/methods_panels/step_2.png'), plot = hex, bg= 'transparent', width = 2.9, height = 2.9, dpi = 600)
 
 
 
@@ -332,7 +332,7 @@ both_fig <- both_ex %>%
 #   annotate("text", x = -0.4, y = 2.5, label = paste("Site B"), color = low_color, size = 12/ pt_size)
 
 both_fig
-ggsave(paste0(wdir, '3_results/figures/methods_panels/both_fig.png'), plot = both_fig, bg= 'transparent', width = 3.5, height = 2.9)
+ggsave(paste0(wdir, '3_results/figures/methods_panels/step_3.png'), plot = both_fig, bg= 'transparent', width = 3.5, height = 2.9, dpi = 600)
 
 
 #===============================================================================
@@ -386,7 +386,7 @@ partial_plot <- ggplot(filter(x,cwd <=1&fit<=1), aes(x = cwd, y = fit, color="bl
 #             method = "loess", span = 2/3, linetype = "dashed", se = FALSE)
 partial_plot
 
-ggsave(paste0(wdir, '3_results/figures/methods_panels/partial_plot.png'), plot = partial_plot, bg= 'transparent', width = 3.75, height = 3.05)
+ggsave(paste0(wdir, '3_results/figures/methods_panels/step_4.png'), plot = partial_plot, bg= 'transparent', width = 3.75, height = 3.05, dpi = 600)
 
 # combined_plot <- (map_ex | both_fig) / (sens_niche | partial_plot)+ plot_layout(widths = c(1,4))
 # combined_plot
@@ -422,7 +422,7 @@ cwd_sens_map <- ggplot() +
   theme()
 cwd_sens_map
 
-ggsave(paste0(wdir, '3_results/figures/methods_panels/cwd_sens_map.png'), plot = cwd_sens_map, bg= 'transparent', width = 2.25, height = 2.9)
+ggsave(paste0(wdir, '3_results/figures/methods_panels/step_5.png'), plot = cwd_sens_map, bg= 'transparent', width = 2.25, height = 2.9, dpi = 600)
 
 
 #===============================================================================
@@ -454,7 +454,7 @@ cwd_change_map <- ggplot() +
         legend.text=element_text(size=base_text_size - 4))
 cwd_change_map
 
-ggsave(paste0(wdir, '3_results/figures/methods_panels/cwd_change_map.png'), plot = cwd_change_map, bg= 'transparent', width = 2.25, height = 2.9)
+ggsave(paste0(wdir, '3_results/figures/methods_panels/step_6a.png'), plot = cwd_change_map, bg= 'transparent', width = 2.25, height = 2.9, dpi = 600)
 
 
 ### Map of predicted RWI
@@ -479,5 +479,5 @@ rwi_map <- ggplot() +
         legend.text=element_text(size=base_text_size - 4))
 rwi_map
 
-ggsave(paste0(wdir, '3_results/figures/methods_panels/rwi_map.png'), plot = rwi_map, bg= 'transparent', width = 2.25, height = 2.9)
+ggsave(paste0(wdir, '3_results/figures/methods_panels/step_6b.png'), plot = rwi_map, bg= 'transparent', width = 2.25, height = 2.9, dpi = 600)
 
