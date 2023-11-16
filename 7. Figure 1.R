@@ -92,14 +92,15 @@ discrete_pal <- c("#1e9c89","darkgrey", "#472e7c")
 labels = c("H0: Consistent","H1: Drought-naive", "H2: Dry-range")
 
 panel1 <- sens_df %>% 
-  ggplot(aes(x = labels, y = sens, fill = name, group = name, color = name)) +
+  ggplot(aes(x = labels, y = sens, fill = name, group = name, color = name, linetype = name)) +
   geom_smooth() +
   scale_fill_manual(values = discrete_pal,labels=c("H0: Consistent","H1: Dry-range ", "H2: Drought-naïve"))+
   scale_color_manual(values = discrete_pal, labels=c("H0: Consistent","H1: Dry-range ", "H2: Drought-naïve"))+
+  scale_linetype_manual(values=c("solid", "dotted", "dashed"), labels=c("H0: Consistent","H1: Dry-range ", "H2: Drought-naïve"))+
   theme(legend.title = element_blank(),plot.title = element_text(hjust = 0.5))+
   ylab("Sensitivity (Δ RWI / Δ CWD)")+
   xlab("Standardized aridity\n(Deviation from species mean)")+
-  guides(fill="none", color="none")+
+  guides(fill="none", color="none", linetype = "none")+
   ggtitle("Sensitivity")
 
 panel1
@@ -114,11 +115,12 @@ panel2 <- exp_df %>%
 
 
 panel3 <- vuln_df %>%
-  ggplot(aes(x = labels, y = rwi_change, fill = name, group = name)) +
-  geom_col(position = "dodge", width =.2, alpha=.4)+
+  ggplot(aes(x = labels, y = rwi_change, fill = name, group = name, linetype = name)) +
+  geom_col(position = "dodge", width =.2, alpha=0.4)+
   geom_smooth(aes(color=name), se=F, method="gam")+
   scale_fill_manual(values = discrete_pal,labels=c("H0: Consistent","H1: Dry-range ", "H2: Drought-naïve"))+
   scale_color_manual(values = discrete_pal, labels=c("H0: Consistent","H1: Dry-range ", "H2: Drought-naïve"))+
+  scale_linetype_manual(values=c("solid", "dotted", "dashed"), labels=c("H0: Consistent","H1: Dry-range ", "H2: Drought-naïve"))+
   theme(legend.title = element_blank(),plot.title = element_text(hjust = 0.5), legend.position = "bottom")+
   ylab("Change in RWI")+
   xlab("Standardized aridity\n(Deviation from species mean)")+
