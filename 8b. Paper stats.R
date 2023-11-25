@@ -45,7 +45,7 @@ ss_df <- read_rds(paste0(wdir, "2_output/second_stage/ss_bootstrap.rds"))
 # 5. Prediction results
 rwi_list <- list.files(paste0(wdir, "2_output/predictions/sp_rwi/"), pattern = ".gz", full.names = TRUE)
 sp_predictions <- do.call('rbind', lapply(rwi_list, readRDS))
-agg_stats <- read_rds(file = paste0(wdir, "out/predictions/mc_agg_stats.gz"))
+agg_stats <- read_rds(file = paste0(wdir, "2_output/predictions/mc_agg_stats.gz"))
 
 
 
@@ -86,9 +86,9 @@ n_obs <- flm_df %>%
 # Effects of CWD and PET on tree growth  ----------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Specifically, a site that experienced a 1 SD decline in CWD (relative to the distribution of 
-# CWD across the species’ full range) experienced a 3.1% decline (-9.9 to -1.0)  in RWI in the 
-# same year. The site-level, marginal effect of CWD was significantly negative (p<0.05) for 54% of 
-# sites, while only 11% of sites exhibited a significantly positive relationship (Appendix Figure 
+# CWD across the species’ full range) experienced a 3.2% decline (-10.1 to -1.1)  in RWI in the 
+# same year. The site-level, marginal effect of CWD was significantly negative (p<0.05) for 54.6% of 
+# sites, while only 10.6% of sites exhibited a significantly positive relationship (Appendix Figure 
 # 2, panel A). 
 ss_df$cwd_const_sens %>% mean()
 ss_df$cwd_const_sens %>%
@@ -123,14 +123,6 @@ ss_df$pet_const_sens %>% mean()
 ss_df$pet_const_sens %>%
   quantile(c(0.025, 0.5, 0.975))
 
-pet_te_count_neg <- flm_df %>%
-  filter(p.value_pet.an<0.05,
-         estimate_pet.an<0) %>% 
-  pull(collection_id) %>% 
-  unique() %>% 
-  length()
-
-(pet_te_shr_neg <- pet_te_count_neg / n_sites)
 
 pet_te_count_pos <- flm_df %>%
   filter(p.value_pet.an<0.05,
@@ -142,11 +134,22 @@ pet_te_count_pos <- flm_df %>%
 (pet_te_shr_pos <- pet_te_count_pos / n_sites)
 
 
+pet_te_count_neg <- flm_df %>%
+  filter(p.value_pet.an<0.05,
+         estimate_pet.an<0) %>% 
+  pull(collection_id) %>% 
+  unique() %>% 
+  length()
+
+(pet_te_shr_neg <- pet_te_count_neg / n_sites)
+
+
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Drier sites exhibit less sensitivity to drought  --------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # For example, our estimates of site-level sensitivity to CWD indicated that 
-# drier-than-average sites experienced a 13% decline (-22% to -7%) in annual growth 
+# drier-than-average sites experienced a 12.8% decline (-22.3% to -6.0%) in annual growth 
 # in response to a 1 SD increase in CWD (Figure 4, A). 
 cwd_high_fs_bs <- block_draw_df %>% 
   filter(cwd.spstd > 0) %>% 
@@ -162,7 +165,7 @@ cwd_high_fs_bs %>%
   quantile(c(0.025, 0.975))
 
 
-# In contrast, wetter-than-average sites experienced a larger 21% decline (-32% to -11%) 
+# In contrast, wetter-than-average sites experienced a larger 22.1% decline (-32% to -11%) 
 # in growth from a 1 SD increase in CWD. 
 cwd_low_fs_bs <- block_draw_df %>% 
   filter(cwd.spstd < 0) %>% 
@@ -176,6 +179,16 @@ cwd_low_fs_bs %>%
 cwd_low_fs_bs %>%
   pull(cwd_coef) %>% 
   quantile(c(0.025, 0.975))
+
+# To characterize this variability in CWD sensitivity, we modeled sensitivity as a 
+# quadratic function of historic CWD and PET (Figure 4, Panels B and C). The regression 
+# results highlight that observed sensitivity declined with increasing CWD (slope at 
+# the species’ mean, historic CWD = 0.015, CI = 0.006 to 0.059). 
+ss_df %>%
+  summarise(mean_cwd = mean(cwd_cwd),
+            lower_cwd = quantile(cwd_cwd, 0.025),
+            upper_cwd = quantile(cwd_cwd, 0.975))
+
 
 
 # Trees also exhibited heterogeneity in their responses to annual increases in 
@@ -218,14 +231,6 @@ pet_high_fs_bs %>%
   quantile(c(0.025, 0.975))
 
 
-# To characterize this variability in CWD sensitivity, we modeled sensitivity as a 
-# quadratic function of historic CWD and PET (Figure 4, Panels B and C). The regression 
-# results highlight that observed sensitivity declined with increasing CWD (slope at 
-# the species’ mean, historic CWD = 0.015, CI = 0.006 to 0.064). 
-ss_df %>%
-  summarise(mean_cwd = mean(cwd_cwd),
-            lower_cwd = quantile(cwd_cwd, 0.025),
-            upper_cwd = quantile(cwd_cwd, 0.975))
 
 
 
@@ -292,14 +297,6 @@ sp_clim <- sp_clim %>%
 
 
 sp_clim %>% 
-  pull(cwd_change) %>% 
-  mean()
-
-sp_clim %>% 
-  pull(cwd_change) %>% 
-  quantile(c(0.025, 0.975))
-
-sp_clim %>% 
   pull(pet_change) %>% 
   mean()
 
@@ -307,12 +304,18 @@ sp_clim %>%
   pull(pet_change) %>% 
   quantile(c(0.025, 0.975))
 
-# Supporting concerns about the emergence of “novel climates” (39, 40), 3.8% of 
-# species’ ranges are predicted to face a mean CWD in 2100 that exceeds the
-# mean CWD experienced anywhere in that species’ historic, climatic range 
-# (Figure 5, D). For some species (e.g., Pinus pinea and Quercus faginea),
-# more than half of their current range is projected to be drier than the 
-# driest parts of their historic range.
+sp_clim %>% 
+  pull(cwd_change) %>% 
+  mean()
+
+sp_clim %>% 
+  pull(cwd_change) %>% 
+  quantile(c(0.025, 0.975))
+
+# For some species (e.g., Pinus pinea and Quercus faginea), more than
+# half of their current range is projected to be
+# drier than the driest parts of their historic
+# range.
 sp_plot_dat %>%
   ungroup() %>% 
   group_by(cwd_end_bin) %>% 
@@ -331,6 +334,9 @@ extreme_sp_change <- sp_plot_dat %>%
   print()
 
 
+# Supporting concerns about the emergence of “novel climates” (42, 43),
+# 11% of the average species’ range will be drier than anywhere in that 
+# species’ historic, climatic range (Fig. 4D).
 extreme_sp_change %>% pull(freq) %>% mean()
 
 
@@ -348,6 +354,13 @@ agg_stats$rwi_pred_change %>% quantile(c(0.025, 0.975))
 # changes in which >97.5% of all predictions are negative. In contrast, 0.4% of grid
 # cells have a distribution of predicted RWI changes in which >97.5% of predictions
 # are positive. 
+
+# Specifically, 50.2% of grid cells (representing the combination of a
+# species and location) are predicted to experience a significant 
+# (>95% of Monte Carlo iterations) decline in growth. By contrast, only
+# 0.6% of grid cells are predicted to experience a
+# significant increase in growth.
+
 changes <- sp_predictions %>%
   mutate(rwi_change_qual = rwi_pred_change_mean < 0) %>% 
   group_by(rwi_change_qual) %>% 
@@ -369,8 +382,8 @@ changes <- sp_predictions %>%
 
 
 # the wetter but hotter-than-average portions of species’ ranges are projected to experience 
-# a 17.3% decline in growth (-53.7% to -0.8%). In contrast, drier but cooler-than-average 
-# locations are predicted to experience a 10.6% decline in growth (-33.5% to +0.9%). 
+# a 17.2% decline in growth (-51.9 to -1.4%). In contrast, drier but cooler-than-average 
+# locations are predicted to experience a 11.0% decline in growth (-33.9% to +0.3%). 
 
 sp_predictions %>%
   filter(cwd_hist<0, pet_hist >0) %>% 
