@@ -34,12 +34,15 @@ createLink(paste0(code_dir, 'remote'), data_dir, overwrite = FALSE)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Add output directory structure -----------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-dir.create(file.path("2_output/climate/"), showWarnings = FALSE)
-dir.create(file.path("2_output/first_stage/"), showWarnings = FALSE)
-dir.create(file.path("2_output/second_stage/"), showWarnings = FALSE)
-dir.create(file.path("2_output/predictions/"), showWarnings = FALSE)
+dir.create(file.path("remote/2_output/"), showWarnings = TRUE)
+dir.create(file.path("remote/2_output/climate/"), showWarnings = TRUE)
+dir.create(file.path("remote/2_output/first_stage/"), showWarnings = TRUE)
+dir.create(file.path("remote/2_output/second_stage/"), showWarnings = TRUE)
+dir.create(file.path("remote/2_output/predictions/"), showWarnings = TRUE)
 
-dir.create(file.path("3_results/figures/methods_panels/"), showWarnings = FALSE)
-dir.create(file.path("3_results/tables/"), showWarnings = FALSE)
+dir.create(file.path("remote/3_results/"), showWarnings = TRUE)
+dir.create(file.path("remote/3_results/figures/"), showWarnings = TRUE)
+dir.create(file.path("remote/3_results/figures/methods_panels/"), showWarnings = TRUE)
+dir.create(file.path("remote/3_results/tables/"), showWarnings = TRUE)
 
 
