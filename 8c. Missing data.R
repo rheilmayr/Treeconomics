@@ -53,13 +53,13 @@ range_species <- range_sf %>%
   drop_na()
 
 # Identify valid dendrochronologies
-dendro_df <- read_csv(paste0(wdir, '2_output/dendro/rwi_long.csv')) %>% 
+dendro_df <- read_csv(paste0(wdir, '1_input_processed/dendro/rwi_long.csv')) %>% 
   select(collection_id) %>% 
   distinct() %>% 
   mutate(valid_dendro = 1)
 
 # Load cwd data
-cwd_csv = paste0(wdir, '2_output/climate/essentialcwd_data.csv')
+cwd_csv = paste0(wdir, '1_input_processed/climate/essentialcwd_data.csv')
 cwd_df <- read_csv(cwd_csv)
 cwd_df <- cwd_df %>% 
   mutate("collection_id" = as.character(site))
@@ -187,21 +187,4 @@ flm_df$species_id %>% unique() %>% length()
 flm_df$ntrees %>% sum()
 flm_df$nobs %>% sum()
 
-
-
-
-
-# Sites dropped in primary specification as outliers in first stage regression estimates:
-
-
-data_inventory %>% gg_miss_upset()
-miss_var_summary(data_inventory)
-
-## Total number of complete sites in analysis
-data_inventory %>% complete.cases() %>% sum()
-
-
-data_inventory %>% 
-  group_by(valid_rwl, valid_dendro, valid_range, valid_fs) %>% 
-  tally()
 
