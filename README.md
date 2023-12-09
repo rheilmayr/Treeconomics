@@ -1,6 +1,12 @@
-The code in this repository reproduces the analysis conducted in Heilmayr, Dudney and Moore, 2023. 
+The code in this repository reproduces the analysis presented in Heilmayr, Dudney and Moore, 2023 (https://www.science.org/doi/10.1126/science.adi1071)
 
-# Processing workflow
+# Data download
+Pre-processed data can be downloaded from the Harvard Dataverse: https://doi.org/10.7910/DVN/DZEXQN
+
+# Analysis
+Once data have been downloaded, the "Full_analysis.R" provides a full walkthrough of the integrated analysis.
+
+# Outline of analysis
 ## Environment configuration
 - "0. init.R" - creates symbolic link to point towards file directory
 
@@ -38,12 +44,14 @@ The code in this repository reproduces the analysis conducted in Heilmayr, Dudne
 - "6. Prediction.R" - Predicts sensitivity and RWI changes
 
 
-## 7. Generate figures, tables and stats
-- "7a. Figures.R" - Generates most figures for paper
-- "7b. Conceptual figure.R" - Generates figure 1 illustrating conceptual link between sensitivity, exposure and vulnerability
-- "7c. Species level figures.R" - Generates figure 2 which illustrates methods using PIPO
-- "7d. Paper tables.R" - Generates supplemental table summarizing species included in analysis 
-- "7e. Paper stats.R" - Reproduces all stats from the paper
+## 7. Generate figures
+- "7. Figure XX.R" - Generate the individual figures in the paper and SI
+
+
+## 8. Generate tables and stats
+- "8a. Table S1.R" - Generate supplementary table 1
+- "8b. Paper stats.R" - Calculate all statistics reported in paper
+- "8c. Missing data.R" - Track missing data
 
 
 ## Helper functions
