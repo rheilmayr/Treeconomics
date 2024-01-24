@@ -10,7 +10,8 @@
 
 # PACKAGES THAT MUST BE INSTALLED BEFORE RUNNING THE SCRIPT: data.table and geosphere
 
-# Adapted from Dobrowski et al., 2012: https://doi.org/10.1111/gcb.12026
+# Original code provided by the Great Basin Landscape Ecology Lab: https://naes.unr.edu/weisberg/old_site/downloads/
+# This code adapts the method described by Dobrowski et al., 2012: https://doi.org/10.1111/gcb.12026
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load required packages -------------------------------------------------
