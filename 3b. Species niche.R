@@ -35,6 +35,7 @@ library(sf)
 library(rgeos)
 library(stringr)
 library(raster)
+# library(terra)
 library(readr)
 library(tmap)
 library(tictoc)
@@ -55,6 +56,8 @@ wdir <- 'remote/'
 # 1. Historic climate raster
 clim_file <- paste0(wdir, '1_input_processed/climate/HistoricCWD_AETGrids_Annual.Rdat')
 load(clim_file)
+# cwd_historic <- rast(cwd_historic)
+# aet_historic <- rast(aet_historic)
 cwd_historic <- mean(cwd_historic)
 aet_historic <- mean(aet_historic)
 pet_historic <- aet_historic + cwd_historic
@@ -65,6 +68,8 @@ names(pet_historic) = "pet"
 # clim_file <- paste0('G:/.shortcut-targets-by-id/10TtqG9P3BY70rcYp-WACmO38J5zBeflA/Treeconomics/Data/replication - original/1_input_processed/climate/HistoricCWD_AETGrids.Rdat')
 clim_file <- paste0(wdir, '1_input_processed/climate/HistoricCWD_AETGrids.Rdat')
 load(clim_file)
+# cwd_historic <- rast(cwd_historic)
+# aet_historic <- rast(aet_historic)
 cwd_historic <- sum(cwd_historic)
 aet_historic <- sum(aet_historic)
 pet_historic <- aet_historic + cwd_historic
@@ -171,7 +176,6 @@ pull_clim <- function(spp_code){
   return(clim_vals)
 }
 
-
 species_list <- range_sf %>%
   pull(sp_code) %>% 
   unique() %>% 
@@ -181,10 +185,14 @@ species_list <- range_sf %>%
   drop_na()
 
 clim_df <- species_list %>% 
-  mutate(clim_vals = future_map(sp_code, 
-                                .f = pull_clim,
-                                .options = furrr_options(packages = c( "dplyr", "raster", "sf")),
-                                .progress = TRUE))
+  mutate(clim_vals = map(sp_code,.f = pull_clim))
+
+
+# clim_df <- species_list %>% 
+#   mutate(clim_vals = future_map(sp_code, 
+#                                 .f = pull_clim,
+#                                 .options = furrr_options(packages = c( "dplyr", "raster", "sf")),
+#                                 .progress = TRUE))
 
 
 ## Summarize mean and sd of each species' climate
@@ -201,6 +209,7 @@ niche_df <- clim_df %>%
 
 ## Export species niche description
 write.csv(niche_df, paste0(wdir, "2_output/climate/clim_niche.csv"))
+niche_df <- read_csv(paste0(wdir, "2_output/climate/clim_niche.csv"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
