@@ -11,7 +11,9 @@
 # PACKAGES THAT MUST BE INSTALLED BEFORE RUNNING THE SCRIPT: data.table and geosphere
 
 # Original code provided by the Great Basin Landscape Ecology Lab: https://naes.unr.edu/weisberg/old_site/downloads/
-# This code adapts the method described by Dobrowski et al., 2012: https://doi.org/10.1111/gcb.12026
+# Original script says it adapts the method described by Dobrowski et al., 2012: https://doi.org/10.1111/gcb.12026
+# But probably relied upon the appendix from https://onlinelibrary.wiley.com/doi/10.1111/j.1365-2699.2009.02268.x#b45
+
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load required packages -------------------------------------------------
@@ -45,6 +47,7 @@ cwd_function <- function(site,slope,latitude,foldedaspect,ppt,tmean,month,soilaw
   data$slope<-as.numeric(as.character(data$slope))
   data$latitude<-as.numeric(as.character(data$latitude))
   data$foldedaspect<-as.numeric(as.character(data$foldedaspect))
+  data$foldedaspect <- abs(180 - abs(foldedaspect-225))  ## Were we calculating this incorrectly?
   data$ppt<-as.numeric(as.character(data$ppt))
   data$tmean<-as.numeric(as.character(data$tmean))
   data$month<-as.numeric(as.character(data$month))
@@ -105,7 +108,7 @@ cwd_function <- function(site,slope,latitude,foldedaspect,ppt,tmean,month,soilaw
   data[month==1 | month==3 |month==5|month==7|month==8|month==10|month==12,days:=31]
   data[month==4 | month==6 |month==9|month==11,days:=30]
   data[month==2,days:=28]
-  data[,ea:=exp(((17.3*tmean)/(tmean+273.2)))*0.611]
+  data[,ea:=exp(((17.3*tmean)/(tmean+237.2)))*0.611] ## DENOMINATOR CORRECTED FROM ORIGINAL CODE - BUT SHOULD THIS ACTUALLY BE 273.2?!?
   # convert slope, folded aspect, and latitude to radians
   data[,sloprad:=slope*0.0174532925]
   data[,afrad:=foldedaspect*0.0174532925]
@@ -113,7 +116,7 @@ cwd_function <- function(site,slope,latitude,foldedaspect,ppt,tmean,month,soilaw
   #calculate heat load
   data[,heatload:=0.339+0.808*(cos(latrad)*cos(sloprad))-0.196*(sin(latrad)*sin(sloprad))-0.482*(cos(afrad)*sin(sloprad))]
 
-  data[,petm:=ifelse(tmean<0,0,((((ea)/(tmean+273.3))*day*days*29.8)*heatload/10))]
+  data[,petm:=ifelse(tmean<0,0,((29.8*days*day*heatload*ea)/(tmean+273.2)))]  ## NUMERATOR AND DENOMINATOR CORRECTED FROM ORIGINAL CODE; ALSO WHY WAS THIS DIVIDED BY 10?!?
 
   mergedata=foreach(i=1:length(sites),.combine="rbind")%dopar%{
     soilm<-vector()
