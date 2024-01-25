@@ -5,7 +5,7 @@
 # Purpose: Create gridded 0.5 degree cwd, pet and aet based on 1901-1980 climatological baseline (CRU Data)
 #
 # Input files:
-#   cru_ts4.04.1901.2019.tmp.dat.nc: Monthly mean temp data from CRU. FRAN - WHERE DOES THIS GET CALCULATED?
+#   cru_ts4.04.1901.2019.tmp.dat.nc: Monthly mean temp data from CRU.
 #   cru_ts4.04.1901.2019.pre.dat.nc: Monthly precip data from CRU. Accessed from https://crudata.uea.ac.uk/cru/data/hrg/.
 #   sr_cru_max.asc: Soil water capacity raster. Accessed from Wang-Erlandsson et al., 2016.
 #   slopeaspectraster.Rdat: FRAN - WHERE DOES THIS GET CALCULATED?
@@ -17,10 +17,6 @@
 #   HistoricCWD_AETGrids.Rdat: 
 #   HistoricCWD_AETGrids_Annual.Rdat: 
 #
-# TODO:
-#   FRAN: Should we be calculating CWD / AET for each year first, then taking the average of that for the baseline?
-#   FRAN: Would be great if you could annotate a bit more. Why are some datasets labeled test? What are "sites" mentioned below?
-#   FRAN: Should we clean up outputs? At least move into a single directory?
 #
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -43,7 +39,7 @@ library(dplyr)
 library(tidyr)
 source("f_cwd_function.R")
 
-max_clusters = 20
+max_clusters = 8
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data --------------------------------------------------------------
@@ -53,16 +49,16 @@ wdir <- "remote/"
 
 ## Load CRU temp and precip data
 cruyears=rep(1901:2019,each=12);crumonths=rep(1:12,length(1901:2019))
-tas=stack(paste0(wdir, "in/CRUData/cru_ts4.04.1901.2019.tmp.dat.nc"))
-pr=stack(paste0(wdir,"in/CRUData/cru_ts4.04.1901.2019.pre.dat.nc"))
+tas=stack(paste0(wdir, "0_raw/CRUData/cru_ts4.04.1901.2019.tmp.dat.nc"))
+pr=stack(paste0(wdir,"0_raw/CRUData/cru_ts4.04.1901.2019.pre.dat.nc"))
 
 ## Load soil water capacity raster
-swc=raster(paste0(wdir,"in/CMIP5 Data/other data for cwd/sr_cru_max.asc"))
+swc=raster(paste0(wdir,"0_raw/other data for cwd/sr_cru_max.asc"))
 #convert swc from mm to cm
 swc=swc/10
 
 ## Load topography raster
-load(paste0(wdir,"in/CMIP5 Data/other data for cwd/slopeaspectraster.Rdat"))
+load(paste0(wdir,"0_raw/other data for cwd/slopeaspectraster.Rdat"))
 terrainraster=crop(terrainraster,extent(swc))
 #convert slope and aspect to degrees
 terrainraster=terrainraster*180/pi
@@ -86,8 +82,8 @@ for(j in 2:12){
 
 
 # save(tas_months,pr_months,file=paste0(wdir,"in/CRUData/monthlycrubaseline.Rdat"))
-writeRaster(tas_months %>% mean(), file=paste0(wdir,"in/CRUData/monthlycrubaseline_tas"), overwrite = TRUE)
-writeRaster(pr_months %>% sum(), file=paste0(wdir,"in/CRUData/monthlycrubaseline_pr"), overwrite = TRUE)
+writeRaster(tas_months %>% mean(), file=paste0(wdir,"1_input_processed/climate/monthlycrubaseline_tas"), overwrite = TRUE)
+writeRaster(pr_months %>% sum(), file=paste0(wdir,"1_input_processed/climate/monthlycrubaseline_pr"), overwrite = TRUE)
 
 
 # melt permanent site data down into a long data frame for cwd function
@@ -118,11 +114,12 @@ dat=merge(sitedata,climatedata)
 dat=dat[complete.cases(dat),]
 
 test=cwd_function(site=as.factor(dat$site),slope=dat$slope,latitude=dat$lat,foldedaspect=dat$aspect,ppt=dat$precip,tmean=dat$temp,month=dat$month,soilawc=dat$swc,year=NULL,type="normal")
-fwrite(test,file=paste0(wdir,"/Data/griddedbaselinecwddata.csv"))
+fwrite(test,file=paste0(wdir,"1_input_processed/climate/griddedbaselinecwddata.csv"))
 
 #merge in lat longs from site data
 sitecrosswalk=data.frame(site_grid=unique(dat$site),site=1:length(unique(dat$site)))
-test=merge(test,sitecrosswalk)
+sitecrosswalk <- sitecrosswalk %>% mutate(site = as.character(site))
+test=merge(test,sitecrosswalk, by = "site")
 
 test$site_grid=as.numeric(test$site_grid)
 test=merge(test[,c(3,28,29,30)],sitedata[,c(4:6)],by.x="site_grid",by.y="site")
@@ -143,9 +140,10 @@ for(j in 2:12){
   cwd_historic=stack(cwd_historic,cwdtemp);aet_historic=stack(aet_historic,aettemp)
 }
 
-save(cwd_historic,aet_historic,file=paste0(wdir,"in/CRUData/historic_raster/HistoricCWD_AETGrids.Rdat"))
+save(cwd_historic,aet_historic,file=paste0(wdir,"1_input_processed/climate/HistoricCWD_AETGrids.Rdat"))
 
-
+### FRAN -  Isn't this block of code redundant with previous definition of climatedata? 
+### Seems like there's some re-use of tasdata that isn't quite right?
 tasdata=melt(tasdata,id.vars=c("site","year"));prdata=melt(prdata,id.vars=c("site","year"))
 climatedata=cbind(tasdata,prdata[,4])
 colnames(climatedata)=c("site","year","month","temp","precip")
@@ -168,12 +166,12 @@ sitegroups=1:61
 for(y in 1:length(sitegroups)){
   groupdat=dat%>%filter(sitegroup==sitegroups[y])
   test=cwd_function(site=as.factor(groupdat$site),slope=groupdat$slope,latitude=groupdat$lat,foldedaspect=groupdat$aspect,ppt=groupdat$precip,tmean=groupdat$temp,month=groupdat$month,soilawc=groupdat$swc,year=groupdat$year,type="annual")
-  fwrite(test,file=paste0(wdir,"in/CRUData/historic_raster/cwd_group",sitegroups[y],".csv"))
+  fwrite(test,file=paste0(wdir,"1_input_processed/climate/cwd_group",sitegroups[y],".csv"))
   print(y)
 }
 
 for(i in 1:length(sitegroups)){
-  temp=fread(paste0(wdir,"in/CRUData/historic_raster/cwd_group",sitegroups[i],".csv"))
+  temp=fread(paste0(wdir,"1_input_processed/climate/cwd_group",sitegroups[i],".csv"))
   #annual totals
   temp=temp%>%group_by(site,year)%>%summarize(aet=sum(aet),cwd=sum(cwd))
   temp=left_join(temp,sitedata%>%select(lon,lat,site))
@@ -205,6 +203,6 @@ for(i in 2:length(baseyears)){
   aet_historic=addLayer(aet_historic,aettemp)
   print(i)
 }
-save(cwd_historic,aet_historic,file=paste0(wdir,"in/CRUData/historic_raster/HistoricCWD_AETGrids_Annual.Rdat"))
+save(cwd_historic,aet_historic,file=paste0(wdir,"1_input_processed/climate/HistoricCWD_AETGrids_Annual.Rdat"))
 
 
