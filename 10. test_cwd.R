@@ -1,7 +1,7 @@
 
 library(tidyverse)
 source("f_cwd_function.R")
-
+library(SPEI)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -44,33 +44,49 @@ data <- data %>%
 test_data <- data %>% 
   filter(site_id == "CA524") # PIPO site in CA
 
+## Test annual cwd calculation
 cwd_data <- cwd_function(site=test_data$site_id,
-                       slope=test_data$slope,
-                       latitude=test_data$latitude,
-                       foldedaspect=test_data$aspect,
-                       ppt=test_data$pre_corrected,
-                       tmean=test_data$tmean,
-                       month=test_data$month,
-                       year=test_data$year,
-                       soilawc=test_data$swc,
-                       type="annual")
+                         slope=test_data$slope,
+                         latitude=test_data$latitude,
+                         foldedaspect=test_data$aspect,
+                         ppt=test_data$pre_corrected,
+                         tmean=test_data$tmean,
+                         month=test_data$month,
+                         year=test_data$year,
+                         soilawc=test_data$swc,
+                         type="annual")
 
-norm_data <- test_data %>% 
-  group_by(site_id, month) %>%
-  summarise(slope = mean(slope),
-          latitude = mean(latitude),
-          aspect = mean(aspect),
-          pre_corrected = mean(pre_corrected),
-          tmean = mean(tmean),
-          swc = mean(swc)
-  )
+year = 10
+start_month = (year - 1) * 12 + 1
+end_month = start_month + 11
+start_month
+end_month
+cwd_data$pet[start_month:end_month] %>% sum()
 
-cwd_data <- cwd_function(site=norm_data$site_id,
-                         slope=norm_data$slope,
-                         latitude=norm_data$latitude,
-                         foldedaspect=norm_data$aspect,
-                         ppt=norm_data$pre_corrected,
-                         tmean=norm_data$tmean,
-                         month=norm_data$month,
-                         soilawc=norm_data$swc,
-                         type="normal")
+## Compare to SPEI's implementation of PET calculation
+pet <- thornthwaite(test_data$tmean, test_data$latitude[1])
+pet[start_month:end_month] %>% sum()
+
+
+
+# ## Test monthly norm cwd calculation
+# norm_data <- test_data %>% 
+#   group_by(site_id, month) %>%
+#   summarise(slope = mean(slope),
+#           latitude = mean(latitude),
+#           aspect = mean(aspect),
+#           pre_corrected = mean(pre_corrected),
+#           tmean = mean(tmean),
+#           swc = mean(swc)
+#   )
+# 
+# cwd_data <- cwd_function(site=norm_data$site_id,
+#                          slope=norm_data$slope,
+#                          latitude=norm_data$latitude,
+#                          foldedaspect=norm_data$aspect,
+#                          ppt=norm_data$pre_corrected,
+#                          tmean=norm_data$tmean,
+#                          month=norm_data$month,
+#                          soilawc=norm_data$swc,
+#                          type="normal")
+# cwd_data
