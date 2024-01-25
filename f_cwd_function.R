@@ -113,7 +113,7 @@ cwd_function <- function(site,slope,latitude,foldedaspect,ppt,tmean,month,soilaw
   #calculate heat load
   data[,heatload:=0.339+0.808*(cos(latrad)*cos(sloprad))-0.196*(sin(latrad)*sin(sloprad))-0.482*(cos(afrad)*sin(sloprad))]
 
-  data[,petm:=ifelse(tmean<0,0,((((ea*tmean)/(tmean+273.3))*day*days*29.8)*heatload/10))]
+  data[,petm:=ifelse(tmean<0,0,((((ea)/(tmean+273.3))*day*days*29.8)*heatload/10))]
 
   mergedata=foreach(i=1:length(sites),.combine="rbind")%dopar%{
     soilm<-vector()
