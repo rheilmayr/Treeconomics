@@ -31,7 +31,7 @@ library(geosphere)
 wdir <- 'remote/'
 
 # 1. Pre-processed climate and soil data
-data=fread(paste0(wdir,"out/climate/sitedataforcwd.csv"))
+data=fread(paste0(wdir,"1_input_processed/climate/sitedataforcwd.csv"))
 miss_var_summary(data)
 
 
@@ -110,5 +110,9 @@ precip_temp_data <- data %>%
 cwd_data <- cwd_data %>% 
   left_join(precip_temp_data, by = c("site", "month", "year"))
 
-fwrite(cwd_data,file=paste0(wdir,"out/climate/essentialcwd_data.csv"))
+fwrite(cwd_data,file=paste0(wdir,"1_input_processed/climate/essentialcwd_data.csv"))
+fwrite(precip_temp_data,file=paste0(wdir,"1_input_processed/climate/essentialtp_data.csv"))
 
+
+cwd_data
+old_cwd_data <- read_csv(paste0("G:/.shortcut-targets-by-id/10TtqG9P3BY70rcYp-WACmO38J5zBeflA/Treeconomics/Data/replication - original/1_input_processed/climate/essentialcwd_data.csv"))
