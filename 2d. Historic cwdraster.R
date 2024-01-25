@@ -39,7 +39,7 @@ library(dplyr)
 library(tidyr)
 source("f_cwd_function.R")
 
-max_clusters = 8
+max_clusters = 20
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data --------------------------------------------------------------
@@ -73,17 +73,18 @@ years=rep(baseyears,each=12)
 
 tas=tas[[which(cruyears%in%baseyears)]];pr=pr[[which(cruyears%in%baseyears)]]
 
-tas_months=calc(tas[[which(basemonths==1)]],function(x) mean(x, na.rm=T));pr_months=calc(pr[[which(basemonths==1)]],function(x) mean(x, na.rm=T))
-for(j in 2:12){
-  tas_months=stack(tas_months,calc(tas[[which(basemonths==j)]],function(x) mean(x, na.rm=T)))
-  pr_months=stack(pr_months,calc(pr[[which(basemonths==j)]],function(x) mean(x, na.rm=T)))
-  print(j)
-}
-
+## Don't need to run if getting annual cwd values (not normals for baseline period)
+# tas_months=calc(tas[[which(basemonths==1)]],function(x) mean(x, na.rm=T));pr_months=calc(pr[[which(basemonths==1)]],function(x) mean(x, na.rm=T))
+# for(j in 2:12){
+#   tas_months=stack(tas_months,calc(tas[[which(basemonths==j)]],function(x) mean(x, na.rm=T)))
+#   pr_months=stack(pr_months,calc(pr[[which(basemonths==j)]],function(x) mean(x, na.rm=T)))
+#   print(j)
+# }
+# 
 
 # save(tas_months,pr_months,file=paste0(wdir,"in/CRUData/monthlycrubaseline.Rdat"))
-writeRaster(tas_months %>% mean(), file=paste0(wdir,"1_input_processed/climate/monthlycrubaseline_tas"), overwrite = TRUE)
-writeRaster(pr_months %>% sum(), file=paste0(wdir,"1_input_processed/climate/monthlycrubaseline_pr"), overwrite = TRUE)
+#writeRaster(tas_months %>% mean(), file=paste0(wdir,"1_input_processed/climate/monthlycrubaseline_tas"), overwrite = TRUE)
+#writeRaster(pr_months %>% sum(), file=paste0(wdir,"1_input_processed/climate/monthlycrubaseline_pr"), overwrite = TRUE)
 
 
 # melt permanent site data down into a long data frame for cwd function
@@ -96,59 +97,61 @@ sitedata$site=1:dim(sitedata)[1]
 sitedata$slope[which(sitedata$slope<0)]=0 
 
 # crop temp and precip data to swc extent
-tas_months=crop(tas_months,extent(swc));pr_months=crop(pr_months,extent(swc))
+#tas_months=crop(tas_months,extent(swc));pr_months=crop(pr_months,extent(swc))
+tas=crop(tas,extent(swc));pr=crop(pr,extent(swc))
 
-# set up parallel processing
-cl=makeCluster(4)
-clusterExport(cl,c("data","setorder"))
-registerDoParallel(cl)
+# # set up parallel processing
+# cl=makeCluster(4)
+# clusterExport(cl,c("data","setorder"))
+# registerDoParallel(cl)
 
-tasdata=as.data.frame(tas_months);prdata=as.data.frame(pr_months)
-colnames(tasdata)=1:12;colnames(prdata)=1:12
+tasdata=as.data.frame(tas);prdata=as.data.frame(pr)
 tasdata$site=1:dim(tasdata)[1];prdata$site=1:dim(tasdata)[1]
-tasdata=melt(tasdata,id.vars="site");prdata=melt(prdata,id.vars="site")
+# tasdata=melt(tasdata,id.vars="site");prdata=melt(prdata,id.vars="site")
+# climatedata=cbind(tasdata,prdata[,3])
+# colnames(climatedata)=c("site","month","temp","precip")
+# 
+# dat=merge(sitedata,climatedata)
+# dat=dat[complete.cases(dat),]
+# 
+# test=cwd_function(site=as.factor(dat$site),slope=dat$slope,latitude=dat$lat,foldedaspect=dat$aspect,ppt=dat$precip,tmean=dat$temp,month=dat$month,soilawc=dat$swc,year=NULL,type="normal")
+# fwrite(test,file=paste0(wdir,"1_input_processed/climate/griddedbaselinecwddata.csv"))
+
+# #merge in lat longs from site data
+# sitecrosswalk=data.frame(site_grid=unique(dat$site),site=1:length(unique(dat$site)))
+# sitecrosswalk <- sitecrosswalk %>% mutate(site = as.character(site))
+# test=merge(test,sitecrosswalk, by = "site")
+# 
+# test$site_grid=as.numeric(test$site_grid)
+# test=merge(test[,c(3,28,29,30)],sitedata[,c(4:6)],by.x="site_grid",by.y="site")
+# test$cells=cellFromXY(cwd_historic,test[,c(5,6)])
+# 
+# testmonths=split(test,test$month)
+# 
+# cwd_historic=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
+# aet_historic=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
+# 
+# cwd_historic[testmonths[[1]]$cells]=testmonths[[1]]$cwd
+# aet_historic[testmonths[[1]]$cells]=testmonths[[1]]$aet
+# 
+# for(j in 2:12){
+#   cwdtemp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc));aettemp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
+#   cwdtemp[testmonths[[j]]$cells]=testmonths[[j]]$cwd
+#   aettemp[testmonths[[j]]$cells]=testmonths[[j]]$aet
+#   cwd_historic=stack(cwd_historic,cwdtemp);aet_historic=stack(aet_historic,aettemp)
+# }
+# 
+# save(cwd_historic,aet_historic,file=paste0(wdir,"1_input_processed/climate/HistoricCWD_AETGrids.Rdat"))
+
+tasdata=reshape2::melt(tasdata,id.vars=c("site"));prdata=reshape2::melt(prdata,id.vars=c("site"))
+tasdata$year=as.numeric(substr(tasdata$variable,2,5))
+tasdata$month=as.numeric(substr(tasdata$variable,7,8))
+
 climatedata=cbind(tasdata,prdata[,3])
-colnames(climatedata)=c("site","month","temp","precip")
+climatedata=climatedata[,-which(colnames(climatedata)=="variable")]
+colnames(climatedata)=c("site","temp","year","month","precip")
 
-dat=merge(sitedata,climatedata)
-dat=dat[complete.cases(dat),]
-
-test=cwd_function(site=as.factor(dat$site),slope=dat$slope,latitude=dat$lat,foldedaspect=dat$aspect,ppt=dat$precip,tmean=dat$temp,month=dat$month,soilawc=dat$swc,year=NULL,type="normal")
-fwrite(test,file=paste0(wdir,"1_input_processed/climate/griddedbaselinecwddata.csv"))
-
-#merge in lat longs from site data
-sitecrosswalk=data.frame(site_grid=unique(dat$site),site=1:length(unique(dat$site)))
-sitecrosswalk <- sitecrosswalk %>% mutate(site = as.character(site))
-test=merge(test,sitecrosswalk, by = "site")
-
-test$site_grid=as.numeric(test$site_grid)
-test=merge(test[,c(3,28,29,30)],sitedata[,c(4:6)],by.x="site_grid",by.y="site")
-test$cells=cellFromXY(cwd_historic,test[,c(5,6)])
-
-testmonths=split(test,test$month)
-
-cwd_historic=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
-aet_historic=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
-
-cwd_historic[testmonths[[1]]$cells]=testmonths[[1]]$cwd
-aet_historic[testmonths[[1]]$cells]=testmonths[[1]]$aet
-
-for(j in 2:12){
-  cwdtemp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc));aettemp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
-  cwdtemp[testmonths[[j]]$cells]=testmonths[[j]]$cwd
-  aettemp[testmonths[[j]]$cells]=testmonths[[j]]$aet
-  cwd_historic=stack(cwd_historic,cwdtemp);aet_historic=stack(aet_historic,aettemp)
-}
-
-save(cwd_historic,aet_historic,file=paste0(wdir,"1_input_processed/climate/HistoricCWD_AETGrids.Rdat"))
-
-### FRAN -  Isn't this block of code redundant with previous definition of climatedata? 
-### Seems like there's some re-use of tasdata that isn't quite right?
-tasdata=melt(tasdata,id.vars=c("site","year"));prdata=melt(prdata,id.vars=c("site","year"))
-climatedata=cbind(tasdata,prdata[,4])
-colnames(climatedata)=c("site","year","month","temp","precip")
-
-climatedata=as.tbl(climatedata);sitedata=as.tbl(sitedata)
+climatedata=tibble:as_tibble(climatedata);sitedata=tibble:as_tibble(sitedata)
 
 dat=inner_join(climatedata,sitedata,by="site")
 dat=dat[complete.cases(dat),]
