@@ -61,6 +61,19 @@ pet_historic <- aet_historic + cwd_historic
 names(cwd_historic) = "cwd"
 names(pet_historic) = "pet"
 
+# 1. Historic climate raster - using monthly norms
+# clim_file <- paste0('G:/.shortcut-targets-by-id/10TtqG9P3BY70rcYp-WACmO38J5zBeflA/Treeconomics/Data/replication - original/1_input_processed/climate/HistoricCWD_AETGrids.Rdat')
+clim_file <- paste0(wdir, '1_input_processed/climate/HistoricCWD_AETGrids.Rdat')
+load(clim_file)
+cwd_historic <- sum(cwd_historic)
+aet_historic <- sum(aet_historic)
+pet_historic <- aet_historic + cwd_historic
+names(cwd_historic) = "cwd"
+names(pet_historic) = "pet"
+
+pet_historic %>% summary()
+cwd_historic %>% summary()
+
 # 2. Data on historic baseline temp and precip
 temps_historic <- raster(paste0(wdir, "1_input_processed/climate/monthlycrubaseline_tas"))
 names(temps_historic) = "temp"
