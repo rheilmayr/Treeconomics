@@ -144,6 +144,7 @@ cwd_function <- function(site,slope,latitude,foldedaspect,ppt,tmean,month,soilaw
   data[,deltsoilwm:=ifelse(deltsoil>0,wm+deltsoil,wm)]
   data[,aet:=ifelse(deltsoilwm<petm,deltsoilwm,petm)]
   data[,cwd:=petm-aet]
+  data[,cwb:=ppt-petm]
 
   ##### for 800 m normal data then we subset to get just the last simulation
   if (type == "normal"){data<-data[year==10,]}
