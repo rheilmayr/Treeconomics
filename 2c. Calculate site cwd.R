@@ -45,9 +45,9 @@ data$tmx = na_if(data$tmx,-999)
 
 # Add corrections from World Clim to CWD to get downscaled variables
 data$pre_corrected=data$pre+data$pre_correction
+data$pre_corrected=ifelse(data$pre_corrected < 0, 0, data$pre_corrected)
 data$tmx_corrected=data$tmx+data$tmax_correction
 data$tmn_corrected=data$tmn+data$tmin_correction
-
 
 # Unit conversions
 data$swc=data$swc/10 #convert swc from mm to cm
@@ -57,6 +57,7 @@ data$aspect <- data$aspect * 57.2958 # convert aspect from radians to degrees
 
 data <- data %>% 
   select(site_id, slope, latitude, longitude, aspect, pre_corrected, tmean, month, year, swc)
+
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Calculate CWD and save data --------------------------------------------
@@ -102,17 +103,7 @@ miss_var_summary(data)
 # Write out file ----------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 cwd_data <- cwd_data %>%
-  select(site, year, month, aet, cwd)
-
-precip_temp_data <- data %>% 
-  select(site = site_id, month, year, precip = pre_corrected, tmean)
-
-cwd_data <- cwd_data %>% 
-  left_join(precip_temp_data, by = c("site", "month", "year"))
+  select(site, year, month, tmean, ppt, aet, cwd, pet = petm, cwb)
 
 fwrite(cwd_data,file=paste0(wdir,"1_input_processed/climate/essentialcwd_data.csv"))
-fwrite(precip_temp_data,file=paste0(wdir,"1_input_processed/climate/essentialtp_data.csv"))
 
-
-cwd_data
-old_cwd_data <- read_csv(paste0("G:/.shortcut-targets-by-id/10TtqG9P3BY70rcYp-WACmO38J5zBeflA/Treeconomics/Data/replication - original/1_input_processed/climate/essentialcwd_data.csv"))
