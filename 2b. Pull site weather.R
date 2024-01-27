@@ -17,6 +17,9 @@
 # Output files:
 #   sitedataforcwd.csv: Compiled site-level climate and soil data.
 #
+# To do:
+#   Will likely need to add SPEI. Find out SPEI time-scale bill is using: https://spei.csic.es/database.html
+#
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
@@ -79,7 +82,7 @@ for(i in 1:length(vars)){
   print(i)
 }
 
-colnames(climdat)[5:6]=vars[2:3]
+colnames(climdat)[5:8]=vars[2:5]
 
 # #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # # Add downscaling correction ---------------------------------------------
@@ -135,14 +138,14 @@ sites <- sites %>%
   left_join(plotswc, by = c("site_id"))
 sites <- sites %>% 
   left_join(climdat,by=c("site_id"))
-sites <- sites %>% 
-  left_join(baselines[,c(1:2,9:11)],by=c("month","site_id"))
+# sites <- sites %>% 
+#   left_join(baselines[,c(1:2,9:11)],by=c("month","site_id"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Save combined topography, weather, and swc data ------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # save(sites,file=paste0(wdir,"out/climate/sitedataforcwd.Rdat"))
-fwrite(sites,file=paste0(wdir,"out/climate/sitedataforcwd.csv"))
+fwrite(sites,file=paste0(wdir,"1_input_processed/climate/sitedataforcwd.csv"))
 
        
