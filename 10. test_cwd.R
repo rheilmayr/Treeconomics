@@ -57,6 +57,13 @@ test_data <- data %>%
 site_loc <- st_as_sf(test_data[1,], coords = c("longitude","latitude"), crs = 4326)
 
 ## Test annual cwd calculation
+test_data <- data[1:10000]
+
+cl=makeCluster(4)
+clusterExport(cl,c("data","setorder"))
+registerDoParallel(cl)
+
+tic()
 cwd_data <- cwd_function(site=test_data$site_id,
                          year=test_data$year,
                          month=test_data$month,
@@ -66,6 +73,19 @@ cwd_data <- cwd_function(site=test_data$site_id,
                          petd=test_data$petd,
                          soilawc=test_data$swc,
                          type="annual")
+toc()
+
+
+site=test_data$site_id
+year=test_data$year
+month=test_data$month
+latitude=test_data$latitude
+ppt=test_data$pre_corrected
+tmean=test_data$tmean
+petd=test_data$petd
+soilawc=test_data$swc
+type="annual"
+
 year = 10
 start_month = (year - 1) * 12 + 1
 end_month = start_month + 11
