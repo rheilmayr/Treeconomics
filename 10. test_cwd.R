@@ -56,13 +56,7 @@ test_data <- data %>%
   filter(site_id == "CA524") # PIPO site in CA
 site_loc <- st_as_sf(test_data[1,], coords = c("longitude","latitude"), crs = 4326)
 
-
-data %>%
-  group_by(site_id) %>% 
-  nest()
-
 ## Test annual cwd calculation
-tic()
 cwd_data <- cwd_function(site=test_data$site_id,
                          year=test_data$year,
                          month=test_data$month,
@@ -72,17 +66,13 @@ cwd_data <- cwd_function(site=test_data$site_id,
                          petd=test_data$petd,
                          soilawc=test_data$swc,
                          type="annual")
-toc()
 year = 10
 start_month = (year - 1) * 12 + 1
 end_month = start_month + 11
 start_month
 end_month
-cwd_data$pet[start_month:end_month] %>% sum()
+cwd_data$cwd[start_month:end_month] %>% sum()
 
-## Compare to SPEI's implementation of PET calculation
-pet <- thornthwaite(test_data$tmean, test_data$latitude[1])
-pet[start_month:end_month] %>% sum()
 
 ## Compare to USGS CWD (within California)
 cwd_reference <- extract(hstdat, site_loc)
