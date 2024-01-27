@@ -35,7 +35,7 @@ data$slope <- data$slope * 57.2958 # convert slope from radians to degrees
 data$aspect <- data$aspect * 57.2958 # convert aspect from radians to degrees
 
 data <- data %>% 
-  select(site_id, slope, latitude, longitude, aspect, pre_corrected, tmean, month, year, swc)
+  select(site_id, year, month, latitude, longitude, pre_corrected, tmean, swc)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
