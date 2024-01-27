@@ -209,7 +209,8 @@ niche_df <- clim_df %>%
 
 ## Export species niche description
 write.csv(niche_df, paste0(wdir, "2_output/climate/clim_niche.csv"))
-niche_df <- read_csv(paste0(wdir, "2_output/climate/clim_niche.csv"))
+niche_df <- read_csv(paste0(wdir, "2_output/climate/clim_niche.csv")) %>% 
+  select(-"...1")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
