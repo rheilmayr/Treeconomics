@@ -6,9 +6,11 @@
 #
 # Input files:
 #   site_summary_slopeaspect.csv: Site-level topography. Created by "2a. Pull site topography.R"
-#   cru_ts4.04.1901.2019.pre: Monthly precipitation data from CRU. Accessed from https://crudata.uea.ac.uk/cru/data/hrg/.
-#   cru_ts4.04.1901.2019.tmin: Monthly min temperature data from CRU. Accessed from https://crudata.uea.ac.uk/cru/data/hrg/.
-#   cru_ts4.04.1901.2019.tmax: Monthly max temperature data from CRU. Accessed from https://crudata.uea.ac.uk/cru/data/hrg/.
+#   cru_ts4.07.1901.2022.pre: Monthly precipitation data from CRU. Accessed from https://crudata.uea.ac.uk/cru/data/hrg/.
+#   cru_ts4.07.1901.2022.tmin: Monthly min temperature data from CRU. Accessed from https://crudata.uea.ac.uk/cru/data/hrg/.
+#   cru_ts4.07.1901.2022.tmax: Monthly max temperature data from CRU. Accessed from https://crudata.uea.ac.uk/cru/data/hrg/.
+#   cru_ts4.07.1901.2022.tmin: Monthly min temperature data from CRU. Accessed from https://crudata.uea.ac.uk/cru/data/hrg/.
+#   cru_ts4.07.1901.2022.tmax: Monthly max temperature data from CRU. Accessed from https://crudata.uea.ac.uk/cru/data/hrg/.
 #   WorldClim directory: Data files for WorldClim climate data. Accessed from https://www.worldclim.org/.
 #   sr_cru_max.asc: Soil water capacity raster. Accessed from Wang-Erlandsson et al., 2016.
 # 
@@ -41,7 +43,7 @@ library(seegSDM)
 wdir <- 'remote/'
 
 # 1. Load site topography 
-sites=fread(paste0(wdir, 'out/dendro/site_summary_slopeaspect.csv')) %>% 
+sites=fread(paste0(wdir, '1_input_processed/dendro/site_summary_slopeaspect.csv')) %>% 
   dplyr::select(-V1)
 
 # sites <- sites %>% 
@@ -50,21 +52,21 @@ plots=unique(data.frame(latitude=sites$latitude,longitude=sites$longitude,site_i
 plots=SpatialPointsDataFrame(coords=plots[,c(2,1)],data=as.data.frame(plots[,3]))
 
 # 2. Define directories for CRU and WorldClim data 
-cru_dir <- paste0(wdir,"in/CRUData/")
-wclim_dir <- paste0(wdir,"in/WorldClim/")
+cru_dir <- paste0(wdir,"0_raw/CRUData/v4.07/")
+# wclim_dir <- paste0(wdir,"in/WorldClim/")
 
 # 3. Load soil water capacity data
-swc <- raster(paste0(wdir,"in/wang_swc/sr_cru_max.asc"))
+swc <- raster(paste0(wdir,"0_raw/wang_swc/sr_cru_max.asc"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Get CRU tmin, tmax and precip --------------------------------------------------------
+# Get CRU tmin, tmax, tmp, pet and precip --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-monthyears=data.frame(year=rep(1901:2019,each=12),month=rep(1:12,length(1901:2019)))
+monthyears=data.frame(year=rep(1901:2022,each=12),month=rep(1:12,length(1901:2022)))
 
-vars=c("pre","tmn", 'tmx')
+vars=c("pre","tmn", 'tmx', 'tmp', 'pet')
 for(i in 1:length(vars)){
-  crudat=stack(paste0(cru_dir, "cru_ts4.04.1901.2019.",vars[i],".dat.nc"))
+  crudat=stack(paste0(cru_dir, "cru_ts4.07.1901.2022.",vars[i],".dat.nc"))
   NAvalue(crudat)=-999
   tempdat=extract(crudat,plots)
   nas=which(is.na(tempdat[,1]));napoints=nearestLand(plots@coords[nas,],crudat[[1]],max_distance = 100000)
@@ -79,45 +81,45 @@ for(i in 1:length(vars)){
 
 colnames(climdat)[5:6]=vars[2:3]
 
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Add downscaling correction ---------------------------------------------
-# Uses 1970-2000 means and compares to higher resolution World Clim data
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-baselines <- climdat %>%
-  filter(year>1969 & year<2001) %>%
-  group_by(site_id, month) %>%
-  dplyr::summarize(pre_baseline = mean(pre),
-                   tmn_baseline = mean(tmn),
-                   tmx_baseline = mean(tmx))
-
-downscaled=list()
-vars=c("prec","tmax","tmin")
-for(i in 1:length(vars)){
-  downscaled[[i]]=matrix(nrow=length(plots),ncol=12)
-  for(j in 1:12){
-    ind=ifelse(j<10,paste0("0",j),j)
-    wcdat=raster(paste0(wclim_dir,vars[i],"/wc2.0_30s_",vars[i],"_",ind,".tif"))
-    downscaled[[i]][,j]=extract(wcdat,plots)
-    if(i==1&j==1){
-      nas=which(is.na(downscaled[[i]][,j]))
-      napoints=nearestLand(plots@coords[nas,],wcdat,max_distance = 100000)
-    }
-    downscaled[[i]][nas,j]=extract(wcdat,napoints)
-    print(paste(i,j))
-  }
-  downscaled[[i]]=data.frame(downscaled[[i]])
-  colnames(downscaled[[i]])=c(1:12)
-  downscaled[[i]]=as.data.frame(downscaled[[i]]);downscaled[[i]]$site_id=plots@data[,1]
-} 
-
-dsdata=melt(downscaled[[1]],id.vars="site_id",variable.name="month",value.name=vars[1])
-for(i in 2:3) dsdata=cbind(dsdata,melt(downscaled[[i]],id.vars="site_id",variable.name="month",value.name=vars[i])[,3])
-colnames(dsdata)=c("site_id","month",vars)
-
-baselines=merge(baselines,dsdata)
-baselines$pre_correction=baselines$prec-baselines$pre_baseline
-baselines$tmax_correction=baselines$tmax-baselines$tmx_baseline
-baselines$tmin_correction=baselines$tmin-baselines$tmn_baseline
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# # Add downscaling correction ---------------------------------------------
+# # Uses 1970-2000 means and compares to higher resolution World Clim data
+# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# baselines <- climdat %>%
+#   filter(year>1969 & year<2001) %>%
+#   group_by(site_id, month) %>%
+#   dplyr::summarize(pre_baseline = mean(pre),
+#                    tmn_baseline = mean(tmn),
+#                    tmx_baseline = mean(tmx))
+# 
+# downscaled=list()
+# vars=c("prec","tmax","tmin")
+# for(i in 1:length(vars)){
+#   downscaled[[i]]=matrix(nrow=length(plots),ncol=12)
+#   for(j in 1:12){
+#     ind=ifelse(j<10,paste0("0",j),j)
+#     wcdat=raster(paste0(wclim_dir,vars[i],"/wc2.0_30s_",vars[i],"_",ind,".tif"))
+#     downscaled[[i]][,j]=extract(wcdat,plots)
+#     if(i==1&j==1){
+#       nas=which(is.na(downscaled[[i]][,j]))
+#       napoints=nearestLand(plots@coords[nas,],wcdat,max_distance = 100000)
+#     }
+#     downscaled[[i]][nas,j]=extract(wcdat,napoints)
+#     print(paste(i,j))
+#   }
+#   downscaled[[i]]=data.frame(downscaled[[i]])
+#   colnames(downscaled[[i]])=c(1:12)
+#   downscaled[[i]]=as.data.frame(downscaled[[i]]);downscaled[[i]]$site_id=plots@data[,1]
+# } 
+# 
+# dsdata=melt(downscaled[[1]],id.vars="site_id",variable.name="month",value.name=vars[1])
+# for(i in 2:3) dsdata=cbind(dsdata,melt(downscaled[[i]],id.vars="site_id",variable.name="month",value.name=vars[i])[,3])
+# colnames(dsdata)=c("site_id","month",vars)
+# 
+# baselines=merge(baselines,dsdata)
+# baselines$pre_correction=baselines$prec-baselines$pre_baseline
+# baselines$tmax_correction=baselines$tmax-baselines$tmx_baseline
+# baselines$tmin_correction=baselines$tmin-baselines$tmn_baseline
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Add soil water capacity ---------------------------------------------
