@@ -22,6 +22,7 @@ library(naniar)
 library(data.table)
 library(tidyverse)
 library(geosphere)
+library(tictoc)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -42,22 +43,25 @@ miss_var_summary(data)
 data$pre = na_if(data$pre,-999)
 data$tmn = na_if(data$tmn,-999)
 data$tmx = na_if(data$tmx,-999)
+data$tmp = na_if(data$tmp,-999)
+data$pet = na_if(data$pet,-999)
 
-# Add corrections from World Clim to CWD to get downscaled variables
-data$pre_corrected=data$pre+data$pre_correction
-data$pre_corrected=ifelse(data$pre_corrected < 0, 0, data$pre_corrected)
-data$tmx_corrected=data$tmx+data$tmax_correction
-data$tmn_corrected=data$tmn+data$tmin_correction
+# # Add corrections from World Clim to CWD to get downscaled variables
+# data$pre_corrected=data$pre+data$pre_correction
+# data$pre_corrected=ifelse(data$pre_corrected < 0, 0, data$pre_corrected)
+# data$tmx_corrected=data$tmx+data$tmax_correction
+# data$tmn_corrected=data$tmn+data$tmin_correction
 
 # Unit conversions
 data$swc=data$swc/10 #convert swc from mm to cm
-data$tmean=(data$tmn_corrected+data$tmx_corrected)/2 
-data$slope <- data$slope * 57.2958 # convert slope from radians to degrees
-data$aspect <- data$aspect * 57.2958 # convert aspect from radians to degrees
+data$tmean=data$tmp
+# data$slope <- data$slope * 57.2958 # convert slope from radians to degrees
+# data$aspect <- data$aspect * 57.2958 # convert aspect from radians to degrees
+data$petd <- data$pet
+data$pre_corrected <- data$pre
 
-data <- data %>% 
-  select(site_id, slope, latitude, longitude, aspect, pre_corrected, tmean, month, year, swc)
-
+data <- data[,c("site_id", "year", "month", "latitude", "longitude", 
+                "pre_corrected", "tmean", "petd", "swc")]
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Calculate CWD and save data --------------------------------------------
@@ -66,10 +70,17 @@ cl=makeCluster(4)
 clusterExport(cl,c("data","setorder"))
 registerDoParallel(cl)
 
-cwd_data<-cwd_function(site=data$site_id,slope=data$slope,latitude=data$latitude,
-                       foldedaspect=data$aspect,ppt=data$pre_corrected,
-                       tmean=data$tmean,month=data$month,year=data$year,
-                       soilawc=data$swc,type="annual")
+tic()
+cwd_data <- cwd_function(site=data$site_id,
+                         year=data$year,
+                         month=data$month,
+                         latitude=data$latitude,
+                         ppt=data$pre_corrected,
+                         tmean=data$tmean,
+                         petd=data$petd,
+                         soilawc=data$swc,
+                         type="annual")
+toc()
 # fwrite(cwd_data,file=paste0(wdir,"out/climate/cwd_data_200620.csv"))
 
 
@@ -78,11 +89,11 @@ cwd_data<-cwd_function(site=data$site_id,slope=data$slope,latitude=data$latitude
 # Characterize missing data ----------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 input_data <- data %>% 
-  select(site_id, slope, latitude, longitude, aspect, pre_corrected, tmean, month, year, swc)
+  select(site_id, latitude, longitude, pre_corrected, tmean, petd, month, year, swc)
 
 input_data %>% gg_miss_upset()
-any_missing <- input_data %>%
-  filter_all(any_vars(is.na(.)))
+# any_missing <- input_data %>%
+#   filter_all(any_vars(is.na(.)))
 share_missing <- dim(any_missing)[1] / dim(data)[1]
 share_missing
 miss_var_summary(data)
