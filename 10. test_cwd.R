@@ -3,9 +3,9 @@ library(tidyverse)
 source("f_cwd_function.R")
 library(SPEI)
 library(ncdf4)
-library(raster)
 library(sf)
 library(tictoc)
+library(terra)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data --------------------------------------------------------------
@@ -16,10 +16,11 @@ wdir <- 'remote/'
 # 1. Pre-processed climate and soil data
 data=fread(paste0(wdir,"1_input_processed/climate/sitedataforcwd.csv"))
 
-# 2. Reference CWD for California
-ref_nc <- paste0(wdir, "0_raw/USGS/HST_Monthly_cwd.nc")
-hstdat=stack(ref_nc)
-
+# 2. Reference CWD for California (https://www.sciencebase.gov/catalog/item/5f29c62d82cef313ed9edb39)
+bcm_dir <- paste0(wdir, "0_raw/BCM/cwd1990/")
+bcm_files <- list.files(bcm_dir, full.names = TRUE)
+bcm_rast <- rast(bcm_files)
+crs(bcm_rast) = crs("epsg:3310")
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Prep data --------------------------------------------------------------
@@ -57,13 +58,6 @@ test_data <- data %>%
 site_loc <- st_as_sf(test_data[1,], coords = c("longitude","latitude"), crs = 4326)
 
 ## Test annual cwd calculation
-test_data <- data[1:10000]
-
-cl=makeCluster(4)
-clusterExport(cl,c("data","setorder"))
-registerDoParallel(cl)
-
-tic()
 cwd_data <- cwd_function(site=test_data$site_id,
                          year=test_data$year,
                          month=test_data$month,
@@ -73,20 +67,9 @@ cwd_data <- cwd_function(site=test_data$site_id,
                          petd=test_data$petd,
                          soilawc=test_data$swc,
                          type="annual")
-toc()
 
 
-site=test_data$site_id
-year=test_data$year
-month=test_data$month
-latitude=test_data$latitude
-ppt=test_data$pre_corrected
-tmean=test_data$tmean
-petd=test_data$petd
-soilawc=test_data$swc
-type="annual"
-
-year = 10
+year = 90
 start_month = (year - 1) * 12 + 1
 end_month = start_month + 11
 start_month
@@ -95,27 +78,11 @@ cwd_data$cwd[start_month:end_month] %>% sum()
 
 
 ## Compare to USGS CWD (within California)
-cwd_reference <- extract(hstdat, site_loc)
+site_loc <- site_loc %>% st_transform(crs(bcm_rast))
+cwd_reference <- extract(bcm_rast, site_loc)
 
+cwd_reference <- as_tibble(cwd_reference) %>% 
+  select(cwd1990jan, cwd1990feb, cwd1990mar, cwd1990apr, cwd1990may, cwd1990jun, cwd1990jul,
+         cwd1990aug, cwd1990sep, cwd1990oct, cwd1990nov, cwd1990dec)
 
-# ## Test monthly norm cwd calculation
-# norm_data <- test_data %>% 
-#   group_by(site_id, month) %>%
-#   summarise(slope = mean(slope),
-#           latitude = mean(latitude),
-#           aspect = mean(aspect),
-#           pre_corrected = mean(pre_corrected),
-#           tmean = mean(tmean),
-#           swc = mean(swc)
-#   )
-# 
-# cwd_data <- cwd_function(site=norm_data$site_id,
-#                          slope=norm_data$slope,
-#                          latitude=norm_data$latitude,
-#                          foldedaspect=norm_data$aspect,
-#                          ppt=norm_data$pre_corrected,
-#                          tmean=norm_data$tmean,
-#                          month=norm_data$month,
-#                          soilawc=norm_data$swc,
-#                          type="normal")
-# cwd_data
+sum(cwd_reference)
