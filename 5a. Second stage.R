@@ -93,22 +93,22 @@ pet_est_bounds = quantile(flm_df$estimate_pet.an, c(0.01, 0.99),na.rm=T)
 cwd_spstd_bounds = quantile(flm_df$cwd.spstd, c(0.01, 0.99), na.rm = T)
 pet_spstd_bounds = quantile(flm_df$pet.spstd, c(0.01, 0.99), na.rm = T)
 
-flm_df <- flm_df %>%
-  mutate(outlier = (estimate_cwd.an<cwd_est_bounds[1]) |
-           (estimate_cwd.an>cwd_est_bounds[2]) |
-           (estimate_pet.an<pet_est_bounds[1]) |
-           (estimate_pet.an>pet_est_bounds[2]) |
-           (cwd.spstd<cwd_spstd_bounds[1]) |
-           (cwd.spstd>cwd_spstd_bounds[2]) |
-           (pet.spstd<pet_spstd_bounds[1]) |
-           (pet.spstd>pet_spstd_bounds[2]))
-           
-
 # flm_df <- flm_df %>%
 #   mutate(outlier = (estimate_cwd.an<cwd_est_bounds[1]) |
-#                    (estimate_cwd.an>cwd_est_bounds[2]) |
-#                    (estimate_pet.an<pet_est_bounds[1]) |
-#                    (estimate_pet.an>pet_est_bounds[2]))
+#            (estimate_cwd.an>cwd_est_bounds[2]) |
+#            (estimate_pet.an<pet_est_bounds[1]) |
+#            (estimate_pet.an>pet_est_bounds[2]) |
+#            (cwd.spstd<cwd_spstd_bounds[1]) |
+#            (cwd.spstd>cwd_spstd_bounds[2]) |
+#            (pet.spstd<pet_spstd_bounds[1]) |
+#            (pet.spstd>pet_spstd_bounds[2]))
+           
+
+flm_df <- flm_df %>%
+  mutate(outlier = (estimate_cwd.an<cwd_est_bounds[1]) |
+                   (estimate_cwd.an>cwd_est_bounds[2]) |
+                   (estimate_pet.an<pet_est_bounds[1]) |
+                   (estimate_pet.an>pet_est_bounds[2]))
 
 # Save out full flm_df to simplify downstream scripts and ensure consistency
 flm_df %>% write.csv(paste0(wdir, "2_output/first_stage/site_pet_cwd_std_augmented.csv"))
