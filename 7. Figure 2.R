@@ -322,8 +322,8 @@ both_fig <- both_ex %>%
   #plot.title = element_text(hjust = 0.5))+
   ylab("Ring width index")+
   xlab("Climatic water deficit") +
-  ylim(c(0,3)) +
-  xlim(c(-1.25, 0))+
+  # ylim(c(0,3)) +
+  # xlim(c(-1.25, 0))+
   guides(fill=F, color=F)+
   geom_label(aes(x = -1.05, y = 2.5, label = "Site A"), fill = high_color, color = "white", size = 5, label.size = NA) +
   geom_label(aes(x = -0.4, y = 2.5, label = "Site B"), fill = low_color, color = "white", size = 5, label.size = NA)
