@@ -10,8 +10,8 @@
 
 # PACKAGES THAT MUST BE INSTALLED BEFORE RUNNING THE SCRIPT: data.table and geosphere
 
+# Source code: Redmond, MD. 2022. CWD and AET function (Version V1.0.3). Zenodo. https://doi.org/10.5281/zenodo.6416352
 # Original code provided by the Great Basin Landscape Ecology Lab: https://naes.unr.edu/weisberg/old_site/downloads/
-# This code adapts the method described by Dobrowski et al., 2012: https://doi.org/10.1111/gcb.12026
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load required packages -------------------------------------------------
