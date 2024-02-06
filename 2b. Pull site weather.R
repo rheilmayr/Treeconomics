@@ -53,7 +53,7 @@ plots=SpatialPointsDataFrame(coords=plots[,c(2,1)],data=as.data.frame(plots[,3])
 
 # 2. Define directories for CRU and WorldClim data 
 cru_dir <- paste0(wdir,"0_raw/CRUData/v4.07/")
-# wclim_dir <- paste0(wdir,"in/WorldClim/")
+wclim_dir <- paste0(wdir,"0_raw/WorldClim/")
 
 # 3. Load soil water capacity data
 swc <- raster(paste0(wdir,"0_raw/wang_swc/sr_cru_max.asc"))
@@ -81,45 +81,45 @@ for(i in 1:length(vars)){
 
 colnames(climdat)[5:6]=vars[2:3]
 
-# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# # Add downscaling correction ---------------------------------------------
-# # Uses 1970-2000 means and compares to higher resolution World Clim data
-# #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# baselines <- climdat %>%
-#   filter(year>1969 & year<2001) %>%
-#   group_by(site_id, month) %>%
-#   dplyr::summarize(pre_baseline = mean(pre),
-#                    tmn_baseline = mean(tmn),
-#                    tmx_baseline = mean(tmx))
-# 
-# downscaled=list()
-# vars=c("prec","tmax","tmin")
-# for(i in 1:length(vars)){
-#   downscaled[[i]]=matrix(nrow=length(plots),ncol=12)
-#   for(j in 1:12){
-#     ind=ifelse(j<10,paste0("0",j),j)
-#     wcdat=raster(paste0(wclim_dir,vars[i],"/wc2.0_30s_",vars[i],"_",ind,".tif"))
-#     downscaled[[i]][,j]=extract(wcdat,plots)
-#     if(i==1&j==1){
-#       nas=which(is.na(downscaled[[i]][,j]))
-#       napoints=nearestLand(plots@coords[nas,],wcdat,max_distance = 100000)
-#     }
-#     downscaled[[i]][nas,j]=extract(wcdat,napoints)
-#     print(paste(i,j))
-#   }
-#   downscaled[[i]]=data.frame(downscaled[[i]])
-#   colnames(downscaled[[i]])=c(1:12)
-#   downscaled[[i]]=as.data.frame(downscaled[[i]]);downscaled[[i]]$site_id=plots@data[,1]
-# } 
-# 
-# dsdata=melt(downscaled[[1]],id.vars="site_id",variable.name="month",value.name=vars[1])
-# for(i in 2:3) dsdata=cbind(dsdata,melt(downscaled[[i]],id.vars="site_id",variable.name="month",value.name=vars[i])[,3])
-# colnames(dsdata)=c("site_id","month",vars)
-# 
-# baselines=merge(baselines,dsdata)
-# baselines$pre_correction=baselines$prec-baselines$pre_baseline
-# baselines$tmax_correction=baselines$tmax-baselines$tmx_baseline
-# baselines$tmin_correction=baselines$tmin-baselines$tmn_baseline
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Add downscaling correction ---------------------------------------------
+# Uses 1970-2000 means and compares to higher resolution World Clim data
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+baselines <- climdat %>%
+  filter(year>1969 & year<2001) %>%
+  group_by(site_id, month) %>%
+  dplyr::summarize(pre_baseline = mean(pre),
+                   tmn_baseline = mean(tmn),
+                   tmx_baseline = mean(tmx))
+
+downscaled=list()
+vars=c("prec","tmax","tmin")
+for(i in 1:length(vars)){
+  downscaled[[i]]=matrix(nrow=length(plots),ncol=12)
+  for(j in 1:12){
+    ind=ifelse(j<10,paste0("0",j),j)
+    wcdat=raster(paste0(wclim_dir,vars[i],"/wc2.0_30s_",vars[i],"_",ind,".tif"))
+    downscaled[[i]][,j]=extract(wcdat,plots)
+    if(i==1&j==1){
+      nas=which(is.na(downscaled[[i]][,j]))
+      napoints=nearestLand(plots@coords[nas,],wcdat,max_distance = 100000)
+    }
+    downscaled[[i]][nas,j]=extract(wcdat,napoints)
+    print(paste(i,j))
+  }
+  downscaled[[i]]=data.frame(downscaled[[i]])
+  colnames(downscaled[[i]])=c(1:12)
+  downscaled[[i]]=as.data.frame(downscaled[[i]]);downscaled[[i]]$site_id=plots@data[,1]
+}
+
+dsdata=melt(downscaled[[1]],id.vars="site_id",variable.name="month",value.name=vars[1])
+for(i in 2:3) dsdata=cbind(dsdata,melt(downscaled[[i]],id.vars="site_id",variable.name="month",value.name=vars[i])[,3])
+colnames(dsdata)=c("site_id","month",vars)
+
+baselines=merge(baselines,dsdata)
+baselines$pre_correction=baselines$prec-baselines$pre_baseline
+baselines$tmax_correction=baselines$tmax-baselines$tmx_baseline
+baselines$tmin_correction=baselines$tmin-baselines$tmn_baseline
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Add soil water capacity ---------------------------------------------
