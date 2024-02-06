@@ -21,6 +21,19 @@
 #example script where I have unique soil awc data for each site:
 ### cwd_normal_data<-cwd_function(site=data$site,slope=data$slope,latitude=data$latitude,foldedaspect=data$foldedaspect,ppt=data$ppt,tmean=data$tmean,month=data$month,soilawc=data$soilawc,type="normal")
 
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Load required packages -------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+library(data.table)
+library(geosphere)
+library(assertr)
+library(parallel)
+library(doParallel)
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Define function -------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 cwd_function <- function(site,slope,latitude,foldedaspect,ppt,tmean,month,soilawc=200,year=NULL,type=c('normal','annual')) {
   
   # Packages
@@ -74,18 +87,18 @@ cwd_function <- function(site,slope,latitude,foldedaspect,ppt,tmean,month,soilaw
   data<-setorder(data,site,year,month)
   sites<-unique(data$site)
   mergedata<-vector()
-  for (i in 1:length(sites)){
+  mergedata=foreach(i=1:length(sites),.combine="rbind")%dopar%{
     packm<-vector()
     sitedat<-setorder(data,site,year,month)[site==sites[i],]
     for (j in 1:length(sitedat$site)){
       packmsite<-ifelse(j>1,(((1-sitedat$fm[j])^2)*sitedat$ppt[j])+((1-sitedat$fm[j])*packm[j-1]),(((1-sitedat$fm[j])^2)*sitedat$ppt[j]))
       packm<-c(packm,packmsite)
-      site<-as.character(sitedat$site)
-      year<-as.numeric(as.character(sitedat$year))
-      month<-as.numeric(as.character(sitedat$month))
     }
+    site<-as.character(sitedat$site)
+    year<-as.numeric(as.character(sitedat$year))
+    month<-as.numeric(as.character(sitedat$month))
     mergedat<-cbind(site,year,month,packm)
-    mergedata<-rbind(mergedata,mergedat)
+    # mergedata<-rbind(mergedata,mergedat)
   }
   mergedt<-as.data.table(mergedata)
   mergedt$year<-as.numeric(as.character(mergedt$year))
@@ -109,18 +122,18 @@ cwd_function <- function(site,slope,latitude,foldedaspect,ppt,tmean,month,soilaw
   data[,petm:=ifelse(tmean<0,0,((((ea)/(tmean+273.2))*day*days*29.8)*heatload))]
   
   mergedata<-vector()
-  for (i in 1:length(sites)){
+  mergedata=foreach(i=1:length(sites),.combine="rbind")%dopar%{
     soilm<-vector()
     sitedat<-setorder(data,site,year,month)[site==sites[i],]
     for (j in 1:length(sitedat$site)){
       soilmsite<-ifelse(j>1,ifelse((sitedat$wm[j]-sitedat$petm[j])<=0,soilm[j-1]*((exp(-1*(sitedat$petm[j]-sitedat$wm[j])/sitedat$soilawc))),ifelse((sitedat$wm[j]-sitedat$petm[j]+soilm[j-1])<sitedat$soilawc[j],(sitedat$wm[j]-sitedat$petm[j]+soilm[j-1]),sitedat$soilawc[j])),ifelse((sitedat$wm[j]-sitedat$petm[j])<=0,0,ifelse((sitedat$wm[j]-sitedat$petm[j])<sitedat$soilawc[j],(sitedat$wm[j]-sitedat$petm[j]),sitedat$soilawc[j])))
       soilm<-c(soilm,soilmsite)
-      site<-as.character(sitedat$site)
-      year<-as.numeric(as.character(sitedat$year))
-      month<-as.numeric(as.character(sitedat$month))
     }
+    site<-as.character(sitedat$site)
+    year<-as.numeric(as.character(sitedat$year))
+    month<-as.numeric(as.character(sitedat$month))
     mergedat<-cbind(site,year,month,soilm)
-    mergedata<-rbind(mergedata,mergedat)
+    # mergedata<-rbind(mergedata,mergedat)
   }
   mergedt<-as.data.table(mergedata)
   mergedt$year<-as.numeric(as.character(mergedt$year))
