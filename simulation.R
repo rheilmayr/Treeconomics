@@ -60,7 +60,7 @@ b=ggplot(petall%>%filter(id==9&year%in%c(1:3)),aes(x=month,y=pet,col=type,group=
 b=b+theme_classic()+labs(title="One Site for Multiple Years")
 a+b
 
-#----------------relationship with outcome variable
+#----------------relationship with outcome variable------------------------
 #true relationship - no effect of average climate
 
 #aggregate up to year
@@ -138,4 +138,46 @@ f=ggplot(mods_dryrange%>%select(type,annualtemps,estimate,id)%>%pivot_wider(name
 f=f+theme_classic()+labs(title="True Effect: Dry Range Edge")+geom_abline(slope=1,intercept=0)
 
 d+e+f
+
+###----- second stage regression under three true models ------
+
+secondstage_null=mods%>%
+  unnest(data)%>%
+  group_by(type,id)%>%
+  dplyr::summarise(meanpet=mean(totalpet),estimate=estimate[1],std.error=std.error[1])%>%
+  ungroup()%>%
+  nest(.by=type)%>%
+  dplyr::mutate(
+    models=lapply(data,function(df) lm(estimate~meanpet,weights = 1/std.error,data=df)),
+    tidied=map(models,tidy)
+  )%>%
+  unnest(tidied)%>%
+  filter(term=="meanpet")
+
+secondstage_spoiled=mods_spoiled%>%
+  unnest(data)%>%
+  group_by(type,id)%>%
+  dplyr::summarise(meanpet=mean(totalpet),estimate=estimate[1],std.error=std.error[1])%>%
+  ungroup()%>%
+  nest(.by=type)%>%
+  dplyr::mutate(
+    models=lapply(data,function(df) lm(estimate~meanpet,weights = 1/std.error,data=df)),
+    tidied=map(models,tidy)
+  )%>%
+  unnest(tidied)%>%
+  filter(term=="meanpet")
+
+secondstage_dryrange=mods_dryrange%>%
+  unnest(data)%>%
+  group_by(type,id)%>%
+  dplyr::summarise(meanpet=mean(totalpet),estimate=estimate[1],std.error=std.error[1])%>%
+  ungroup()%>%
+  nest(.by=type)%>%
+  dplyr::mutate(
+    models=lapply(data,function(df) lm(estimate~meanpet,weights = 1/std.error,data=df)),
+    tidied=map(models,tidy)
+  )%>%
+  unnest(tidied)%>%
+  filter(term=="meanpet")
+
 
