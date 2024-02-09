@@ -44,7 +44,7 @@ data$tmn = na_if(data$tmn,-999)
 data$tmx = na_if(data$tmx,-999)
 
 # Add corrections from World Clim to CWD to get downscaled variables
-data$pre_corrected=data$pre+data$pre_correction
+data$pre_corrected=data$pre*data$pre_correction
 data$pre_corrected=ifelse(data$pre_corrected < 0, 0, data$pre_corrected)
 data$tmx_corrected=data$tmx+data$tmax_correction
 data$tmn_corrected=data$tmn+data$tmin_correction
@@ -103,7 +103,7 @@ miss_var_summary(data)
 # Write out file ----------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 cwd_data <- cwd_data %>%
-  select(site, year, month, tmean, ppt, aet, cwd, pet = petm, cwb)
+  select(site, year, month, tmean, ppt, aet, cwd, pet = petm)
 
 fwrite(cwd_data,file=paste0(wdir,"1_input_processed/climate/essentialcwd_data.csv"))
 

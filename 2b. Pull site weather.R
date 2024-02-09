@@ -79,7 +79,7 @@ for(i in 1:length(vars)){
   print(i)
 }
 
-colnames(climdat)[5:6]=vars[2:3]
+colnames(climdat)[5:8]=vars[2:5]
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Add downscaling correction ---------------------------------------------
@@ -117,7 +117,8 @@ for(i in 2:3) dsdata=cbind(dsdata,melt(downscaled[[i]],id.vars="site_id",variabl
 colnames(dsdata)=c("site_id","month",vars)
 
 baselines=merge(baselines,dsdata)
-baselines$pre_correction=baselines$prec-baselines$pre_baseline
+baselines$pre_baseline[which(baselines$pre_baseline==0)]<-1 #you can’t divide by 0
+baselines$pre_correction=baselines$prec/baselines$pre_baseline
 baselines$tmax_correction=baselines$tmax-baselines$tmx_baseline
 baselines$tmin_correction=baselines$tmin-baselines$tmn_baseline
 
@@ -143,6 +144,6 @@ sites <- sites %>%
 # Save combined topography, weather, and swc data ------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # save(sites,file=paste0(wdir,"out/climate/sitedataforcwd.Rdat"))
-fwrite(sites,file=paste0(wdir,"out/climate/sitedataforcwd.csv"))
+fwrite(sites,file=paste0(wdir,"1_input_processed/climate/sitedataforcwd.csv"))
 
        
