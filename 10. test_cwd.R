@@ -2,6 +2,8 @@
 library(tidyverse)
 source("f_cwd_function_new.R")
 library(SPEI)
+library(zoo)
+library(lubridate)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -13,11 +15,44 @@ wdir <- 'remote/'
 # 1. Pre-processed climate and soil data
 data=fread(paste0(wdir,"1_input_processed/climate/sitedataforcwd.csv"))
 
+# 2. Treecon climate data
+clim_df <- read_csv(file=paste0(wdir,"1_input_processed/climate/essentialcwd_data.csv"))
 
-# 2. Terraclimate reference data
+
+# 3. Terraclimate reference data
 tc_pet <- read_csv(paste0(wdir,"0_raw/TerraClimate/itrdbsites_pet.csv"))
 tc_cwd <- read_csv(paste0(wdir,"0_raw/TerraClimate/itrdbsites_def.csv"))
+tc_df <- tc_pet %>% 
+  left_join(tc_cwd, by = c("collection_id", "Month", "year"))
 
+# tc_df <- tc_df %>% 
+#   mutate(date = as.yearmon(year, Month), "%Y %m",
+#          days = days_in_month(date))
+
+tc_df <- tc_df %>% 
+  # mutate(pet = pet*days,
+  #        def = def*days) %>% 
+  group_by(collection_id, year) %>% 
+  summarise(pet_tc = sum(pet),
+            cwd_tc = sum(def))
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Compare data --------------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+clim_df <- clim_df %>%
+  rename(collection_id = site) %>% 
+  inner_join(tc_df, by = c("collection_id", "year"))
+
+mod <- lm(cwd ~ cwd_tc, clim_df)
+summary(mod)
+
+mod <- lm(pet ~ pet_tc, clim_df)
+summary(mod)
+
+clim_df %>% 
+  ggplot(aes(x = cwd_tc, y = cwd)) +
+  geom_point(alpha = .3)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
