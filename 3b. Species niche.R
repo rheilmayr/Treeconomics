@@ -159,7 +159,7 @@ niche_df <- clim_df %>%
             cwd_sd = sd(cwd),
             tmp_mean = mean(tmp),
             tmp_sd = sd(tmp),
-            ppt_mean = mean(tmp),
+            ppt_mean = mean(ppt),
             ppt_sd = sd(ppt),
             cwb_mean = mean(cwb),
             cwb_sd = sd(cwb))
