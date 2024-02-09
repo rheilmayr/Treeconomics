@@ -55,18 +55,32 @@ future::plan(multisession, workers = n_cores)
 wdir <- 'remote/'
 
 # 1. Historic climate raster
-cwd_historic <- rast(paste0(wdir,"1_input_processed/climate/HistoricCWD.tif"))
-pet_historic <- rast(paste0(wdir,"1_input_processed/climate/HistoricPET.tif"))
-ppt_historic <- rast(paste0(wdir,"1_input_processed/climate/HistoricPPT.tif"))
-tmp_historic <- rast(paste0(wdir,"1_input_processed/climate/HistoricTMP.tif"))
-clim_historic <- rast(list(cwd_historic, pet_historic, ppt_historic, tmp_historic))
+cwd_historic <- rast(paste0(wdir,"0_raw/TerraClimate/TerraClimate19611990_def.nc")) %>% 
+  sum()
+pet_historic <- rast(paste0(wdir,"0_raw/TerraClimate/TerraClimate19611990_pet.nc")) %>% 
+  sum()
+ppt_historic <- rast(paste0(wdir,"0_raw/TerraClimate/TerraClimate19611990_ppt.nc")) %>% 
+  sum()
+clim_historic <- rast(list("cwd" = cwd_historic, "pet" = pet_historic, "ppt" = ppt_historic))
 
 # 2. Site-specific historic climate data
-site_clim_csv <- paste0(wdir, '1_input_processed/climate/essentialcwd_data.csv')
-site_clim_df <- read_csv(site_clim_csv)
-site_clim_df <- site_clim_df %>% 
-  mutate("site_id" = as.character(site)) %>% 
-  rename(location_id = site_id)
+tc_pet <- read_csv(paste0(wdir,"0_raw/TerraClimate/itrdbsites_pet.csv"))
+tc_cwd <- read_csv(paste0(wdir,"0_raw/TerraClimate/itrdbsites_def.csv"))
+tc_ppt <- read_csv(paste0(wdir,"0_raw/TerraClimate/itrdbsites_ppt.csv"))
+tc_df <- tc_pet %>% 
+  left_join(tc_cwd, by = c("collection_id", "Month", "year")) %>% 
+  left_join(tc_ppt, by = c("collection_id", "Month", "year"))
+
+tc_df <- tc_df %>% 
+  group_by(collection_id, year) %>% 
+  summarise(pet = sum(pet),
+            cwd = sum(def),
+            ppt = sum(ppt))
+
+site_clim_df <- tc_df %>% 
+  rename(location_id = collection_id)
+
+
 
 # 3. Load species information for sites
 site_smry <- read_csv(paste0(wdir, '1_input_processed/dendro/site_summary.csv'))
@@ -90,20 +104,20 @@ site_smry <- site_smry %>%
 range_file <- paste0(wdir, '1_input_processed/species_ranges/merged_ranges_dissolve.shp')
 range_sf <- st_read(range_file)
 
-# 5. Climate projections from CMIP5
-cmip_end <- load(paste0(wdir, '1_input_processed/climate/cmip5_cwdaet_end.Rdat'))
-pet_cmip_end <- aet_raster + cwd_raster
-cwd_cmip_end <- cwd_raster
-names(cwd_cmip_end) <- NULL # Resetting this due to strange names in file from CMIP processing
-rm(cwd_raster)
-rm(aet_raster)
-
-cmip_start <- load(paste0(wdir, '1_input_processed/climate/cmip5_cwdaet_start.Rdat'))
-pet_cmip_start <- aet_raster + cwd_raster
-cwd_cmip_start <- cwd_raster
-names(cwd_cmip_start) <- NULL # Resetting this due to strange names in file from CMIP processing
-rm(cwd_raster)
-rm(aet_raster)
+# # 5. Climate projections from CMIP5
+# cmip_end <- load(paste0(wdir, '1_input_processed/climate/cmip5_cwdaet_end.Rdat'))
+# pet_cmip_end <- aet_raster + cwd_raster
+# cwd_cmip_end <- cwd_raster
+# names(cwd_cmip_end) <- NULL # Resetting this due to strange names in file from CMIP processing
+# rm(cwd_raster)
+# rm(aet_raster)
+# 
+# cmip_start <- load(paste0(wdir, '1_input_processed/climate/cmip5_cwdaet_start.Rdat'))
+# pet_cmip_start <- aet_raster + cwd_raster
+# cwd_cmip_start <- cwd_raster
+# names(cwd_cmip_start) <- NULL # Resetting this due to strange names in file from CMIP processing
+# rm(cwd_raster)
+# rm(aet_raster)
 
 
 
@@ -157,12 +171,8 @@ niche_df <- clim_df %>%
             pet_sd = sd(pet),
             cwd_mean = mean(cwd),
             cwd_sd = sd(cwd),
-            tmp_mean = mean(tmp),
-            tmp_sd = sd(tmp),
-            ppt_mean = mean(tmp),
-            ppt_sd = sd(ppt),
-            cwb_mean = mean(cwb),
-            cwb_sd = sd(cwb))
+            ppt_mean = mean(ppt),
+            ppt_sd = sd(ppt))
 
 
 ## Export species niche description
