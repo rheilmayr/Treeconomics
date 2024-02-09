@@ -37,7 +37,7 @@ library(data.table)
 library(geosphere)
 library(dplyr)
 library(tidyr)
-source("f_cwd_function.R")
+source("f_cwd_function_new.R")
 
 max_clusters = 20
 
@@ -151,7 +151,8 @@ climatedata=cbind(tasdata,prdata[,3])
 climatedata=climatedata[,-which(colnames(climatedata)=="variable")]
 colnames(climatedata)=c("site","temp","year","month","precip")
 
-climatedata=tibble:as_tibble(climatedata);sitedata=tibble:as_tibble(sitedata)
+climatedata <- as_tibble(climatedata)
+sitedata <- as_tibble(sitedata)
 
 dat=inner_join(climatedata,sitedata,by="site")
 dat=dat[complete.cases(dat),]
