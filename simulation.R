@@ -60,81 +60,111 @@ b=ggplot(petall%>%filter(id==9&year%in%c(1:3)),aes(x=month,y=pet,col=type,group=
 b=b+theme_classic()+labs(title="One Site for Multiple Years")
 a+b
 
-#----------------relationship with outcome variable------------------------
-#true relationship - no effect of average climate
+##---------add rainfall and estimate annual cwd -----------------
+
+#create cwd based on random average precip across sites and log norm precip across years within sites
+meanprecip=runif(nsites,min=5,max=100)
+precipdata=matrix(nrow=nsites,ncol=12*nyears)
+
+for(i in 1:nsites){
+  precipdata[i,]=meanprecip[i]*rlnorm(nyears*12,mean=0,sd=0.15)
+}
+precipdata=as.data.frame(precipdata)
+colnames(precipdata)=rep(1:nyears,each=12)
+precipdata$id=1:nsites
+precipdata=pivot_longer(precipdata,cols=-id,names_to="year",values_to="ppt")
+precipdata$month=rep(1:12,nsites*nyears)
+
+cwddata=merge(petall,precipdata,by=c("id","year","month"))
 
 #aggregate up to year
-petall_year=petall%>%group_by(type,id,year)%>%dplyr::summarise(totalpet=sum(pet),annualtemps=mean(meantemp))
+cwdall_year=cwddata%>%group_by(type,id,year)%>%dplyr::summarise(totalpet=sum(pet),totalppt=sum(ppt),totalcwd=max(0,sum(pet-ppt)),annualtemps=mean(meantemp))
+meancwd=cwdall_year%>%group_by(id,type)%>%dplyr::summarise(sitemeancwd=mean(totalcwd))
+cwdall_year=merge(cwdall_year,meancwd)
 
-siteresponse=-0.05 #common effect of pet on response variable across all sites (no spoiled tree or dry range edge sensitivity)
-responseerror=0.35 #standard deviation of response error
+#summary plots of cwd
+#error across all sites
+plotdat=cwdall_year%>%select(id,year,totalcwd,type)%>%pivot_wider(names_from = type,values_from = totalcwd)
+plotdat=merge(plotdat,cwdall_year%>%filter(type=="right")%>%select(id,year,sitemeancwd))
+a=ggplot(plotdat,aes(x=right,y=wrong,col=sitemeancwd))+geom_point()
+a=a+geom_abline(slope=1,intercept = 0,col="darkred")+theme_classic()+labs(x="CWD with Correct PET",y="CWD with Wrong PET",col="True Site Mean\nAnnual CWD")
+a
 
-truedriver=petall_year%>%filter(type=="right")
-y=siteresponse*truedriver$totalpet+rnorm(nsites*nyears,mean=0,sd=responseerror)
+
+#----------------relationship with outcome variable------------------------
+
+#---------true relationship - no effect of average climate -----null effect
+siteresponse=-0.05 #common effect of cwd on response variable across all sites (no spoiled tree or dry range edge sensitivity)
+responseerror=0.5 #standard deviation of response error
+peteffect=0.02 #benefit of higher pet - common across all sites
+
+truedriver=cwdall_year%>%filter(type=="right")
+y=siteresponse*truedriver$totalcwd+peteffect*truedriver$totalpet+rnorm(nsites*nyears,mean=0,sd=responseerror)
 truedriver$y=y
 
-data=merge(petall_year,truedriver[,c(2,3,6)],by=c("id","year"))
+data=merge(cwdall_year,truedriver[,c(2,3,9)],by=c("id","year"))
 
 #fit regression model for each site for wrong and right pet
 mods=data%>%
-  nest(.by=c("id",'type','annualtemps'))%>%
+  nest(.by=c("id",'type','sitemeancwd',"annualtemps"))%>%
   dplyr::mutate(
-    models=lapply(data,function(df) lm(y~totalpet,data=df)),
+    models=lapply(data,function(df) lm(y~totalpet+totalcwd,data=df)),
     tidied=map(models,tidy)
     )%>%
   unnest(tidied)%>%
-  filter(term=="totalpet")
+  filter(term!="(Intercept)")
 
 #compare regression coefficients visually
-d=ggplot(mods%>%select(type,annualtemps,estimate,id)%>%pivot_wider(names_from = type,values_from = estimate),aes(x=right,y=wrong,col=annualtemps))+geom_point()
+d=ggplot(mods%>%filter(term=="totalcwd")%>%select(type,annualtemps,estimate,id)%>%pivot_wider(names_from = type,values_from = estimate),aes(x=right,y=wrong,col=annualtemps))+geom_point()
 d=d+theme_classic()+labs(title="True Effect: No Spoiled Tree or Dry Range Edge Effect")
-d=d+geom_vline(xintercept = siteresponse,lty=2)+guides(col="none")
+d=d+geom_vline(xintercept = siteresponse,lty=2)+guides(col="none")+geom_hline(yintercept = siteresponse,lty=2)
 
 ##-----introduce true spoiled tree effect - correlation of slope with temperature
 
-spoiledeffect=0.006 #change in response per degree average temperature - smaller at hotter sites
+spoiledeffect=0.0006 #change in response per degree average cwd - smaller at hotter sites
 
-truedriver=petall_year%>%filter(type=="right")
-y=(siteresponse+spoiledeffect*(truedriver$annualtemps-mean(truedriver$annualtemps)))*truedriver$totalpet+rnorm(nsites*nyears,mean=0,sd=responseerror)
+truedriver=cwdall_year%>%filter(type=="right")
+siteeffect=ifelse(siteresponse+spoiledeffect*(truedriver$sitemeancwd-mean(truedriver$sitemeancwd))>0,0,siteresponse+spoiledeffect*(truedriver$sitemeancwd-mean(truedriver$sitemeancwd)))
+y=siteeffect*truedriver$totalcwd+peteffect*truedriver$totalpet+rnorm(nsites*nyears,mean=0,sd=responseerror)
 truedriver$y=y
 
-data_spoiled=merge(petall_year,truedriver[,c(2,3,6)],by=c("id","year"))
+data_spoiled=merge(cwdall_year,truedriver[,c(2,3,9)],by=c("id","year"))
 
 #fit regression model for each site for wrong and right pet
 mods_spoiled=data_spoiled%>%
-  nest(.by=c("id",'type','annualtemps'))%>%
+  nest(.by=c("id",'type','sitemeancwd',"annualtemps"))%>%
   dplyr::mutate(
-    models=lapply(data,function(df) lm(y~totalpet,data=df)),
+    models=lapply(data,function(df) lm(y~totalpet+totalcwd,data=df)),
     tidied=map(models,tidy)
   )%>%
   unnest(tidied)%>%
-  filter(term=="totalpet")
+  filter(term!="(Intercept)")
 
 #compare regression coefficients visually
-e=ggplot(mods_spoiled%>%select(type,annualtemps,estimate,id)%>%pivot_wider(names_from = type,values_from = estimate),aes(x=right,y=wrong,col=annualtemps))+geom_point()
+e=ggplot(mods_spoiled%>%filter(term=="totalcwd")%>%select(type,annualtemps,estimate,id)%>%pivot_wider(names_from = type,values_from = estimate),aes(x=right,y=wrong,col=annualtemps))+geom_point()
 e=e+theme_classic()+labs(title="True Effect: Spoiled Tree")+geom_abline(slope=1,intercept=0)
 e=e+guides(col="none")
 
 ##-----dry range sensitive - correlation of slope with temperature in opposite direction
 
-truedriver=petall_year%>%filter(type=="right")
-y=(siteresponse-spoiledeffect*(truedriver$annualtemps-mean(truedriver$annualtemps)))*truedriver$totalpet+rnorm(nsites*nyears,mean=0,sd=responseerror)
+truedriver=cwdall_year%>%filter(type=="right")
+siteeffect=ifelse(siteresponse-spoiledeffect*(truedriver$sitemeancwd-mean(truedriver$sitemeancwd))>0,0,siteresponse-spoiledeffect*(truedriver$sitemeancwd-mean(truedriver$sitemeancwd)))
+y=siteeffect*truedriver$totalcwd+peteffect*truedriver$totalpet+rnorm(nsites*nyears,mean=0,sd=responseerror)
 truedriver$y=y
 
-data_dryrange=merge(petall_year,truedriver[,c(2,3,6)],by=c("id","year"))
+data_dryrange=merge(cwdall_year,truedriver[,c(2,3,9)],by=c("id","year"))
 
 #fit regression model for each site for wrong and right pet
 mods_dryrange=data_dryrange%>%
-  nest(.by=c("id",'type','annualtemps'))%>%
+  nest(.by=c("id",'type','sitemeancwd',"annualtemps"))%>%
   dplyr::mutate(
-    models=lapply(data,function(df) lm(y~totalpet,data=df)),
+    models=lapply(data,function(df) lm(y~totalpet+totalcwd,data=df)),
     tidied=map(models,tidy)
   )%>%
   unnest(tidied)%>%
-  filter(term=="totalpet")
-
+  filter(term!="(Intercept)")
 #compare regression coefficients visually
-f=ggplot(mods_dryrange%>%select(type,annualtemps,estimate,id)%>%pivot_wider(names_from = type,values_from = estimate),aes(x=right,y=wrong,col=annualtemps))+geom_point()
+f=ggplot(mods_dryrange%>%filter(term=="totalcwd")%>%select(type,annualtemps,estimate,id)%>%pivot_wider(names_from = type,values_from = estimate),aes(x=right,y=wrong,col=annualtemps))+geom_point()
 f=f+theme_classic()+labs(title="True Effect: Dry Range Edge")+geom_abline(slope=1,intercept=0)
 
 d+e+f
@@ -142,42 +172,33 @@ d+e+f
 ###----- second stage regression under three true models ------
 
 secondstage_null=mods%>%
-  unnest(data)%>%
-  group_by(type,id)%>%
-  dplyr::summarise(meanpet=mean(totalpet),estimate=estimate[1],std.error=std.error[1])%>%
-  ungroup()%>%
+  filter(term=="totalcwd")%>%
   nest(.by=type)%>%
   dplyr::mutate(
-    models=lapply(data,function(df) lm(estimate~meanpet,weights = 1/std.error,data=df)),
+    models=lapply(data,function(df) lm(estimate~sitemeancwd,weights = 1/std.error,data=df)),
     tidied=map(models,tidy)
   )%>%
   unnest(tidied)%>%
-  filter(term=="meanpet")
+  filter(term=="sitemeancwd")
 
 secondstage_spoiled=mods_spoiled%>%
-  unnest(data)%>%
-  group_by(type,id)%>%
-  dplyr::summarise(meanpet=mean(totalpet),estimate=estimate[1],std.error=std.error[1])%>%
-  ungroup()%>%
+  filter(term=="totalcwd")%>%
   nest(.by=type)%>%
   dplyr::mutate(
-    models=lapply(data,function(df) lm(estimate~meanpet,weights = 1/std.error,data=df)),
+    models=lapply(data,function(df) lm(estimate~sitemeancwd,weights = 1/std.error,data=df)),
     tidied=map(models,tidy)
   )%>%
   unnest(tidied)%>%
-  filter(term=="meanpet")
+  filter(term=="sitemeancwd")
 
 secondstage_dryrange=mods_dryrange%>%
-  unnest(data)%>%
-  group_by(type,id)%>%
-  dplyr::summarise(meanpet=mean(totalpet),estimate=estimate[1],std.error=std.error[1])%>%
-  ungroup()%>%
+  filter(term=="totalcwd")%>%
   nest(.by=type)%>%
   dplyr::mutate(
-    models=lapply(data,function(df) lm(estimate~meanpet,weights = 1/std.error,data=df)),
+    models=lapply(data,function(df) lm(estimate~sitemeancwd,weights = 1/std.error,data=df)),
     tidied=map(models,tidy)
   )%>%
   unnest(tidied)%>%
-  filter(term=="meanpet")
+  filter(term=="sitemeancwd")
 
 
