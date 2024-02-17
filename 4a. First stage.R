@@ -166,7 +166,6 @@ site_df <- dendro_df %>%
   # drop_na() %>% 
   rename(cwd.an = cwd.an.spstd,
          pet.an = pet.an.spstd,
-         tmp.an = tmp.an.spstd,
          cwb.an = cwb.an.spstd,
          ppt.an = ppt.an.spstd) %>% 
   group_by(collection_id) %>%

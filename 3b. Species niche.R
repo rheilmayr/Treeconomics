@@ -67,19 +67,17 @@ clim_historic <- rast(list("cwd" = cwd_historic, "pet" = pet_historic, "ppt" = p
 tc_pet <- read_csv(paste0(wdir,"0_raw/TerraClimate/itrdbsites_pet.csv"))
 tc_cwd <- read_csv(paste0(wdir,"0_raw/TerraClimate/itrdbsites_def.csv"))
 tc_ppt <- read_csv(paste0(wdir,"0_raw/TerraClimate/itrdbsites_ppt.csv"))
-tc_df <- tc_pet %>% 
+site_clim_df <- tc_pet %>% 
   left_join(tc_cwd, by = c("collection_id", "Month", "year")) %>% 
-  left_join(tc_ppt, by = c("collection_id", "Month", "year"))
-
-tc_df <- tc_df %>% 
-  group_by(collection_id, year) %>% 
-  summarise(pet = sum(pet),
-            cwd = sum(def),
-            ppt = sum(ppt))
-
-site_clim_df <- tc_df %>% 
+  left_join(tc_ppt, by = c("collection_id", "Month", "year")) %>% 
   rename(location_id = collection_id)
+  
 
+# tc_df <- tc_df %>% 
+#   group_by(collection_id, year) %>% 
+#   summarise(pet = sum(pet),
+#             cwd = sum(def),
+#             ppt = sum(ppt))
 
 
 # 3. Load species information for sites
@@ -172,7 +170,9 @@ niche_df <- clim_df %>%
             cwd_mean = mean(cwd),
             cwd_sd = sd(cwd),
             ppt_mean = mean(ppt),
-            ppt_sd = sd(ppt))
+            ppt_sd = sd(ppt),
+            cwb_mean = mean(cwb),
+            cwb_sd = sd(cwb))
 
 
 ## Export species niche description
@@ -188,23 +188,21 @@ sp_standardize <- function(val, sp_mean, sp_sd){
   return(std_val)
 }
 
-sp_std_historic_df <- function(hist_clim_vals, pet_mean, pet_sd, cwd_mean, cwd_sd, tmp_mean, tmp_sd, ppt_mean, ppt_sd, cwb_mean, cwb_sd){
+sp_std_historic_df <- function(hist_clim_vals, pet_mean, pet_sd, cwd_mean, cwd_sd, ppt_mean, ppt_sd, cwb_mean, cwb_sd){
   hist_clim_vals <- hist_clim_vals %>% 
     mutate_at(vars(starts_with("cwd")), 
               ~sp_standardize(.x, cwd_mean, cwd_sd)) %>% 
     mutate_at(vars(starts_with("pet")), 
               ~sp_standardize(.x, pet_mean, pet_sd)) %>% 
-    mutate_at(vars(starts_with("tmp")), 
-              ~sp_standardize(.x, tmp_mean, tmp_sd)) %>% 
     mutate_at(vars(starts_with("ppt")), 
               ~sp_standardize(.x, ppt_mean, ppt_sd)) %>% 
     mutate_at(vars(starts_with("cwb")), 
-              ~sp_standardize(.x, cwb_mean, cwb_sd))    
+              ~sp_standardize(.x, cwb_mean, cwb_sd)) 
   return(hist_clim_vals)
 }
 
 
-sp_std_future_df <- function(cmip_df, hist_clim_vals, pet_mean, pet_sd, cwd_mean, cwd_sd, temp_mean, temp_sd){
+sp_std_future_df <- function(cmip_df, hist_clim_vals, pet_mean, pet_sd, cwd_mean, cwd_sd){
   valid_locations <- hist_clim_vals %>% select(x,y)
   cmip_df <- valid_locations %>% 
     left_join(cmip_df, by = c("x", "y"))
@@ -212,9 +210,7 @@ sp_std_future_df <- function(cmip_df, hist_clim_vals, pet_mean, pet_sd, cwd_mean
     mutate_at(vars(starts_with("cwd")), 
               ~sp_standardize(.x, cwd_mean, cwd_sd)) %>% 
     mutate_at(vars(starts_with("pet")), 
-              ~sp_standardize(.x, pet_mean, pet_sd)) %>% 
-    mutate_at(vars(starts_with("temp")), 
-              ~sp_standardize(.x, temp_mean, temp_sd))
+              ~sp_standardize(.x, pet_mean, pet_sd))
   return(cmip_df)
 }
 
@@ -228,8 +224,8 @@ clim_df <- clim_df %>%
                                              pet_sd = pet_sd,
                                              cwd_mean = cwd_mean,
                                              cwd_sd = cwd_sd,
-                                             temp_mean = temp_mean,
-                                             temp_sd = temp_sd),
+                                             ppt_mean = ppt_mean,
+                                             ppt_sd = ppt_sd),
                                         .f = sp_std_historic_df,
                                         .options = furrr_options(packages = c( "dplyr"))))
 # NOTE: May no longer need this dataframe???
@@ -350,26 +346,23 @@ write_rds(sp_cmip_clim, paste0(wdir, "2_output/climate/sp_clim_predictions.", co
 # Calculate site-level annual climate
 site_clim_df = site_clim_df %>%
   group_by(location_id, year) %>%
-  summarise(aet.an = sum(aet),
-            cwd.an = sum(cwd),
-            pet.an = sum(petm),
-            tmp.an = mean(tmean),
+  summarise(cwd.an = sum(def),
+            pet.an = sum(pet),
             ppt.an = sum(ppt),
-            cwb.an = sum(ppt) - sum(petm),
+            cwb.an = sum(ppt) - sum(pet),
             .groups = "drop")
 
 
-### Calculate site-level, average, historic, relative climate (for second stage)
-## TODO: Note - dropping CANA323 because it has null climate data for a few months each year. might want to dig into this
-site_clim_df <- site_clim_df %>% 
-  filter(location_id != "CANA323")
+# ### Calculate site-level, average, historic, relative climate (for second stage)
+# ## TODO: Note - dropping CANA323 because it has null climate data for a few months each year. might want to dig into this
+# site_clim_df <- site_clim_df %>% 
+#   filter(location_id != "CANA323")
 
 ave_site_clim_df <- site_clim_df %>% 
   filter(year < 1980) %>% 
   group_by(location_id) %>% 
   summarise(cwd.ave = mean(cwd.an),
             pet.ave = mean(pet.an),
-            tmp.ave = mean(tmp.an),
             ppt.ave = mean(ppt.an),
             cwb.ave = mean(cwb.an)) %>% 
   ungroup()
@@ -377,7 +370,7 @@ ave_site_clim_df <- site_clim_df %>%
 spstd_site_clim_df <- site_smry %>% 
   left_join(ave_site_clim_df, by = "location_id") %>% 
   group_by(sp_code) %>% 
-  nest(data = c(collection_id, cwd.ave, pet.ave, tmp.ave, ppt.ave, cwb.ave)) %>% 
+  nest(data = c(collection_id, cwd.ave, pet.ave, ppt.ave, cwb.ave)) %>% 
   left_join(niche_df, by = ("sp_code")) %>%
   drop_na() # Dropping some species due to NA niche data
 
@@ -387,8 +380,6 @@ spstd_site_clim_df <- spstd_site_clim_df %>%
                                       pet_sd = pet_sd,
                                       cwd_mean = cwd_mean,
                                       cwd_sd = cwd_sd,
-                                      tmp_mean = tmp_mean,
-                                      tmp_sd = tmp_sd,
                                       ppt_mean = ppt_mean,
                                       ppt_sd = ppt_sd,
                                       cwb_mean = cwb_mean,
@@ -398,12 +389,12 @@ spstd_site_clim_df <- spstd_site_clim_df %>%
 
 spstd_site_clim_df <- spstd_site_clim_df %>% 
   unnest(site_clim) %>% 
-  rename(cwd.spstd = cwd.ave, pet.spstd = pet.ave, tmp.spstd = tmp.ave, ppt.spstd = ppt.ave, cwb.spstd = cwb.ave) %>% 
+  rename(cwd.spstd = cwd.ave, pet.spstd = pet.ave, ppt.spstd = ppt.ave, cwb.spstd = cwb.ave) %>% 
   ungroup() %>% 
-  select(collection_id, location_id, cwd.spstd, pet.spstd, tmp.spstd, ppt.spstd, cwb.spstd)
+  select(collection_id, location_id, cwd.spstd, pet.spstd, ppt.spstd, cwb.spstd)
 
 spstd_site_clim_df <- spstd_site_clim_df %>% 
-  left_join(ave_site_clim_df %>% select(location_id, cwd.ave, pet.ave, tmp.ave, ppt.ave, cwb.ave), by = "location_id")
+  left_join(ave_site_clim_df %>% select(location_id, cwd.ave, pet.ave, ppt.ave, cwb.ave), by = "location_id")
 
 spstd_site_clim_df <- spstd_site_clim_df %>% 
   select(-location_id)
@@ -429,8 +420,6 @@ an_site_clim_df <- an_site_clim_df %>%
                                       pet_sd = pet_sd,
                                       cwd_mean = cwd_mean,
                                       cwd_sd = cwd_sd,
-                                      tmp_mean = tmp_mean,
-                                      tmp_sd = tmp_sd,
                                       ppt_mean = ppt_mean,
                                       ppt_sd = ppt_sd,
                                       cwb_mean = cwb_mean,
@@ -440,9 +429,9 @@ an_site_clim_df <- an_site_clim_df %>%
 
 an_site_clim_df <- an_site_clim_df %>% 
   unnest(site_clim) %>% 
-  rename(cwd.an.spstd = cwd.an, pet.an.spstd = pet.an, tmp.an.spstd = tmp.an, ppt.an.spstd = ppt.an, cwb.an.spstd = cwb.an) %>% 
+  rename(cwd.an.spstd = cwd.an, pet.an.spstd = pet.an, ppt.an.spstd = ppt.an, cwb.an.spstd = cwb.an) %>% 
   ungroup() %>% 
-  select(-aet.an, -pet_mean, -pet_sd, -cwd_mean, -cwd_sd, -tmp_mean, -tmp_sd, -ppt_mean, -ppt_sd, -cwb_mean, -cwb_sd, -data, -sp_code)
+  select(-pet_mean, -pet_sd, -cwd_mean, -cwd_sd, -ppt_mean, -ppt_sd, -cwb_mean, -cwb_sd, -data, -sp_code)
 
 an_site_clim_df <- an_site_clim_df %>%
   select(-location_id)
