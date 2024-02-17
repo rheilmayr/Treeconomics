@@ -1,3 +1,64 @@
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Package imports --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+library(MASS)
+library(tidyverse)
+library(broom)
+library(purrr)
+library(margins)
+library(tidylog)
+library(fixest)
+library(gstat)
+library(sf)
+library(units)
+library(dtplyr)
+library(marginaleffects)
+
+set.seed(5597)
+
+select <- dplyr::select
+
+n_mc <- 10000
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Import data --------------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+### Define path
+wdir <- 'remote/'
+
+# 1. Site-level regressions
+flm_df <- read_csv(paste0(wdir, '2_output/first_stage/site_pet_ppt_std.csv'))
+
+# 2. Historic site-level climate
+ave_site_clim <- read_rds(paste0(wdir, "2_output/climate/site_ave_clim.gz"))
+flm_df <- flm_df %>% 
+  left_join(ave_site_clim, by = c("collection_id"))
+
+# 3. Site information
+site_df <- read_csv(paste0(wdir, '1_input_processed/dendro/site_summary.csv'))
+site_df <- site_df %>% 
+  select(collection_id, sp_id, latitude, longitude)
+site_df <- site_df %>% 
+  rename(species_id = sp_id) %>% 
+  mutate(species_id = str_to_lower(species_id))
+
+# # 4. Species information
+# sp_info <- read_csv(paste0(wdir, 'species_gen_gr.csv'))
+# sp_info <- sp_info %>% 
+#   select(species_id, genus, gymno_angio, family)
+# site_df <- site_df %>% 
+#   left_join(sp_info, by = "species_id")
+
+# Merge back into main flm_df
+flm_df <- flm_df %>% 
+  left_join(site_df, by = "collection_id")
+
+
+
+
+
+
 # Add weighting based on inverse of first stage variance
 flm_df <- flm_df %>% 
   mutate(ppt_errorweights = 1 / (std.error_ppt.an),
