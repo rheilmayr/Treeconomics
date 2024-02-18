@@ -4,6 +4,7 @@ source("f_cwd_function_new.R")
 library(SPEI)
 library(zoo)
 library(lubridate)
+library(fixest)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -13,7 +14,11 @@ library(lubridate)
 wdir <- 'remote/'
 
 # 1. Pre-processed climate and soil data
-data=fread(paste0(wdir,"1_input_processed/climate/sitedataforcwd.csv"))
+site_df <- fread(paste0(wdir,"1_input_processed/climate/sitedataforcwd.csv"))
+lat_df <- site_df %>% 
+  select(collection_id = site_id, latitude) %>% 
+  unique()
+
 
 # 2. Treecon climate data
 clim_df <- read_csv(file=paste0(wdir,"1_input_processed/climate/essentialcwd_data.csv"))
@@ -22,19 +27,22 @@ clim_df <- read_csv(file=paste0(wdir,"1_input_processed/climate/essentialcwd_dat
 # 3. Terraclimate reference data
 tc_pet <- read_csv(paste0(wdir,"0_raw/TerraClimate/itrdbsites_pet.csv"))
 tc_cwd <- read_csv(paste0(wdir,"0_raw/TerraClimate/itrdbsites_def.csv"))
-tc_df <- tc_pet %>% 
-  left_join(tc_cwd, by = c("collection_id", "Month", "year"))
+tc_month_df <- tc_pet %>% 
+  left_join(tc_cwd, by = c("collection_id", "Month", "year")) %>% 
+  rename(month = Month,
+         pet_tc = pet,
+         cwd_tc = def)
 
 # tc_df <- tc_df %>% 
 #   mutate(date = as.yearmon(year, Month), "%Y %m",
 #          days = days_in_month(date))
 
-tc_df <- tc_df %>% 
+tc_df <- tc_month_df %>% 
   # mutate(pet = pet*days,
   #        def = def*days) %>% 
   group_by(collection_id, year) %>% 
-  summarise(pet_tc = sum(pet),
-            cwd_tc = sum(def))
+  summarise(pet_tc = sum(pet_tc),
+            cwd_tc = sum(cwd_tc))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -42,54 +50,120 @@ tc_df <- tc_df %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 clim_df <- clim_df %>%
   rename(collection_id = site) %>% 
-  inner_join(tc_df, by = c("collection_id", "year"))
+  inner_join(tc_month_df, by = c("collection_id", "year", "month"))
+
+clim_df <- clim_df %>% 
+  left_join(lat_df, by = "collection_id") 
+
+calc_pet_thornthwaite_spei <- function(data){
+  data <- data %>% 
+    arrange(year, month) 
+  data$pet_spei <- thornthwaite(Tave = data$tmean, lat = data$latitude[1])
+  return(data)
+}
+
+clim_df <- clim_df %>% 
+  group_by(collection_id) %>% 
+  nest() %>% 
+  mutate(data = map(.x = data, .f = calc_pet_thornthwaite_spei)) %>% 
+  unnest()
+
+clim_df <- clim_df %>% 
+  ungroup()
 
 mod <- lm(cwd ~ cwd_tc, clim_df)
+summary(mod)
+
+mod <- feols(cwd ~ cwd_tc | collection_id, clim_df)
 summary(mod)
 
 mod <- lm(pet ~ pet_tc, clim_df)
 summary(mod)
 
-clim_df %>% 
-  ggplot(aes(x = cwd_tc, y = cwd)) +
-  geom_point(alpha = .3)
+mod <- feols(pet ~ pet_tc | collection_id, clim_df)
+summary(mod)
+
+mod <- lm(pet ~ pet_spei, clim_df)
+summary(mod)
+
+mod <- feols(pet ~ pet_spei | collection_id, clim_df)
+summary(mod)
+
+mod <- lm(pet_tc ~ pet_spei, clim_df)
+summary(mod)
+
+clim_df %>%
+  sample_n(40000) %>% 
+  ggplot(aes(y = pet_tc, x = pet)) +
+  geom_point(alpha = .3) +
+  geom_smooth() +
+  geom_abline(intercept = 0, slope = 1, size = 0.5, color = "red")
+
+clim_df %>%
+  sample_n(40000) %>% 
+  ggplot(aes(y = pet_spei, x = pet)) +
+  geom_point(alpha = .3) +
+  geom_smooth() +
+  geom_abline(intercept = 0, slope = 1, size = 0.5, color = "red") +
+  ylim(0,300) +
+  xlim(0,300)
+
+
+clim_df %>%
+  sample_n(40000) %>% 
+  ggplot(aes(y = cwd_tc, x = cwd)) +
+  geom_point(alpha = .3) +
+  geom_smooth() +
+  geom_abline(intercept = 0, slope = 1, size = 0.5, color = "red")
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Prep data --------------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Set NAs for precip and temp
-data$pre = na_if(data$pre,-999)
-data$tmn = na_if(data$tmn,-999)
-data$tmx = na_if(data$tmx,-999)
+site_df$pre = na_if(site_df$pre,-999)
+site_df$tmn = na_if(site_df$tmn,-999)
+site_df$tmx = na_if(site_df$tmx,-999)
 
 # Add corrections from World Clim to CWD to get downscaled variables
-data$pre_corrected=data$pre+data$pre_correction
-data$tmx_corrected=data$tmx+data$tmax_correction
-data$tmn_corrected=data$tmn+data$tmin_correction
+site_df$pre_corrected=site_df$pre*site_df$pre_correction
+site_df$tmx_corrected=site_df$tmx+site_df$tmax_correction
+site_df$tmn_corrected=site_df$tmn+site_df$tmin_correction
 
 
 # Unit conversions
-data$swc=data$swc/10 #convert swc from mm to cm
-data$tmean=(data$tmn_corrected+data$tmx_corrected)/2 
-data$slope <- data$slope * 57.2958 # convert slope from radians to degrees
-data$aspect <- data$aspect * 57.2958 # convert aspect from radians to degrees
+site_df$swc=site_df$swc/10 #convert swc from mm to cm
+site_df$tmean=(site_df$tmn_corrected+site_df$tmx_corrected)/2 
+site_df$slope <- site_df$slope * 57.2958 # convert slope from radians to degrees
+site_df$aspect <- site_df$aspect * 57.2958 # convert aspect from radians to degrees
 
-data <- data %>% 
-  select(site_id, year, month, latitude, longitude, pre_corrected, tmean, swc)
+site_df <- site_df %>% 
+  select(site_id, year, month, latitude, longitude, aspect, slope, pre_corrected, tmean, swc)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Focus on example site --------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-test_data <- data %>% 
-  filter(site_id == "CA524") # PIPO site in CA
+test_site <- "CA524"
+test_data <- site_df %>% 
+  filter(site_id == test_site) # PIPO site in CA
+
+site=test_data$site_id
+slope=test_data$slope
+latitude=test_data$latitude
+aspect=test_data$aspect
+ppt=test_data$pre_corrected
+tmean=test_data$tmean
+month=test_data$month
+year=test_data$year
+soilawc=test_data$swc
+type="annual"
 
 ## Test annual cwd calculation
 cwd_data <- cwd_function(site=test_data$site_id,
                          slope=test_data$slope,
                          latitude=test_data$latitude,
-                         foldedaspect=test_data$aspect,
+                         aspect=test_data$aspect,
                          ppt=test_data$pre_corrected,
                          tmean=test_data$tmean,
                          month=test_data$month,
@@ -97,16 +171,30 @@ cwd_data <- cwd_function(site=test_data$site_id,
                          soilawc=test_data$swc,
                          type="annual")
 
-year = 10
+year = 15
 start_month = (year - 1) * 12 + 1
 end_month = start_month + 11
 start_month
 end_month
 cwd_data$pet[start_month:end_month] %>% sum()
 
+
 ## Compare to SPEI's implementation of PET calculation
 pet <- thornthwaite(test_data$tmean, test_data$latitude[1])
+cwd_data$pet_spei <- pet
 pet[start_month:end_month] %>% sum()
+
+spei_compare_mod <- lm(pet ~ pet_spei, cwd_data)
+summary(spei_compare_mod)
+
+
+## Compare to Terraclimate values
+cwd_data <- cwd_data %>%
+  rename(collection_id = site) %>% 
+  left_join(tc_month_df, by = c("collection_id", "year", "month"))
+
+tc_compare_mod <- lm(pet ~ pet_tc, cwd_data)
+summary(spei_compare_mod)
 
 
 
