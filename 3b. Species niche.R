@@ -61,13 +61,15 @@ load(clim_file)
 
 pet_historic <- aet_historic + cwd_historic
 pet_historic <- mean(pet_historic %>% subset(2:80))
-# pet_historic <- mean(pet_historic %>% subset(58:80))
-
 cwd_historic <- mean(cwd_historic %>% subset(2:80))
-# cwd_historic <- mean(cwd_historic %>% subset(58:80))
-
 ppt_historic <- mean(ppt_historic %>% subset(2:80))
 tmp_historic <- mean(tmp_historic %>% subset(2:80))
+
+# pet_historic <- mean(pet_historic %>% subset(61:80))
+# cwd_historic <- mean(cwd_historic %>% subset(61:80))
+# ppt_historic <- mean(ppt_historic %>% subset(61:80))
+# tmp_historic <- mean(tmp_historic %>% subset(61:80))
+
 
 names(cwd_historic) = "cwd"
 names(pet_historic) = "pet"
