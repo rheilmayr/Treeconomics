@@ -35,7 +35,7 @@ library(sf)
 library(rgeos)
 library(stringr)
 library(raster)
-# library(terra)
+library(terra)
 library(readr)
 library(tmap)
 library(tictoc)
@@ -60,35 +60,41 @@ load(clim_file)
 # aet_historic <- rast(aet_historic)
 
 pet_historic <- aet_historic + cwd_historic
-# pet_historic <- mean(pet_historic)
-pet_historic <- mean(pet_historic %>% subset(58:80))
+pet_historic <- mean(pet_historic)
+# pet_historic <- mean(pet_historic %>% subset(58:80))
 
-# cwd_historic <- mean(cwd_historic)
-cwd_historic <- mean(cwd_historic %>% subset(58:80))
+cwd_historic <- mean(cwd_historic)
+# cwd_historic <- mean(cwd_historic %>% subset(58:80))
 
 names(cwd_historic) = "cwd"
 names(pet_historic) = "pet"
 
-# 1. Historic climate raster - using monthly norms
-# clim_file <- paste0('G:/.shortcut-targets-by-id/10TtqG9P3BY70rcYp-WACmO38J5zBeflA/Treeconomics/Data/replication - original/1_input_processed/climate/HistoricCWD_AETGrids.Rdat')
-clim_file <- paste0(wdir, '1_input_processed/climate/HistoricCWD_AETGrids.Rdat')
-load(clim_file)
-# cwd_historic <- rast(cwd_historic)
-# aet_historic <- rast(aet_historic)
-cwd_historic <- sum(cwd_historic)
-aet_historic <- sum(aet_historic)
-pet_historic <- aet_historic + cwd_historic
-names(cwd_historic) = "cwd"
-names(pet_historic) = "pet"
 
-pet_historic %>% summary()
-cwd_historic %>% summary()
+# # 1. Historic climate raster - using monthly norms
+# # clim_file <- paste0('G:/.shortcut-targets-by-id/10TtqG9P3BY70rcYp-WACmO38J5zBeflA/Treeconomics/Data/replication - original/1_input_processed/climate/HistoricCWD_AETGrids.Rdat')
+# clim_file <- paste0(wdir, '1_input_processed/climate/HistoricCWD_AETGrids.Rdat')
+# load(clim_file)
+# # cwd_historic <- rast(cwd_historic)
+# # aet_historic <- rast(aet_historic)
+# cwd_historic <- sum(cwd_historic)
+# aet_historic <- sum(aet_historic)
+# pet_historic <- aet_historic + cwd_historic
+# names(cwd_historic) = "cwd"
+# names(pet_historic) = "pet"
+# 
+# pet_historic %>% summary()
+# cwd_historic %>% summary()
 
 # 2. Data on historic baseline temp and precip
 temps_historic <- raster(paste0(wdir, "1_input_processed/climate/monthlycrubaseline_tas"))
 names(temps_historic) = "temp"
 temps_historic <- resample(temps_historic, cwd_historic)
-clim_historic <- raster::brick(list(cwd_historic, pet_historic, temps_historic))
+
+# Composite into multilayer spatraster
+cwd_historic <- rast(cwd_historic)
+pet_historic <- rast(pet_historic)
+temps_historic <- rast(temps_historic)
+clim_historic <- rast(list(cwd_historic, pet_historic, temps_historic))
 
 # 3. Site-specific historic climate data
 site_clim_csv <- paste0(wdir, '1_input_processed/climate/essentialcwd_data.csv')
@@ -151,32 +157,16 @@ rm(aet_raster)
 # Pull and organize climate distribution for species
 pull_clim <- function(spp_code){
   print(spp_code)
+  
   # Pull relevant range map
   sp_range <- range_sf %>%
-    filter(sp_code == spp_code) %>% 
-    rasterize(cwd_historic, getCover=TRUE)
-  sp_range[sp_range==0] <- NA
+    filter(sp_code == spp_code)
   
-  # Pull cwd and aet values
-  cwd_vals <- cwd_historic %>% 
-    mask(sp_range) %>% 
+  # Pull clim values
+  clim_vals <- clim_historic %>% 
+    mask(mask = sp_range, touches = TRUE) %>% 
     as.data.frame(xy = TRUE) %>% 
     drop_na()
-  
-  pet_vals <- pet_historic %>% 
-    mask(sp_range) %>% 
-    as.data.frame(xy = TRUE) %>% 
-    drop_na()
-  
-  temp_vals <- temps_historic %>% 
-    mask(sp_range) %>% 
-    as.data.frame(xy = TRUE) %>% 
-    drop_na()
-  
-  # Combine into tibble
-  clim_vals <- cwd_vals %>% 
-    left_join(pet_vals, by = c("x", "y")) %>% 
-    left_join(temp_vals, by = c("x", "y"))
   
   return(clim_vals)
 }
@@ -213,8 +203,8 @@ niche_df <- clim_df %>%
 
 
 ## Export species niche description
-write_csv(niche_df, paste0(wdir, "2_output/climate/clim_niche_58_80.csv"))
-niche_df <- read_csv(paste0(wdir, "2_output/climate/clim_niche_58_80.csv"))
+write_csv(niche_df, paste0(wdir, "2_output/climate/clim_niche.csv"))
+niche_df <- read_csv(paste0(wdir, "2_output/climate/clim_niche.csv"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -335,7 +325,7 @@ spstd_site_clim_df <- spstd_site_clim_df %>%
   select(-location_id)
 
 write_rds(spstd_site_clim_df, 
-          paste0(wdir, "2_output/climate/site_ave_clim_58-80.", compress = "gz"))
+          paste0(wdir, "2_output/climate/site_ave_clim.", compress = "gz"))
 
 
 
@@ -370,7 +360,7 @@ an_site_clim_df <- an_site_clim_df %>%
   select(-location_id)
 
 write_rds(an_site_clim_df, 
-          paste0(wdir, "2_output/climate/site_an_clim_58-80.", compress = "gz"))
+          paste0(wdir, "2_output/climate/site_an_clim.", compress = "gz"))
 
 
 # ## Exploring source of dropped sites - seems to be entirely driven by sites for species with no range maps
