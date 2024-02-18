@@ -78,8 +78,7 @@ dendro_df <- dendro_df %>%
 
 
 # 4. Drop data from species without range maps and resulting climatic niche data
-niche_df <- read.csv(paste0(wdir, "2_output/climate/clim_niche.csv")) %>%
-  select(-X)
+niche_df <- read.csv(paste0(wdir, "2_output/climate/clim_niche.csv"))
 niche_species <- niche_df %>% pull(sp_code) %>% unique()
 dendro_species <- dendro_df %>% pull(species_id) %>% unique()
 dendro_df <- dendro_df %>% 
