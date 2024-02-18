@@ -60,41 +60,27 @@ load(clim_file)
 # aet_historic <- rast(aet_historic)
 
 pet_historic <- aet_historic + cwd_historic
-pet_historic <- mean(pet_historic)
+pet_historic <- mean(pet_historic %>% subset(2:80))
 # pet_historic <- mean(pet_historic %>% subset(58:80))
 
-cwd_historic <- mean(cwd_historic)
+cwd_historic <- mean(cwd_historic %>% subset(2:80))
 # cwd_historic <- mean(cwd_historic %>% subset(58:80))
+
+ppt_historic <- mean(ppt_historic %>% subset(2:80))
+tmp_historic <- mean(tmp_historic %>% subset(2:80))
 
 names(cwd_historic) = "cwd"
 names(pet_historic) = "pet"
+names(ppt_historic) = "ppt"
+names(tmp_historic) = "tmp"
 
-
-# # 1. Historic climate raster - using monthly norms
-# # clim_file <- paste0('G:/.shortcut-targets-by-id/10TtqG9P3BY70rcYp-WACmO38J5zBeflA/Treeconomics/Data/replication - original/1_input_processed/climate/HistoricCWD_AETGrids.Rdat')
-# clim_file <- paste0(wdir, '1_input_processed/climate/HistoricCWD_AETGrids.Rdat')
-# load(clim_file)
-# # cwd_historic <- rast(cwd_historic)
-# # aet_historic <- rast(aet_historic)
-# cwd_historic <- sum(cwd_historic)
-# aet_historic <- sum(aet_historic)
-# pet_historic <- aet_historic + cwd_historic
-# names(cwd_historic) = "cwd"
-# names(pet_historic) = "pet"
-# 
-# pet_historic %>% summary()
-# cwd_historic %>% summary()
-
-# 2. Data on historic baseline temp and precip
-temps_historic <- raster(paste0(wdir, "1_input_processed/climate/monthlycrubaseline_tas"))
-names(temps_historic) = "temp"
-temps_historic <- resample(temps_historic, cwd_historic)
 
 # Composite into multilayer spatraster
 cwd_historic <- rast(cwd_historic)
 pet_historic <- rast(pet_historic)
-temps_historic <- rast(temps_historic)
-clim_historic <- rast(list(cwd_historic, pet_historic, temps_historic))
+tmp_historic <- rast(tmp_historic)
+ppt_historic <- rast(ppt_historic)
+clim_historic <- rast(list(cwd_historic, pet_historic, ppt_historic, tmp_historic))
 
 # 3. Site-specific historic climate data
 site_clim_csv <- paste0(wdir, '1_input_processed/climate/essentialcwd_data.csv')
@@ -198,8 +184,10 @@ niche_df <- clim_df %>%
             pet_sd = sd(pet),
             cwd_mean = mean(cwd),
             cwd_sd = sd(cwd),
-            temp_mean = mean(temp),
-            temp_sd = sd(temp))
+            temp_mean = mean(tmp),
+            temp_sd = sd(tmp),
+            ppt_mean = mean(ppt), 
+            ppt_sd = sd(ppt))
 
 
 ## Export species niche description
@@ -281,7 +269,7 @@ site_clim_df <- site_clim_df %>%
   filter(location_id != "CANA323")
 
 ave_site_clim_df <- site_clim_df %>% 
-  filter(year < 1980) %>% 
+  filter(year>1901, year < 1980) %>% 
   group_by(location_id) %>% 
   summarise(cwd.ave = mean(cwd.an),
             pet.ave = mean(pet.an),
