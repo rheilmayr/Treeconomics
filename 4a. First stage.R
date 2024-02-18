@@ -48,6 +48,8 @@ dendro_dir <- paste0(wdir, "1_input_processed/dendro/")
 dendro_df <- read_csv(paste0(dendro_dir, "rwi_long.csv"))
 dendro_df <- dendro_df %>% 
   select(-core_id)
+# %>% 
+#   filter(year > 1957)
 
 ## Combine multiple cores from the same tree
 dendro_df <- dendro_df %>% 
