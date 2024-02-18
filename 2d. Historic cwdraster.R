@@ -177,36 +177,56 @@ for(y in 1:length(sitegroups)){
 for(i in 1:length(sitegroups)){
   temp=fread(paste0(wdir,"1_input_processed/climate/cwd_group",sitegroups[i],".csv"))
   #annual totals
-  temp=temp%>%group_by(site,year)%>%summarize(aet=sum(aet),cwd=sum(cwd))
+  temp=temp%>%group_by(site,year)%>%summarize(aet=sum(aet),cwd=sum(cwd),ppt = sum(ppt), tmean = mean(tmean))
   temp=left_join(temp,sitedata%>%select(lon,lat,site))
   
   if(i==1) cwdhist=temp
   if(i>1) cwdhist=rbind(cwdhist,temp)
 }
 
-cwdgrid=pivot_wider(cwdhist[,c(2,4,5,6)],id_cols=c(lon,lat),names_from=year,values_from=cwd)
-aetgrid=pivot_wider(cwdhist[,c(2,3,5,6)],id_cols=c(lon,lat),names_from=year,values_from=aet)
+cwdgrid=pivot_wider(cwdhist[,c(2,4,7,8)],id_cols=c(lon,lat),names_from=year,values_from=cwd)
+aetgrid=pivot_wider(cwdhist[,c(2,3,7,8)],id_cols=c(lon,lat),names_from=year,values_from=aet)
+pptgrid=pivot_wider(cwdhist[,c(2,5,7,8)],id_cols=c(lon,lat),names_from=year,values_from=ppt)
+tmpgrid=pivot_wider(cwdhist[,c(2,6,7,8)],id_cols=c(lon,lat),names_from=year,values_from=tmean)
 
 cwd_historic=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
 aet_historic=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
+ppt_historic=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
+tmp_historic=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
 
 cwdgrid$cells=cellFromXY(cwd_historic,as.matrix(cwdgrid[,c(1,2)]))
 aetgrid$cells=cellFromXY(aet_historic,as.matrix(aetgrid[,c(1,2)]))
+pptgrid$cells=cellFromXY(ppt_historic,as.matrix(pptgrid[,c(1,2)]))
+tmpgrid$cells=cellFromXY(tmp_historic,as.matrix(tmpgrid[,c(1,2)]))
 
-cwdgrid=as.data.frame(cwdgrid);aetgrid=as.data.frame(aetgrid)
+cwdgrid=as.data.frame(cwdgrid)
+aetgrid=as.data.frame(aetgrid)
+pptgrid=as.data.frame(pptgrid)
+tmpgrid=as.data.frame(tmpgrid)
 
 cwd_historic[cwdgrid$cells]=cwdgrid[,grep(baseyears[1],colnames(cwdgrid))]
 aet_historic[aetgrid$cells]=aetgrid[,grep(baseyears[1],colnames(aetgrid))]
+ppt_historic[pptgrid$cells]=pptgrid[,grep(baseyears[1],colnames(pptgrid))]
+tmp_historic[tmpgrid$cells]=tmpgrid[,grep(baseyears[1],colnames(tmpgrid))]
 
 for(i in 2:length(baseyears)){
   cwdtemp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
   aettemp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
+  ppttemp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
+  tmptemp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
+  
   cwdtemp[cwdgrid$cells]=cwdgrid[,grep(baseyears[i],colnames(cwdgrid))]
   aettemp[aetgrid$cells]=aetgrid[,grep(baseyears[i],colnames(aetgrid))]
+  ppttemp[pptgrid$cells]=pptgrid[,grep(baseyears[i],colnames(pptgrid))]
+  tmptemp[tmpgrid$cells]=tmpgrid[,grep(baseyears[i],colnames(tmpgrid))]
+  
   cwd_historic=addLayer(cwd_historic,cwdtemp)
   aet_historic=addLayer(aet_historic,aettemp)
+  ppt_historic=addLayer(ppt_historic,ppttemp)
+  tmp_historic=addLayer(tmp_historic,tmptemp)
+
   print(i)
 }
-save(cwd_historic,aet_historic,file=paste0(wdir,"1_input_processed/climate/HistoricCWD_AETGrids_Annual.Rdat"))
+save(cwd_historic, aet_historic, ppt_historic, tmp_historic, file=paste0(wdir,"1_input_processed/climate/HistoricCWD_AETGrids_Annual.Rdat"))
 
 
