@@ -101,7 +101,7 @@ dendro_df %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define regression model  -------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-fs_mod <- function(site_data, outcome = "rwi", energy_var = "pet.an", mod_type = "lm"){
+fs_mod <- function(site_data, outcome = "rwi", water_var = "cwd.an", energy_var = "pet.an", mod_type = "lm"){
   failed <- F
   reg_error <- NA
   nobs <- NA
@@ -116,7 +116,7 @@ fs_mod <- function(site_data, outcome = "rwi", energy_var = "pet.an", mod_type =
     # Try to run felm. Typically fails if missing cwd / pet data 
     tryCatch(
       expr = {
-        formula <- as.formula(paste0(outcome, " ~ ", energy_var, " + cwd.an"))
+        formula <- as.formula(paste0(outcome, " ~ ", energy_var, " + ", water_var))
         if (mod_type == "lm"){
           mod <- lm(formula, data = site_data)
         }
@@ -135,15 +135,16 @@ fs_mod <- function(site_data, outcome = "rwi", energy_var = "pet.an", mod_type =
         nobs <- nobs(mod)
         mod <- tidy(mod) %>%
           mutate(term = term %>% str_replace("\\(Intercept\\)", "intercept")) %>% 
-          filter(term %in% c('intercept', 'cwd.an', energy_var)) %>% 
+          filter(term %in% c('intercept', water_var, energy_var)) %>% 
           pivot_wider(names_from = "term", values_from = c("estimate", "std.error", "statistic", "p.value"))
         # mod <- mod %>% 
         #   rename_all(funs(stringr::str_replace_all(., energy_var, 'energy.an')))
-        mod$cov_int_cwd = mod_vcov[c("(Intercept)"), c("cwd.an")]
+        cov_var_name <- paste0("cov_int_", water_var %>% str_replace(".an", ""))
+        mod[[cov_var_name]] = mod_vcov[c("(Intercept)"), c(water_var)]
         cov_var_name <- paste0("cov_int_", energy_var %>% str_replace(".an", ""))
         mod[[cov_var_name]] = mod_vcov[c("(Intercept)"), c(energy_var)]
-        cov_var_name <- paste0("cov_cwd_", energy_var %>% str_replace(".an", ""))
-        mod[[cov_var_name]] = mod_vcov[c("cwd.an"), c(energy_var)]
+        cov_var_name <- paste0(water_var %>% str_replace(".an", ""), energy_var %>% str_replace(".an", ""))
+        mod[[cov_var_name]] = mod_vcov[c(water_var), c(energy_var)]
         mod$r2 = mod_sum$r.squared
       },
       error = function(e){ 
@@ -167,45 +168,50 @@ site_df <- dendro_df %>%
   # drop_na() %>% 
   rename(cwd.an = cwd.an.spstd,
          pet.an = pet.an.spstd,
-         temp.an = temp.an.spstd) %>% 
+         ppt.an = ppt.an.spstd) %>% 
   group_by(collection_id) %>%
   add_tally(name = 'nobs') %>% 
   # filter(nobs>10) %>% 
   nest()
 
 
-fs_mod_bl <- partial(fs_mod, outcome = "rwi", energy_var = "pet.an", mod_type = "lm")
+fs_mod_bl <- partial(fs_mod, outcome = "rwi", water_var = "cwd.an", energy_var = "pet.an", mod_type = "lm")
+fs_mod_ppt <- partial(fs_mod, outcome = "rwi", water_var = "ppt.an", energy_var = "pet.an", mod_type = "lm")
+
 fs_mod_nb <- partial(fs_mod, outcome = "rwi_nb", energy_var = "pet.an", mod_type = "lm")
 fs_mod_ar <- partial(fs_mod, outcome = "rwi_ar", energy_var = "pet.an", mod_type = "lm")
 fs_mod_temp <- partial(fs_mod, outcome = "rwi", energy_var = "temp.an", mod_type = "lm")
 fs_mod_re <- partial(fs_mod, outcome = "rwi", energy_var = "pet.an", mod_type = "lme")
 
-# site_df <- site_df %>% 
-#   mutate(fs_result = map(data, .f = fs_mod_bl),
-#          fs_result_nb = map(data, .f = fs_mod_nb),
-#          fs_result_ar = map(data, .f = fs_mod_ar),
-#          fs_result_temp = map(data, .f = fs_mod_temp),
-#          fs_result_re = map(data, .f = fs_mod_re))
-
 site_df <- site_df %>% 
-  mutate(fs_result = map(data, .f = fs_mod_bl))
+  mutate(fs_result = map(data, .f = fs_mod_bl),
+         fs_result_ppt = map(data, .f = fs_mod_ppt))
 
 
 data_df <- site_df %>% 
   select(collection_id,data)
 
+## Primary first stage results using CWD and PET
 fs_df <- site_df %>% 
   select(collection_id, fs_result) %>% 
   unnest(fs_result)
-
 fs_df <- fs_df[which(!(fs_df %>% pull(mod) %>% is.na())),]
 fs_df <- fs_df %>% 
-  unnest(mod)
-
-fs_df <- fs_df %>% 
+  unnest(mod) %>% 
   select(-error)
-
 fs_df %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_std.csv'))
+
+
+## Repeat using ppt in place of cwd
+fs_df <- site_df %>% 
+  select(collection_id, fs_result_ppt) %>% 
+  unnest(fs_result_ppt)
+fs_df <- fs_df[which(!(fs_df %>% pull(mod) %>% is.na())),]
+fs_df <- fs_df %>% 
+  unnest(mod) %>% 
+  select(-error)
+fs_df %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_ppt_std.csv'))
+
 
 
 ## Repeat using results from nb detrended data
