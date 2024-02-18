@@ -75,6 +75,16 @@ names(ppt_historic) = "ppt"
 names(tmp_historic) = "tmp"
 
 
+# 2. Add terraclimate data for comparison
+tc_pet <- read_csv(paste0(wdir,"0_raw/TerraClimate/itrdbsites_pet.csv"))
+tc_cwd <- read_csv(paste0(wdir,"0_raw/TerraClimate/itrdbsites_def.csv"))
+tc_ppt <- read_csv(paste0(wdir,"0_raw/TerraClimate/itrdbsites_ppt.csv"))
+site_clim_df <- tc_pet %>% 
+  left_join(tc_cwd, by = c("collection_id", "Month", "year")) %>% 
+  left_join(tc_ppt, by = c("collection_id", "Month", "year")) %>% 
+  rename(location_id = collection_id)
+
+
 # Composite into multilayer spatraster
 cwd_historic <- rast(cwd_historic)
 pet_historic <- rast(pet_historic)
