@@ -134,6 +134,7 @@ site_df$tmn_corrected=site_df$tmn+site_df$tmin_correction
 # Unit conversions
 site_df$swc=site_df$swc/10 #convert swc from mm to cm
 site_df$tmean=(site_df$tmn_corrected+site_df$tmx_corrected)/2 
+site_df$ppt=site_df$pre_corrected
 site_df$slope <- site_df$slope * 57.2958 # convert slope from radians to degrees
 site_df$aspect <- site_df$aspect * 57.2958 # convert aspect from radians to degrees
 
