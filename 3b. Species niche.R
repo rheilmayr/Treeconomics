@@ -60,7 +60,7 @@ load(clim_file)
 # aet_historic <- rast(aet_historic)
 
 pet_historic <- aet_historic + cwd_historic
-pet_historic <- mean(pet_historic)
+# pet_historic <- mean(pet_historic)
 pet_historic <- mean(pet_historic %>% subset(58:80))
 
 # cwd_historic <- mean(cwd_historic)
