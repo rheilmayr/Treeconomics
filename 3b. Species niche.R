@@ -236,19 +236,21 @@ sp_standardize <- function(val, sp_mean, sp_sd){
   return(std_val)
 }
 
-sp_std_historic_df <- function(hist_clim_vals, pet_mean, pet_sd, cwd_mean, cwd_sd, temp_mean, temp_sd){
+sp_std_historic_df <- function(hist_clim_vals, pet_mean, pet_sd, cwd_mean, cwd_sd, temp_mean, temp_sd, ppt_mean, ppt_sd){
   hist_clim_vals <- hist_clim_vals %>% 
     mutate_at(vars(starts_with("cwd")), 
               ~sp_standardize(.x, cwd_mean, cwd_sd)) %>% 
     mutate_at(vars(starts_with("pet")), 
               ~sp_standardize(.x, pet_mean, pet_sd)) %>% 
     mutate_at(vars(starts_with("temp")), 
-              ~sp_standardize(.x, temp_mean, temp_sd))
+              ~sp_standardize(.x, temp_mean, temp_sd)) %>% 
+    mutate_at(vars(starts_with("ppt")), 
+              ~sp_standardize(.x, ppt_mean, ppt_sd))
   return(hist_clim_vals)
 }
 
 
-sp_std_future_df <- function(cmip_df, hist_clim_vals, pet_mean, pet_sd, cwd_mean, cwd_sd, temp_mean, temp_sd){
+sp_std_future_df <- function(cmip_df, hist_clim_vals, pet_mean, pet_sd, cwd_mean, cwd_sd, temp_mean, temp_sd, ppt_mean, ppt_sd){
   valid_locations <- hist_clim_vals %>% select(x,y)
   cmip_df <- valid_locations %>% 
     left_join(cmip_df, by = c("x", "y"))
@@ -258,7 +260,9 @@ sp_std_future_df <- function(cmip_df, hist_clim_vals, pet_mean, pet_sd, cwd_mean
     mutate_at(vars(starts_with("pet")), 
               ~sp_standardize(.x, pet_mean, pet_sd)) %>% 
     mutate_at(vars(starts_with("temp")), 
-              ~sp_standardize(.x, temp_mean, temp_sd))
+              ~sp_standardize(.x, temp_mean, temp_sd)) %>% 
+    mutate_at(vars(starts_with("ppt")), 
+              ~sp_standardize(.x, ppt_mean, ppt_sd))
   return(cmip_df)
 }
 
@@ -293,6 +297,7 @@ site_clim_df = site_clim_df %>%
             cwd.an = sum(cwd),
             pet.an = sum((aet+cwd)),
             temp.an = mean(tmean),
+            ppt.an = mean(ppt),
             .groups = "drop")
 
 
@@ -309,13 +314,15 @@ ave_site_clim_df <- site_clim_df %>%
             cwd.sd = sd(cwd.an),
             pet.sd = sd(pet.an),
             temp.ave = mean(temp.an),
-            temp.sd = sd(temp.an)) %>% 
+            temp.sd = sd(temp.an),
+            ppt.ave = mean(ppt.an),
+            ppt.sd = sd(ppt.an)) %>% 
   ungroup()
 
 spstd_site_clim_df <- site_smry %>% 
   left_join(ave_site_clim_df, by = "location_id") %>% 
   group_by(sp_code) %>% 
-  nest(data = c(collection_id, cwd.ave, pet.ave, temp.ave)) %>% 
+  nest(data = c(collection_id, cwd.ave, pet.ave, temp.ave, ppt.ave)) %>% 
   left_join(niche_df, by = ("sp_code")) %>%
   drop_na() # Dropping some species due to NA niche data
 
@@ -326,21 +333,23 @@ spstd_site_clim_df <- spstd_site_clim_df %>%
                                       cwd_mean = cwd_mean,
                                       cwd_sd = cwd_sd,
                                       temp_mean = temp_mean,
-                                      temp_sd = temp_sd),
+                                      temp_sd = temp_sd,
+                                      ppt_mean = ppt_mean,
+                                      ppt_sd = ppt_sd),
                                  .f = sp_std_historic_df,
                                  .options = furrr_options(packages = c( "dplyr"))))
 
 spstd_site_clim_df <- spstd_site_clim_df %>% 
   unnest(site_clim) %>% 
-  rename(cwd.spstd = cwd.ave, pet.spstd = pet.ave, temp.spstd = temp.ave) %>% 
+  rename(cwd.spstd = cwd.ave, pet.spstd = pet.ave, temp.spstd = temp.ave, ppt.spstd = ppt.ave) %>% 
   mutate(cwd.sd = cwd.sd / cwd_sd,
          pet.sd = pet.sd / pet_sd,
          temp.sd = temp.sd / temp_sd) %>% 
   ungroup() %>% 
-  select(collection_id, location_id, cwd.spstd, pet.spstd, temp.spstd, cwd.sd, pet.sd, temp.sd)
+  select(collection_id, location_id, cwd.spstd, pet.spstd, temp.spstd, ppt.spstd, cwd.sd, pet.sd, temp.sd)
 
 spstd_site_clim_df <- spstd_site_clim_df %>% 
-  left_join(ave_site_clim_df %>% select(location_id, cwd.ave, pet.ave, temp.ave), by = "location_id")
+  left_join(ave_site_clim_df %>% select(location_id, cwd.ave, pet.ave, temp.ave, ppt.ave), by = "location_id")
 
 spstd_site_clim_df <- spstd_site_clim_df %>% 
   select(-location_id)
@@ -367,15 +376,17 @@ an_site_clim_df <- an_site_clim_df %>%
                                       cwd_mean = cwd_mean,
                                       cwd_sd = cwd_sd,
                                       temp_mean = temp_mean,
-                                      temp_sd = temp_sd),
+                                      temp_sd = temp_sd,
+                                      ppt_mean = ppt_mean,
+                                      ppt_sd = ppt_sd),
                                  .f = sp_std_historic_df,
                                  .options = furrr_options(packages = c( "dplyr"))))
 
 an_site_clim_df <- an_site_clim_df %>% 
   unnest(site_clim) %>% 
-  rename(cwd.an.spstd = cwd.an, pet.an.spstd = pet.an, temp.an.spstd = temp.an) %>% 
+  rename(cwd.an.spstd = cwd.an, pet.an.spstd = pet.an, temp.an.spstd = temp.an, ppt.an.spstd = ppt.an) %>% 
   ungroup() %>% 
-  select(-aet.an, -pet_mean, -pet_sd, -cwd_mean, -cwd_sd, -temp_mean, -temp_sd, -data, -sp_code)
+  select(-aet.an, -pet_mean, -pet_sd, -cwd_mean, -cwd_sd, -temp_mean, -temp_sd, -ppt_mean, -data, -sp_code)
 
 an_site_clim_df <- an_site_clim_df %>%
   select(-location_id)
