@@ -169,7 +169,7 @@ sitegroups=1:61
 
 for(y in 1:length(sitegroups)){
   groupdat=dat%>%filter(sitegroup==sitegroups[y])
-  test=cwd_function(site=as.factor(groupdat$site),slope=groupdat$slope,latitude=groupdat$lat,foldedaspect=groupdat$aspect,ppt=groupdat$precip,tmean=groupdat$temp,month=groupdat$month,soilawc=groupdat$swc,year=groupdat$year,type="annual")
+  test=cwd_function(site=as.factor(groupdat$site),slope=groupdat$slope,latitude=groupdat$lat,aspect=groupdat$aspect,ppt=groupdat$precip,tmean=groupdat$temp,month=groupdat$month,soilawc=groupdat$swc,year=groupdat$year,type="annual")
   fwrite(test,file=paste0(wdir,"1_input_processed/climate/cwd_group",sitegroups[y],".csv"))
   print(y)
 }

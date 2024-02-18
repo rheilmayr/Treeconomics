@@ -45,7 +45,7 @@ data$tmx = na_if(data$tmx,-999)
 
 # Add corrections from World Clim to CWD to get downscaled variables
 data$pre_corrected=data$pre*data$pre_correction
-data$pre_corrected=ifelse(data$pre_corrected < 0, 0, data$pre_corrected)
+# data$pre_corrected=ifelse(data$pre_corrected < 0, 0, data$pre_corrected)
 data$tmx_corrected=data$tmx+data$tmax_correction
 data$tmn_corrected=data$tmn+data$tmin_correction
 
@@ -67,7 +67,7 @@ clusterExport(cl,c("data","setorder"))
 registerDoParallel(cl)
 
 cwd_data<-cwd_function(site=data$site_id,slope=data$slope,latitude=data$latitude,
-                       foldedaspect=data$aspect,ppt=data$pre_corrected,
+                       aspect=data$aspect,ppt=data$pre_corrected,
                        tmean=data$tmean,month=data$month,year=data$year,
                        soilawc=data$swc,type="annual")
 # fwrite(cwd_data,file=paste0(wdir,"out/climate/cwd_data_200620.csv"))

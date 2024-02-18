@@ -34,7 +34,7 @@ library(doParallel)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define function -------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-cwd_function <- function(site,slope,latitude,foldedaspect,ppt,tmean,month,soilawc=200,year=NULL,type=c('normal','annual')) {
+cwd_function <- function(site,slope,latitude,aspect,ppt,tmean,month,soilawc=200,year=NULL,type=c('normal','annual')) {
   
   # Packages
   require(data.table)
@@ -42,20 +42,23 @@ cwd_function <- function(site,slope,latitude,foldedaspect,ppt,tmean,month,soilaw
   
   #R SCRIPT
   if (type =="annual"){
-    data<-as.data.table(cbind(as.character(site),slope,latitude,foldedaspect,ppt,tmean,month,year))[,soilawc:=soilawc]
-    colnames(data)<-c("site","slope","latitude","foldedaspect","ppt","tmean","month","year","soilawc")}
+    data<-as.data.table(cbind(as.character(site),slope,latitude,aspect,ppt,tmean,month,year))[,soilawc:=soilawc]
+    colnames(data)<-c("site","slope","latitude","aspect","ppt","tmean","month","year","soilawc")}
   
   if (type =="normal"){
-    data<-as.data.table(cbind(site,slope,latitude,foldedaspect,ppt,tmean,month))[,soilawc:=soilawc]
-    colnames(data)<-c("site","slope","latitude","foldedaspect","ppt","tmean","month","soilawc")
+    data<-as.data.table(cbind(site,slope,latitude,aspect,ppt,tmean,month))[,soilawc:=soilawc]
+    colnames(data)<-c("site","slope","latitude","aspect","ppt","tmean","month","soilawc")
   }
   data$site<-as.character(data$site)
   data$slope<-as.numeric(as.character(data$slope))
   data$latitude<-as.numeric(as.character(data$latitude))
-  data$foldedaspect<-as.numeric(as.character(data$foldedaspect))
+  data$aspect<-as.numeric(as.character(data$aspect))
   data$ppt<-as.numeric(as.character(data$ppt))
   data$tmean<-as.numeric(as.character(data$tmean))
   data$month<-as.numeric(as.character(data$month))
+  
+  data$foldedaspect <- ifelse(data$latitude>0,180 - ( data$aspect - 225), 180 - (data$aspect - 315)) # convert aspect (from radians to degrees) into folded aspect, if latitude <0 (southern hemisphere) maximum heat exposure in NW direction (315 degrees) else in SW direction (225 degrees).
+
   
   ### for 30 year normal data only, we'll create iterations so that way the water storage can carry over from one year to the next
   if (type == "normal"){year<-c(rep(1,length(data$site)),rep(2,length(data$site)),rep(3,length(data$site)),rep(4,length(data$site)),rep(5,length(data$site)),rep(6,length(data$site)),rep(7,length(data$site)),rep(8,length(data$site)),rep(9,length(data$site)),rep(10,length(data$site)))
@@ -97,7 +100,8 @@ cwd_function <- function(site,slope,latitude,foldedaspect,ppt,tmean,month,soilaw
     site<-as.character(sitedat$site)
     year<-as.numeric(as.character(sitedat$year))
     month<-as.numeric(as.character(sitedat$month))
-    mergedat<-cbind(site,year,month,packm)
+    meltm <- sitedat$fm *(sitedat$snowm + data.table::shift(packm,1L,type="lag",fill=0))
+    mergedat<-cbind(site,year,month,packm,meltm)
     # mergedata<-rbind(mergedata,mergedat)
   }
   mergedt<-as.data.table(mergedata)
@@ -106,7 +110,7 @@ cwd_function <- function(site,slope,latitude,foldedaspect,ppt,tmean,month,soilaw
   mergedt$site<-as.character(mergedt$site)
   data<-merge(data,mergedt,by=c("site","year","month"))
   data$packm<-as.numeric(as.character(data$packm))
-  data[,meltm:=fm*(snowm+data.table::shift(packm,1L,type="lag",fill=0))]
+  data$meltm<-as.numeric(as.character(data$meltm))
   data[,wm:=rainm+meltm]
   data[month==1 | month==3 |month==5|month==7|month==8|month==10|month==12,days:=31]
   data[month==4 | month==6 |month==9|month==11,days:=30]
