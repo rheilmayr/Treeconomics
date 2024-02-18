@@ -74,17 +74,6 @@ names(pet_historic) = "pet"
 names(ppt_historic) = "ppt"
 names(tmp_historic) = "tmp"
 
-
-# 2. Add terraclimate data for comparison
-tc_pet <- read_csv(paste0(wdir,"0_raw/TerraClimate/itrdbsites_pet.csv"))
-tc_cwd <- read_csv(paste0(wdir,"0_raw/TerraClimate/itrdbsites_def.csv"))
-tc_ppt <- read_csv(paste0(wdir,"0_raw/TerraClimate/itrdbsites_ppt.csv"))
-site_clim_df <- tc_pet %>% 
-  left_join(tc_cwd, by = c("collection_id", "Month", "year")) %>% 
-  left_join(tc_ppt, by = c("collection_id", "Month", "year")) %>% 
-  rename(location_id = collection_id)
-
-
 # Composite into multilayer spatraster
 cwd_historic <- rast(cwd_historic)
 pet_historic <- rast(pet_historic)
@@ -92,12 +81,33 @@ tmp_historic <- rast(tmp_historic)
 ppt_historic <- rast(ppt_historic)
 clim_historic <- rast(list(cwd_historic, pet_historic, ppt_historic, tmp_historic))
 
+
+# 2. Add terraclimate data for comparison
+cwd_tc <- rast(paste0(wdir,"0_raw/TerraClimate/TerraClimate19611990_def.nc")) %>% 
+  sum()
+pet_tc <- rast(paste0(wdir,"0_raw/TerraClimate/TerraClimate19611990_pet.nc")) %>% 
+  sum()
+ppt_tc <- rast(paste0(wdir,"0_raw/TerraClimate/TerraClimate19611990_ppt.nc")) %>% 
+  sum()
+clim_tc <- rast(list("cwd" = cwd_tc, "pet" = pet_tc, "ppt" = ppt_tc))
+
+
 # 3. Site-specific historic climate data
 site_clim_csv <- paste0(wdir, '1_input_processed/climate/essentialcwd_data.csv')
 site_clim_df <- read_csv(site_clim_csv)
 site_clim_df <- site_clim_df %>% 
   mutate("site_id" = as.character(site)) %>% 
   rename(location_id = site_id)
+
+# tc_pet <- read_csv(paste0(wdir,"0_raw/TerraClimate/itrdbsites_pet.csv"))
+# tc_cwd <- read_csv(paste0(wdir,"0_raw/TerraClimate/itrdbsites_def.csv"))
+# tc_ppt <- read_csv(paste0(wdir,"0_raw/TerraClimate/itrdbsites_ppt.csv"))
+# site_clim_df <- tc_pet %>% 
+#   left_join(tc_cwd, by = c("collection_id", "Month", "year")) %>% 
+#   left_join(tc_ppt, by = c("collection_id", "Month", "year")) %>% 
+#   rename(location_id = collection_id)
+
+
 
 # 4. Load species information for sites
 site_smry <- read_csv(paste0(wdir, '1_input_processed/dendro/site_summary.csv'))
@@ -151,7 +161,7 @@ rm(aet_raster)
 # Summarize species niches -----------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Pull and organize climate distribution for species
-pull_clim <- function(spp_code){
+pull_clim <- function(spp_code, clim_raster){
   print(spp_code)
   
   # Pull relevant range map
@@ -159,13 +169,16 @@ pull_clim <- function(spp_code){
     filter(sp_code == spp_code)
   
   # Pull clim values
-  clim_vals <- clim_historic %>% 
+  clim_vals <- clim_raster %>% 
     mask(mask = sp_range, touches = TRUE) %>% 
     as.data.frame(xy = TRUE) %>% 
     drop_na()
   
   return(clim_vals)
 }
+
+pull_clim_base <- partial(.f = pull_clim, clim_raster = clim_historic)
+pull_clim_tc <- partial(.f = pull_clim, clim_raster = clim_tc)
 
 species_list <- range_sf %>%
   pull(sp_code) %>% 
@@ -176,15 +189,7 @@ species_list <- range_sf %>%
   drop_na()
 
 clim_df <- species_list %>% 
-  mutate(clim_vals = map(sp_code,.f = pull_clim))
-
-
-# clim_df <- species_list %>% 
-#   mutate(clim_vals = future_map(sp_code, 
-#                                 .f = pull_clim,
-#                                 .options = furrr_options(packages = c( "dplyr", "raster", "sf")),
-#                                 .progress = TRUE))
-
+  mutate(clim_vals = map(sp_code,.f = pull_clim_base))
 
 ## Summarize mean and sd of each species' climate
 niche_df <- clim_df %>% 
@@ -203,6 +208,22 @@ niche_df <- clim_df %>%
 ## Export species niche description
 write_csv(niche_df, paste0(wdir, "2_output/climate/clim_niche.csv"))
 niche_df <- read_csv(paste0(wdir, "2_output/climate/clim_niche.csv"))
+
+
+## Repeat for terraclimate data
+clim_df_tc <- species_list %>% 
+  mutate(clim_vals = map(sp_code,.f = pull_clim_tc))
+niche_df_tc <- clim_df_tc %>% 
+  unnest(clim_vals) %>% 
+  group_by(sp_code) %>% 
+  summarize(pet_mean = mean(pet),
+            pet_sd = sd(pet),
+            cwd_mean = mean(cwd),
+            cwd_sd = sd(cwd),
+            ppt_mean = mean(ppt), 
+            ppt_sd = sd(ppt))
+write_csv(niche_df_tc, paste0(wdir, "2_output/climate/clim_niche_tc.csv"))
+niche_df_tc <- read_csv(paste0(wdir, "2_output/climate/clim_niche_tc.csv"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
