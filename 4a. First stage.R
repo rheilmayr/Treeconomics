@@ -106,11 +106,11 @@ fs_mod <- function(site_data, outcome = "rwi", water_var = "cwd.an", energy_var 
   reg_error <- NA
   nobs <- NA
   ntrees <- site_data %>% select(tree) %>%  n_distinct()
-  no_cwd_var <- (site_data %>% select(cwd.an) %>% n_distinct() == 1)
-  no_pet_var <- (site_data %>% select(energy_var) %>% n_distinct() == 1)
+  no_cwd_var <- (site_data %>% select(all_of(water_var)) %>% n_distinct() == 1)
+  no_pet_var <- (site_data %>% select(all_of(energy_var)) %>% n_distinct() == 1)
   
   if (no_cwd_var | no_pet_var) {
-    message(paste0("Site has no variation in cwd.an or ", energy_var))
+    message(paste0("Site has no variation in ", water_var, " or ", energy_var))
     failed <- T
   } else{
     # Try to run felm. Typically fails if missing cwd / pet data 
@@ -166,17 +166,19 @@ fs_mod <- function(site_data, outcome = "rwi", water_var = "cwd.an", energy_var 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 site_df <- dendro_df %>% 
   # drop_na() %>% 
-  rename(cwd.an = cwd.an.spstd,
-         pet.an = pet.an.spstd,
-         ppt.an = ppt.an.spstd) %>% 
+  # rename(cwd.an = cwd.an.spstd,
+  #        pet.an = pet.an.spstd,
+  #        ppt.an = ppt.an.spstd) %>% 
   group_by(collection_id) %>%
   add_tally(name = 'nobs') %>% 
   # filter(nobs>10) %>% 
   nest()
 
 
-fs_mod_bl <- partial(fs_mod, outcome = "rwi", water_var = "cwd.an", energy_var = "pet.an", mod_type = "lm")
-fs_mod_ppt <- partial(fs_mod, outcome = "rwi", water_var = "ppt.an", energy_var = "pet.an", mod_type = "lm")
+fs_mod_bl <- partial(fs_mod, outcome = "rwi", water_var = "cwd.an.spstd", energy_var = "pet.an.spstd", mod_type = "lm")
+fs_mod_ppt <- partial(fs_mod, outcome = "rwi", water_var = "ppt.an.spstd", energy_var = "pet.an.spstd", mod_type = "lm")
+fs_mod_tc <- partial(fs_mod, outcome = "rwi", water_var = "cwd.an.spstd.tc", energy_var = "pet.an.spstd.tc", mod_type = "lm")
+
 
 fs_mod_nb <- partial(fs_mod, outcome = "rwi_nb", energy_var = "pet.an", mod_type = "lm")
 fs_mod_ar <- partial(fs_mod, outcome = "rwi_ar", energy_var = "pet.an", mod_type = "lm")
@@ -185,7 +187,8 @@ fs_mod_re <- partial(fs_mod, outcome = "rwi", energy_var = "pet.an", mod_type = 
 
 site_df <- site_df %>% 
   mutate(fs_result = map(data, .f = fs_mod_bl),
-         fs_result_ppt = map(data, .f = fs_mod_ppt))
+         fs_result_ppt = map(data, .f = fs_mod_ppt),
+         fs_result_tc = map(data, .f = fs_mod_tc))
 
 
 data_df <- site_df %>% 
@@ -211,6 +214,17 @@ fs_df <- fs_df %>%
   unnest(mod) %>% 
   select(-error)
 fs_df %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_ppt_std.csv'))
+
+
+## Repeat using terraclimate data
+fs_df <- site_df %>% 
+  select(collection_id, fs_result_tc) %>% 
+  unnest(fs_result_tc)
+fs_df <- fs_df[which(!(fs_df %>% pull(mod) %>% is.na())),]
+fs_df <- fs_df %>% 
+  unnest(mod) %>% 
+  select(-error)
+fs_df %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_tc_std.csv'))
 
 
 
