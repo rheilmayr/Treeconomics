@@ -58,9 +58,14 @@ clim_file <- paste0(wdir, '1_input_processed/climate/HistoricCWD_AETGrids_Annual
 load(clim_file)
 # cwd_historic <- rast(cwd_historic)
 # aet_historic <- rast(aet_historic)
-cwd_historic <- mean(cwd_historic)
-aet_historic <- mean(aet_historic)
+
 pet_historic <- aet_historic + cwd_historic
+pet_historic <- mean(pet_historic)
+pet_historic <- mean(pet_historic %>% subset(58:80))
+
+# cwd_historic <- mean(cwd_historic)
+cwd_historic <- mean(cwd_historic %>% subset(58:80))
+
 names(cwd_historic) = "cwd"
 names(pet_historic) = "pet"
 
