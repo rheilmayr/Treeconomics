@@ -213,8 +213,8 @@ niche_df <- clim_df %>%
 
 
 ## Export species niche description
-write_csv(niche_df, paste0(wdir, "2_output/climate/clim_niche.csv"))
-niche_df <- read_csv(paste0(wdir, "2_output/climate/clim_niche.csv"))
+write_csv(niche_df, paste0(wdir, "2_output/climate/clim_niche_58_80.csv"))
+niche_df <- read_csv(paste0(wdir, "2_output/climate/clim_niche_58_80.csv"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -335,7 +335,7 @@ spstd_site_clim_df <- spstd_site_clim_df %>%
   select(-location_id)
 
 write_rds(spstd_site_clim_df, 
-          paste0(wdir, "2_output/climate/site_ave_clim.", compress = "gz"))
+          paste0(wdir, "2_output/climate/site_ave_clim_58-80.", compress = "gz"))
 
 
 
@@ -370,7 +370,7 @@ an_site_clim_df <- an_site_clim_df %>%
   select(-location_id)
 
 write_rds(an_site_clim_df, 
-          paste0(wdir, "2_output/climate/site_an_clim.", compress = "gz"))
+          paste0(wdir, "2_output/climate/site_an_clim_58-80.", compress = "gz"))
 
 
 # ## Exploring source of dropped sites - seems to be entirely driven by sites for species with no range maps
