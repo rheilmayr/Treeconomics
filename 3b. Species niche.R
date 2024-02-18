@@ -377,10 +377,6 @@ spstd_site_clim_df <- spstd_site_clim_df %>%
   select(collection_id, cwd.spstd, pet.spstd, temp.spstd, ppt.spstd, 
          cwd.spstd.tc, pet.spstd.tc, ppt.spstd.tc)
 
-# Quick check of correlation across datasets
-summary(lm(cwd.spstd ~ cwd.spstd.tc, data = spstd_site_clim_df))
-summary(lm(ppt.spstd ~ ppt.spstd.tc, data = spstd_site_clim_df))
-
 spstd_site_clim_df <- spstd_site_clim_df %>% 
   left_join(ave_site_clim_df %>% select(collection_id, cwd.ave, pet.ave, temp.ave, ppt.ave, tc_cwd.ave, tc_pet.ave, tc_ppt.ave), by = "collection_id") %>% 
   rename(cwd.ave.tc = tc_cwd.ave, pet.ave.tc = tc_pet.ave, ppt.ave.tc = tc_ppt.ave)
@@ -430,6 +426,13 @@ an_site_clim_df <- an_site_clim_df %>%
 
 write_rds(an_site_clim_df, 
           paste0(wdir, "2_output/climate/site_an_clim.", compress = "gz"))
+
+# Quick check of correlation across datasets
+summary(lm(cwd.spstd ~ cwd.spstd.tc, data = spstd_site_clim_df))
+summary(lm(ppt.spstd ~ ppt.spstd.tc, data = spstd_site_clim_df))
+
+summary(lm(cwd.an.spstd ~ cwd.an.spstd.tc, data = an_site_clim_df))
+summary(lm(ppt.an.spstd ~ ppt.an.spstd.tc, data = an_site_clim_df))
 
 
 # ## Exploring source of dropped sites - seems to be entirely driven by sites for species with no range maps
