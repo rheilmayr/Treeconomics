@@ -17,7 +17,8 @@ wdir <- 'remote/'
 site_df <- fread(paste0(wdir,"1_input_processed/climate/sitedataforcwd.csv"))
 lat_df <- site_df %>% 
   select(collection_id = site_id, latitude) %>% 
-  unique()
+  unique() %>% 
+  as_tibble()
 
 
 # 2. Treecon climate data
@@ -115,6 +116,8 @@ clim_df %>%
   geom_point(alpha = .3) +
   geom_smooth() +
   geom_abline(intercept = 0, slope = 1, size = 0.5, color = "red")
+
+
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
