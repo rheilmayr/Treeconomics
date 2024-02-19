@@ -87,6 +87,20 @@ dendro_df <- dendro_df %>%
   filter(species_id %in% niche_species)
 
 
+# count <- dendro_df %>% 
+#   select(collection_id, year, cwd.an.spstd, pet.an.spstd) %>% 
+#   drop_na() %>% 
+#   group_by(collection_id) %>% 
+#   summarize(count = n_distinct(year))
+# count %>% summary()
+# 
+# count <- dendro_df %>% 
+#   select(collection_id, year, cwd.an.spstd.tc, pet.an.spstd.tc) %>% 
+#   drop_na() %>% 
+#   group_by(collection_id) %>% 
+#   summarize(count = n_distinct(year))
+# count %>% summary()
+# (count$count < 10) %>% sum()
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Export example sites for presentations  ------------------------------
@@ -164,20 +178,22 @@ fs_mod <- function(site_data, outcome = "rwi", water_var = "cwd.an", energy_var 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Run site-level regressions --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-site_df <- dendro_df %>% 
+site_df <- dendro_df %>%
+  filter(year>1957) %>% 
   # drop_na() %>% 
-  # rename(cwd.an = cwd.an.spstd,
-  #        pet.an = pet.an.spstd,
-  #        ppt.an = ppt.an.spstd) %>% 
+  rename(cwd.an = cwd.an.spstd,
+         pet.an = pet.an.spstd,
+         ppt.an = ppt.an.spstd) %>%
   group_by(collection_id) %>%
   add_tally(name = 'nobs') %>% 
   # filter(nobs>10) %>% 
   nest()
 
 
-fs_mod_bl <- partial(fs_mod, outcome = "rwi", water_var = "cwd.an.spstd", energy_var = "pet.an.spstd", mod_type = "lm")
-fs_mod_ppt <- partial(fs_mod, outcome = "rwi", water_var = "ppt.an.spstd", energy_var = "pet.an.spstd", mod_type = "lm")
+fs_mod_bl <- partial(fs_mod, outcome = "rwi", water_var = "cwd.an", energy_var = "pet.an", mod_type = "lm")
+fs_mod_ppt <- partial(fs_mod, outcome = "rwi", water_var = "ppt.an", energy_var = "pet.an", mod_type = "lm")
 fs_mod_tc <- partial(fs_mod, outcome = "rwi", water_var = "cwd.an.spstd.tc", energy_var = "pet.an.spstd.tc", mod_type = "lm")
+fs_mod_tc_ppt <- partial(fs_mod, outcome = "rwi", water_var = "ppt.an.spstd.tc", energy_var = "pet.an.spstd.tc", mod_type = "lm")
 
 
 fs_mod_nb <- partial(fs_mod, outcome = "rwi_nb", energy_var = "pet.an", mod_type = "lm")
@@ -188,7 +204,8 @@ fs_mod_re <- partial(fs_mod, outcome = "rwi", energy_var = "pet.an", mod_type = 
 site_df <- site_df %>% 
   mutate(fs_result = map(data, .f = fs_mod_bl),
          fs_result_ppt = map(data, .f = fs_mod_ppt),
-         fs_result_tc = map(data, .f = fs_mod_tc))
+         fs_result_tc = map(data, .f = fs_mod_tc),
+         fs_result_ppt_tc = map(data, .f = fs_mod_tc_ppt))
 
 
 data_df <- site_df %>% 
@@ -225,6 +242,16 @@ fs_df <- fs_df %>%
   unnest(mod) %>% 
   select(-error)
 fs_df %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_tc_std.csv'))
+
+## Repeat using terraclimate precip data
+fs_df <- site_df %>% 
+  select(collection_id, fs_result_ppt_tc) %>% 
+  unnest(fs_result_ppt_tc)
+fs_df <- fs_df[which(!(fs_df %>% pull(mod) %>% is.na())),]
+fs_df <- fs_df %>% 
+  unnest(mod) %>% 
+  select(-error)
+fs_df %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_ppt_tc_std.csv'))
 
 
 
