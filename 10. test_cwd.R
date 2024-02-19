@@ -45,6 +45,9 @@ tc_df <- tc_month_df %>%
   summarise(pet_tc = sum(pet_tc),
             cwd_tc = sum(cwd_tc))
 
+ave_site_clim <- read_rds(paste0(wdir, "2_output/climate/site_ave_clim.gz"))
+
+
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Compare data --------------------------------------------------------------
@@ -72,7 +75,7 @@ clim_df <- clim_df %>%
 clim_df <- clim_df %>% 
   ungroup()
 
-mod <- lm(cwd ~ cwd_tc, clim_df)
+mod <- lm(cwd_tc ~ cwd, clim_df)
 summary(mod)
 
 mod <- feols(cwd ~ cwd_tc | collection_id, clim_df)
@@ -93,30 +96,88 @@ summary(mod)
 mod <- lm(pet_tc ~ pet_spei, clim_df)
 summary(mod)
 
+
 clim_df %>%
-  sample_n(40000) %>% 
+  sample_n(30000) %>% 
   ggplot(aes(y = pet_tc, x = pet)) +
   geom_point(alpha = .3) +
   geom_smooth() +
   geom_abline(intercept = 0, slope = 1, size = 0.5, color = "red")
 
 clim_df %>%
-  sample_n(40000) %>% 
+  sample_n(30000) %>% 
   ggplot(aes(y = pet_spei, x = pet)) +
   geom_point(alpha = .3) +
   geom_smooth() +
-  geom_abline(intercept = 0, slope = 1, size = 0.5, color = "red") +
-  ylim(0,300) +
-  xlim(0,300)
+  geom_abline(intercept = 0, slope = 1, size = 0.5, color = "red")
+
+clim_df %>%
+  sample_n(30000) %>% 
+  ggplot(aes(y = pet_tc, x = pet_spei)) +
+  geom_point(alpha = .3) +
+  geom_smooth() +
+  geom_abline(intercept = 0, slope = 1, size = 0.5, color = "red")
 
 
 clim_df %>%
-  sample_n(40000) %>% 
+  sample_n(30000) %>% 
   ggplot(aes(y = cwd_tc, x = cwd)) +
   geom_point(alpha = .3) +
   geom_smooth() +
   geom_abline(intercept = 0, slope = 1, size = 0.5, color = "red")
 
+
+an_clim_df <- clim_df %>% 
+  group_by(collection_id, year) %>% 
+  summarize(pet_tc = sum(pet_tc),
+            cwd_tc = sum(cwd_tc),
+            cwd = sum(cwd),
+            pet = sum(pet),
+            pet_spei = sum(pet_spei)) %>% 
+  ungroup()
+
+mod <- lm(cwd_tc ~ cwd, an_clim_df)
+summary(mod)
+
+mod <- feols(cwd_tc ~ cwd | collection_id, an_clim_df)
+summary(mod)
+
+mod <- lm(pet_tc ~ pet, an_clim_df)
+summary(mod)
+
+mod <- feols(pet_tc ~pet | collection_id, an_clim_df)
+summary(mod)
+
+mod <- lm(pet_spei ~ pet, an_clim_df)
+summary(mod)
+
+mod <- feols(pet ~ pet_spei | collection_id, an_clim_df)
+summary(mod)
+
+mod <- lm(pet_tc ~ pet_spei, an_clim_df)
+summary(mod)
+
+an_clim_df %>%
+  sample_n(10000) %>% 
+  ggplot(aes(y = cwd_tc, x = cwd)) +
+  geom_point(alpha = .3) +
+  geom_smooth() +
+  geom_abline(intercept = 0, slope = 1, size = 0.5, color = "red")
+
+
+an_clim_df %>%
+  sample_n(10000) %>% 
+  ggplot(aes(y = pet_tc, x = pet)) +
+  geom_point(alpha = .3) +
+  geom_smooth() +
+  geom_abline(intercept = 0, slope = 1, size = 0.5, color = "red")
+
+an_clim_df %>%
+  sample_n(10000) %>% 
+  ggplot(aes(y = pet_spei, x = pet)) +
+  geom_point(alpha = .3) +
+  geom_smooth() +
+  geom_abline(intercept = 0, slope = 1, size = 0.5, color = "red")
 
 
 
@@ -202,6 +263,8 @@ summary(spei_compare_mod)
 
 
 
+
+
 # ## Test monthly norm cwd calculation
 # norm_data <- test_data %>% 
 #   group_by(site_id, month) %>%
@@ -223,3 +286,36 @@ summary(spei_compare_mod)
 #                          soilawc=norm_data$swc,
 #                          type="normal")
 # cwd_data
+
+
+
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# Compare site averages --------------------------------------------------
+#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+mod <- lm(cwd.ave.tc ~ cwd.ave, data = ave_site_clim)
+summary(mod)
+
+ave_site_clim %>% 
+  ggplot(aes(x = cwd.ave, y = cwd.ave.tc)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1) +
+  geom_smooth()
+
+
+mod <- lm(ppt.ave.tc ~ ppt.ave, data = ave_site_clim)
+summary(mod)
+ave_site_clim %>% 
+  ggplot(aes(x = ppt.ave, y = ppt.ave.tc)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1) +
+  geom_smooth()
+
+
+mod <- lm(pet.ave.tc ~ pet.ave, data = ave_site_clim)
+summary(mod)
+
+ave_site_clim %>% 
+  ggplot(aes(x = pet.ave, y = pet.ave.tc)) +
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1) +
+  geom_smooth()
