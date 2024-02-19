@@ -26,7 +26,8 @@ code_dir <- "D:/dev/Treeconomics/"
 # Define the root directory where you've unzipped the replication dataset.
 # The replication dataset can be downloaded from XX.
 # After unzipping, the root directory should contain the "1_input_processed" directory.
-data_dir <- "G:/.shortcut-targets-by-id/10TtqG9P3BY70rcYp-WACmO38J5zBeflA/Treeconomics/Data/replication/"
+data_dir <- "G:/.shortcut-targets-by-id/10TtqG9P3BY70rcYp-WACmO38J5zBeflA/Treeconomics/Data/replication - cruts/"
+# data_dir <- "G:/.shortcut-targets-by-id/10TtqG9P3BY70rcYp-WACmO38J5zBeflA/Treeconomics/Data/replication - downscale/"
 
 createLink(paste0(code_dir, 'remote'), data_dir, overwrite = FALSE)
 
