@@ -31,6 +31,8 @@ library(assertr)
 library(parallel)
 library(doParallel)
 library(lubridate)
+library(SPEI)
+# library(zoo)
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -100,6 +102,16 @@ library(lubridate)
 #   
 #   return(data$petm)
 # }
+
+
+pet_spei_function <- function(data){
+  # Applies SPEI's implementation (non heatload adjusted) of the thornthwaite equation
+  data <- data %>% 
+    arrange(year, month) 
+  data$pet_spei <- thornthwaite(Tave = data$tmean, lat = data$latitude[1])
+  return(data)
+}
+
 
 
 cwd_function <- function(site, year, month, petm, ppt, tmean, soilawc) {
