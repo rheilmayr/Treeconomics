@@ -93,7 +93,8 @@ data <- data %>%
   group_by(site) %>% 
   nest() %>% 
   mutate(data = map(.x = data, .f = pet_spei_function)) %>% 
-  unnest(data)
+  unnest(data)  %>% 
+  as.data.table()
 
 
 lm(petm~pet_spei, data = data) %>% summary()
@@ -113,16 +114,16 @@ cwd_data <- cwd_function(site=data$site, year=data$year, month=data$month,
                          ppt = data$pre_corrected, soilawc = data$swc)
 
 cwd_data <- cwd_data[,c("site", "month", "year", "cwd")]
-data <- data %>% as.data.table()
 data <- merge(data, cwd_data, by = c("site", "month", "year"))
 
+
+## Need to figure out units for cru PET - obviously not correct
 cwd_cru <- cwd_function(site=data$site, year=data$year, month=data$month,
                         petm = data$pet_cru, tmean=data$tmean,  
                         ppt = data$pre_corrected, soilawc = data$swc)
 cwd_cru <- cwd_cru[,c("site", "month", "year", "cwd")]
 names(cwd_cru) <- c("site", "month", "year", "cwd_cru")
 data <- merge(data, cwd_cru, by = c("site", "month", "year"))
-
 
 
 cwd_spei <- cwd_function(site=data$site, year=data$year, month=data$month,
@@ -132,6 +133,11 @@ cwd_spei <- cwd_spei[,c("site", "month", "year", "cwd")]
 names(cwd_spei) <- c("site", "month", "year", "cwd_spei")
 data <- merge(data, cwd_spei, by = c("site", "month", "year"))
 toc()
+
+lm(cwd~cwd_spei, data = data) %>% summary()
+lm(cwd~cwd_cru, data = data) %>% summary()
+lm(cwd_spei~cwd_cru, data = data) %>% summary()
+
 
 
 # #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -162,8 +168,8 @@ toc()
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Write out file ----------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-cwd_data <- cwd_data %>%
-  select(site, year, month, tmean, ppt, aet, cwd, pet = petm, pet_cru, pet_spei)
+data <- data %>%
+  select(site, year, month, tmean, ppt = pre_corrected, cwd, cwd_cru, cwd_spei, pet = petm, pet_cru, pet_spei)
 
-fwrite(cwd_data,file=paste0(wdir,"1_input_processed/climate/essentialcwd_data.csv"))
+fwrite(data,file=paste0(wdir,"1_input_processed/climate/essentialcwd_data.csv"))
 
