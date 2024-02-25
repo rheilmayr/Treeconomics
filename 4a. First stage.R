@@ -194,6 +194,7 @@ fs_mod_bl <- partial(fs_mod, outcome = "rwi", water_var = "cwd.an", energy_var =
 fs_mod_ppt <- partial(fs_mod, outcome = "rwi", water_var = "ppt.an", energy_var = "pet.an", mod_type = "lm")
 fs_mod_tc <- partial(fs_mod, outcome = "rwi", water_var = "cwd.an.spstd.tc", energy_var = "pet.an.spstd.tc", mod_type = "lm")
 fs_mod_tc_ppt <- partial(fs_mod, outcome = "rwi", water_var = "ppt.an.spstd.tc", energy_var = "pet.an.spstd.tc", mod_type = "lm")
+fs_mod_spei <- partial(fs_mod, outcome = "rwi", water_var = "cwd.an.spstd.spei", energy_var = "pet.an.spstd.spei", mod_type = "lm")
 
 
 fs_mod_nb <- partial(fs_mod, outcome = "rwi_nb", energy_var = "pet.an", mod_type = "lm")
@@ -205,7 +206,8 @@ site_df <- site_df %>%
   mutate(fs_result = map(data, .f = fs_mod_bl),
          fs_result_ppt = map(data, .f = fs_mod_ppt),
          fs_result_tc = map(data, .f = fs_mod_tc),
-         fs_result_ppt_tc = map(data, .f = fs_mod_tc_ppt))
+         fs_result_ppt_tc = map(data, .f = fs_mod_tc_ppt),
+         fs_result_spei = map(data, .f = fs_mod_spei))
 
 
 data_df <- site_df %>% 
@@ -253,6 +255,15 @@ fs_df <- fs_df %>%
   select(-error)
 fs_df %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_ppt_tc_std.csv'))
 
+## Repeat using spei pet data
+fs_df <- site_df %>% 
+  select(collection_id, fs_result_spei) %>% 
+  unnest(fs_result_ppt_tc)
+fs_df <- fs_df[which(!(fs_df %>% pull(mod) %>% is.na())),]
+fs_df <- fs_df %>% 
+  unnest(mod) %>% 
+  select(-error)
+fs_df %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_spei_std.csv'))
 
 
 ## Repeat using results from nb detrended data
