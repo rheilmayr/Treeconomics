@@ -195,6 +195,8 @@ cwd_function <- function(site, year, month, petm, ppt, tmean, soilawc) {
   data[,deltsoil:=soilm1-soilm] # change to soilm1 - soilm
   data[,aet:=ifelse(wm>petm, petm, wm+deltsoil)]
   data[,cwd:=petm-aet]
+  data<-setorder(data,site,year,month)
+  
   
   return(data)
 }
@@ -212,6 +214,7 @@ pet_function <- function(site,year,month,slope,latitude,aspect,tmean) {
   data$year<-as.numeric(as.character(year))
   data[,yearmonth:= as.yearmon(paste(year, month), "%Y %m")]
   data[,days:=days_in_month(yearmonth)]
+  data<-setorder(data,site,year,month)
   
   data$foldedaspect <- ifelse(data$latitude>0,180 - ( data$aspect - 225), 180 - (data$aspect - 315)) # convert aspect (from radians to degrees) into folded aspect, if latitude <0 (southern hemisphere) maximum heat exposure in NW direction (315 degrees) else in SW direction (225 degrees).
   
@@ -232,16 +235,18 @@ pet_function <- function(site,year,month,slope,latitude,aspect,tmean) {
   daylength$month<-as.numeric(as.character(daylength$month))
   daylength$day<-as.numeric(as.character(daylength$day))
   data<-merge(data,daylength,by=c("site","month"))
+  data<-setorder(data,site,year,month)
   
   data[,ea:=exp(((17.3*tmean)/(tmean+237.3)))*0.611] 
   # convert slope, folded aspect, and latitude to radians
   data[,sloprad:=slope*pi/180]
   data[,afrad:=foldedaspect*pi/180]
   data[,latrad:=latitude*pi/180]
-  #calculate heat load
+  # calculate heat load
   data[,heatload:=0.339+0.808*(cos(latrad)*cos(sloprad))-0.196*(sin(latrad)*sin(sloprad))-0.482*(cos(afrad)*sin(sloprad))]
   
-  data[,petm:=ifelse(tmean<0,0,((29.8*days*day*heatload*ea)/(tmean+273.2)))]
+  # calculate pet
+  data[,petm:=ifelse(tmean<0,0,((((ea)/(tmean+273.2))*day*days*29.8)*heatload))]
   
   return(data)
 }
