@@ -59,11 +59,13 @@ load(clim_file)
 # cwd_historic <- rast(cwd_historic)
 # aet_historic <- rast(aet_historic)
 
-pet_historic <- aet_historic + cwd_historic
 pet_historic <- mean(pet_historic %>% subset(2:80))
 cwd_historic <- mean(cwd_historic %>% subset(2:80))
 ppt_historic <- mean(ppt_historic %>% subset(2:80))
 tmp_historic <- mean(tmp_historic %>% subset(2:80))
+petsp_historic <- mean(petsp_historic %>% subset(2:80))
+cwdsp_historic <- mean(cwdsp_historic %>% subset(2:80))
+
 
 # pet_historic <- mean(pet_historic %>% subset(61:80))
 # cwd_historic <- mean(cwd_historic %>% subset(61:80))
@@ -74,13 +76,18 @@ names(cwd_historic) = "cwd"
 names(pet_historic) = "pet"
 names(ppt_historic) = "ppt"
 names(tmp_historic) = "tmp"
+names(cwdsp_historic) = "cwd_spei"
+names(petsp_historic) = "pet_spei"
+
 
 # Composite into multilayer spatraster
 cwd_historic <- rast(cwd_historic)
 pet_historic <- rast(pet_historic)
 tmp_historic <- rast(tmp_historic)
 ppt_historic <- rast(ppt_historic)
-clim_historic <- rast(list(cwd_historic, pet_historic, ppt_historic, tmp_historic))
+cwdsp_historic <- rast(cwdsp_historic)
+petsp_historic <- rast(petsp_historic)
+clim_historic <- rast(list(cwd_historic, pet_historic, ppt_historic, tmp_historic,cwdsp_historic,petsp_historic))
 
 
 # # 2. Add terraclimate data for comparison
@@ -161,6 +168,11 @@ rm(aet_raster)
 # # Visually inspect data -----------------------------------------------
 # #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # tmap_mode("view")
+# tm_shape(pet_historic) +
+#   tm_raster() +
+#   tm_facets(as.layers = TRUE)
+# 
+# 
 # tm_shape(cwd_cmip_end) +
 #   tm_raster() +
 #   tm_facets(as.layers = TRUE)
@@ -209,7 +221,11 @@ niche_df <- clim_df %>%
             temp_mean = mean(tmp),
             temp_sd = sd(tmp),
             ppt_mean = mean(ppt), 
-            ppt_sd = sd(ppt))
+            ppt_sd = sd(ppt),
+            spei_pet_mean = mean(pet_spei),
+            spei_pet_sd = sd(pet_spei),
+            spei_cwd_mean = mean(cwd_spei),
+            spei_cwd_sd = sd(cwd_spei))
 
 
 ## Export species niche description
@@ -252,7 +268,8 @@ sp_standardize <- function(val, sp_mean, sp_sd){
 sp_std_historic_df <- function(hist_clim_vals, pet_mean, pet_sd, cwd_mean, cwd_sd, 
                                temp_mean, temp_sd, ppt_mean, ppt_sd, 
                                tc_pet_mean, tc_pet_sd, tc_cwd_mean, tc_cwd_sd,
-                               tc_ppt_mean, tc_ppt_sd){
+                               tc_ppt_mean, tc_ppt_sd, spei_pet_mean, spei_pet_sd,
+                               spei_cwd_mean, spei_cwd_sd){
   hist_clim_vals <- hist_clim_vals %>% 
     mutate_at(vars(starts_with("cwd")), 
               ~sp_standardize(.x, cwd_mean, cwd_sd)) %>% 
@@ -267,7 +284,11 @@ sp_std_historic_df <- function(hist_clim_vals, pet_mean, pet_sd, cwd_mean, cwd_s
     mutate_at(vars(starts_with("tc_pet")), 
               ~sp_standardize(.x, tc_pet_mean, tc_pet_sd)) %>% 
     mutate_at(vars(starts_with("tc_ppt")), 
-              ~sp_standardize(.x, tc_ppt_mean, tc_ppt_sd))
+              ~sp_standardize(.x, tc_ppt_mean, tc_ppt_sd)) %>% 
+    mutate_at(vars(starts_with("spei_cwd")), 
+              ~sp_standardize(.x, spei_cwd_mean, spei_cwd_sd)) %>% 
+    mutate_at(vars(starts_with("spei_pet")), 
+              ~sp_standardize(.x, spei_pet_mean, spei_pet_sd))
   return(hist_clim_vals)
 }
 
@@ -316,12 +337,14 @@ sp_std_future_df <- function(cmip_df, hist_clim_vals, pet_mean, pet_sd, cwd_mean
 site_clim_df = site_clim_df %>%
   group_by(collection_id, year) %>%
   summarise(cwd.an = sum(cwd),
-            pet.an = sum((aet+cwd)),
+            pet.an = sum(pet),
             ppt.an = sum(ppt),
             temp.an = mean(tmean),
             tc_cwd.an = sum(tc_cwd),
             tc_pet.an = sum(tc_pet),
             tc_ppt.an = sum(tc_ppt),
+            spei_pet.an = sum(pet_spei),
+            spei_cwd.an = sum(cwd_spei),
             .groups = "drop")
 
 
@@ -339,13 +362,15 @@ ave_site_clim_df <- site_clim_df %>%
             ppt.ave = mean(ppt.an),
             tc_cwd.ave = mean(tc_cwd.an, na.rm = TRUE),
             tc_pet.ave = mean(tc_pet.an, na.rm = TRUE),
-            tc_ppt.ave = mean(tc_ppt.an, na.rm = TRUE)) %>% 
+            tc_ppt.ave = mean(tc_ppt.an, na.rm = TRUE),
+            spei_cwd.ave = mean(spei_cwd.an),
+            spei_pet.ave = mean(spei_pet.an)) %>% 
   ungroup()
 
 spstd_site_clim_df <- site_smry %>% 
   left_join(ave_site_clim_df, by = "collection_id") %>% 
   group_by(sp_code) %>% 
-  nest(data = c(collection_id, cwd.ave, pet.ave, temp.ave, ppt.ave, tc_cwd.ave, tc_pet.ave, tc_ppt.ave)) %>% 
+  nest(data = c(collection_id, cwd.ave, pet.ave, temp.ave, ppt.ave, tc_cwd.ave, tc_pet.ave, tc_ppt.ave, spei_cwd.ave, spei_pet.ave)) %>% 
   left_join(niche_df, by = ("sp_code")) %>%
   left_join(niche_df_tc, by = "sp_code") %>% 
   drop_na() # Dropping some species due to NA niche data
@@ -365,21 +390,26 @@ spstd_site_clim_df <- spstd_site_clim_df %>%
                                       tc_cwd_mean = tc_cwd_mean,
                                       tc_cwd_sd = tc_cwd_sd,
                                       tc_ppt_mean = tc_ppt_mean,
-                                      tc_ppt_sd = tc_ppt_sd),
+                                      tc_ppt_sd = tc_ppt_sd,
+                                      spei_pet_mean = spei_pet_mean,
+                                      spei_pet_sd = spei_pet_sd,
+                                      spei_cwd_mean = spei_cwd_mean,
+                                      spei_cwd_sd = spei_cwd_sd),
                                  .f = sp_std_historic_df,
                                  .options = furrr_options(packages = c( "dplyr"))))
 
 spstd_site_clim_df <- spstd_site_clim_df %>% 
   unnest(site_clim) %>% 
   rename(cwd.spstd = cwd.ave, pet.spstd = pet.ave, temp.spstd = temp.ave, ppt.spstd = ppt.ave, 
-         cwd.spstd.tc = tc_cwd.ave, pet.spstd.tc = tc_pet.ave, ppt.spstd.tc = tc_ppt.ave) %>% 
+         cwd.spstd.tc = tc_cwd.ave, pet.spstd.tc = tc_pet.ave, ppt.spstd.tc = tc_ppt.ave,
+         pet.spstd.spei = spei_pet.ave, cwd.spstd.spei = spei_cwd.ave) %>% 
   ungroup() %>% 
   select(collection_id, cwd.spstd, pet.spstd, temp.spstd, ppt.spstd, 
-         cwd.spstd.tc, pet.spstd.tc, ppt.spstd.tc)
+         cwd.spstd.tc, pet.spstd.tc, ppt.spstd.tc, cwd.spstd.spei, pet.spstd.spei)
 
 spstd_site_clim_df <- spstd_site_clim_df %>% 
-  left_join(ave_site_clim_df %>% select(collection_id, cwd.ave, pet.ave, temp.ave, ppt.ave, tc_cwd.ave, tc_pet.ave, tc_ppt.ave), by = "collection_id") %>% 
-  rename(cwd.ave.tc = tc_cwd.ave, pet.ave.tc = tc_pet.ave, ppt.ave.tc = tc_ppt.ave)
+  left_join(ave_site_clim_df %>% select(collection_id, cwd.ave, pet.ave, temp.ave, ppt.ave, tc_cwd.ave, tc_pet.ave, tc_ppt.ave, spei_pet.ave, spei_cwd.ave), by = "collection_id") %>% 
+  rename(cwd.ave.tc = tc_cwd.ave, pet.ave.tc = tc_pet.ave, ppt.ave.tc = tc_ppt.ave, cwd.ave.spei = spei_cwd.ave, pet.ave.spei = spei_pet.ave)
 
 write_rds(spstd_site_clim_df, 
           paste0(wdir, "2_output/climate/site_ave_clim.", compress = "gz"))
@@ -412,26 +442,36 @@ an_site_clim_df <- an_site_clim_df %>%
                                       tc_cwd_mean = tc_cwd_mean,
                                       tc_cwd_sd = tc_cwd_sd,
                                       tc_ppt_mean = tc_ppt_mean,
-                                      tc_ppt_sd = tc_ppt_sd),
+                                      tc_ppt_sd = tc_ppt_sd,
+                                      spei_cwd_mean = spei_cwd_mean,
+                                      spei_cwd_sd = spei_cwd_sd,
+                                      spei_pet_mean = spei_pet_mean,
+                                      spei_pet_sd = spei_pet_sd),
                                  .f = sp_std_historic_df,
                                  .options = furrr_options(packages = c( "dplyr"))))
 
 an_site_clim_df <- an_site_clim_df %>% 
+  ungroup() %>% 
+  select(site_clim) %>% 
   unnest(site_clim) %>% 
   rename(cwd.an.spstd = cwd.an, pet.an.spstd = pet.an, temp.an.spstd = temp.an, 
          ppt.an.spstd = ppt.an, cwd.an.spstd.tc = tc_cwd.an, pet.an.spstd.tc = tc_pet.an,
-         ppt.an.spstd.tc = tc_ppt.an) %>% 
-  ungroup() %>% 
-  select(-pet_mean, -pet_sd, -cwd_mean, -cwd_sd, -temp_mean, -temp_sd, -ppt_mean, -data, -sp_code)
+         ppt.an.spstd.tc = tc_ppt.an, cwd.an.spstd.spei = spei_cwd.an, pet.an.spstd.spei = spei_pet.an) %>% 
+  ungroup()
+
 
 write_rds(an_site_clim_df, 
           paste0(wdir, "2_output/climate/site_an_clim.", compress = "gz"))
 
 # Quick check of correlation across datasets
+library(fixest)
 summary(lm(cwd.spstd ~ cwd.spstd.tc, data = spstd_site_clim_df))
 summary(lm(ppt.spstd ~ ppt.spstd.tc, data = spstd_site_clim_df))
 
 summary(lm(cwd.an.spstd ~ cwd.an.spstd.tc, data = an_site_clim_df))
+summary(feols(cwd.an.spstd ~ cwd.an.spstd.tc | collection_id, data = an_site_clim_df))
+summary(lm(pet.an.spstd ~ pet.an.spstd.tc, data = an_site_clim_df))
+summary(feols(pet.an.spstd ~ pet.an.spstd.tc | collection_id, data = an_site_clim_df))
 summary(lm(ppt.an.spstd ~ ppt.an.spstd.tc, data = an_site_clim_df))
 
 
