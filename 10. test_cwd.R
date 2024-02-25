@@ -1,11 +1,21 @@
 
-library(tidyverse)
 source("f_cwd_function_new.R")
+library(tidyverse)
 library(SPEI)
 library(zoo)
 library(lubridate)
 library(fixest)
 
+
+library(data.table)
+library(geosphere)
+library(assertr)
+library(parallel)
+library(doParallel)
+library(lubridate)
+
+library(tictoc)
+library(dtplyr)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Load data --------------------------------------------------------------
@@ -70,10 +80,17 @@ clim_df <- clim_df %>%
   group_by(collection_id) %>% 
   nest() %>% 
   mutate(data = map(.x = data, .f = calc_pet_thornthwaite_spei)) %>% 
-  unnest()
+  unnest(data)
 
 clim_df <- clim_df %>% 
   ungroup()
+
+clim_df <- clim_df %>% 
+  merge(site_df %>% select(collection_id = site_id, latitude, aspect, slope, swc), by = "collection_id")
+
+pet_df <- pet_function(clim_df$collection_id, clim_df$year, clim_df$month, clim_df$slope, clim_df$latitude, clim_df$aspect, clim_df$tmean)
+cwd_df <- cwd_function(clim_df$collection_id, clim_df$year, clim_df$month, clim_df$pet, )
+
 
 mod <- lm(cwd_tc ~ cwd, clim_df)
 summary(mod)
@@ -109,7 +126,8 @@ clim_df %>%
   ggplot(aes(y = pet_spei, x = pet)) +
   geom_point(alpha = .3) +
   geom_smooth() +
-  geom_abline(intercept = 0, slope = 1, size = 0.5, color = "red")
+  geom_abline(intercept = 0, slope = 1, size = 0.5, color = "red") +
+  ylim(0, 250)
 
 clim_df %>%
   sample_n(30000) %>% 
@@ -188,6 +206,7 @@ an_clim_df %>%
 site_df$pre = na_if(site_df$pre,-999)
 site_df$tmn = na_if(site_df$tmn,-999)
 site_df$tmx = na_if(site_df$tmx,-999)
+site_df$pet_cru = na_if(site_df$pet, -999)
 
 # Add corrections from World Clim to CWD to get downscaled variables
 site_df$pre_corrected=site_df$pre*site_df$pre_correction
@@ -209,9 +228,11 @@ site_df <- site_df %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Focus on example site --------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-test_site <- "CA524"
+test_site <- "AR024"
 test_data <- site_df %>% 
-  filter(site_id == test_site) # PIPO site in CA
+  filter(site_id == test_site) %>% # PIPO site in CA
+  as_tibble() %>% 
+  arrange(site, year, month)
 
 site=test_data$site_id
 slope=test_data$slope
@@ -222,6 +243,27 @@ tmean=test_data$tmean
 month=test_data$month
 year=test_data$year
 soilawc=test_data$swc
+petm = test_data$petm
+tic()
+pet = pet_thornthwaite_dt(test_data$site_id, test_data$year, test_data$month, test_data$slope, test_data$latitude, test_data$aspect, test_data$tmean)
+toc()
+pet_spei <- thornthwaite(test_data$tmean, test_data$latitude[1])
+tic()
+pet_data = pet_function(test_data$site_id, test_data$year, test_data$month, test_data$slope, test_data$latitude, test_data$aspect, test_data$tmean)
+
+test_data = cbind(test_data, "petm" = pet_data$petm, "pet_spei" = pet_spei)
+
+
+
+cwd_data = cwd_function(test_data$site_id, test_data$year, test_data$month, test_data$petm, test_data$pre_corrected, test_data$tmean, test_data$swc)
+cwd_data = cwd_function(test_data$site_id, test_data$year, test_data$month, test_data$pet_spei, test_data$pre_corrected, test_data$tmean, test_data$swc)
+
+
+petm = pet$petm
+toc()
+summary(lm(pet$petm~pet_spei))
+
+
 type="annual"
 
 ## Test annual cwd calculation
