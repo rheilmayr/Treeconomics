@@ -133,11 +133,11 @@ site_smry <- site_smry %>%
   select(-sp_id)
 
 
-## NOTE: FIA data not included in replication data repository
+# # NOTE: FIA data not included in replication data repository
 # site_smry_fia <- read_csv(paste0(wdir, 'out/dendro/site_summary_fia.csv'))
-# site_smry_fia <- site_smry_fia %>% 
-#   select(collection_id, location_id = plot_cn, sp_id = species_id) %>% 
-#   mutate(sp_code = tolower(sp_id)) %>% 
+# site_smry_fia <- site_smry_fia %>%
+#   select(collection_id, location_id = plot_cn, sp_id = species_id) %>%
+#   mutate(sp_code = tolower(sp_id)) %>%
 #   select(-sp_id)
 # site_smry <- rbind(site_smry, site_smry_fia)
 
