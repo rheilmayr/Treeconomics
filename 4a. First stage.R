@@ -157,7 +157,7 @@ fs_mod <- function(site_data, outcome = "rwi", water_var = "cwd.an", energy_var 
         mod[[cov_var_name]] = mod_vcov[c("(Intercept)"), c(water_var)]
         cov_var_name <- paste0("cov_int_", energy_var %>% str_replace(".an", ""))
         mod[[cov_var_name]] = mod_vcov[c("(Intercept)"), c(energy_var)]
-        cov_var_name <- paste0(water_var %>% str_replace(".an", ""), energy_var %>% str_replace(".an", ""))
+        cov_var_name <- paste0("cov_", water_var %>% str_replace(".an", ""), "_", energy_var %>% str_replace(".an", ""))
         mod[[cov_var_name]] = mod_vcov[c(water_var), c(energy_var)]
         mod$r2 = mod_sum$r.squared
       },
@@ -183,7 +183,8 @@ site_df <- dendro_df %>%
   # drop_na() %>% 
   rename(cwd.an = cwd.an.spstd,
          pet.an = pet.an.spstd,
-         ppt.an = ppt.an.spstd) %>%
+         ppt.an = ppt.an.spstd,
+         temp.an = temp.an.spstd) %>%
   group_by(collection_id) %>%
   add_tally(name = 'nobs') %>% 
   # filter(nobs>10) %>% 
@@ -195,8 +196,6 @@ fs_mod_ppt <- partial(fs_mod, outcome = "rwi", water_var = "ppt.an", energy_var 
 fs_mod_tc <- partial(fs_mod, outcome = "rwi", water_var = "cwd.an.spstd.tc", energy_var = "pet.an.spstd.tc", mod_type = "lm")
 fs_mod_tc_ppt <- partial(fs_mod, outcome = "rwi", water_var = "ppt.an.spstd.tc", energy_var = "pet.an.spstd.tc", mod_type = "lm")
 fs_mod_spei <- partial(fs_mod, outcome = "rwi", water_var = "cwd.an.spstd.spei", energy_var = "pet.an.spstd.spei", mod_type = "lm")
-
-
 fs_mod_nb <- partial(fs_mod, outcome = "rwi_nb", energy_var = "pet.an", mod_type = "lm")
 fs_mod_ar <- partial(fs_mod, outcome = "rwi_ar", energy_var = "pet.an", mod_type = "lm")
 fs_mod_temp <- partial(fs_mod, outcome = "rwi", energy_var = "temp.an", mod_type = "lm")
@@ -258,12 +257,19 @@ fs_df %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_ppt_tc_std.csv')
 ## Repeat using spei pet data
 fs_df <- site_df %>% 
   select(collection_id, fs_result_spei) %>% 
-  unnest(fs_result_ppt_tc)
+  unnest(fs_result_spei)
 fs_df <- fs_df[which(!(fs_df %>% pull(mod) %>% is.na())),]
 fs_df <- fs_df %>% 
   unnest(mod) %>% 
   select(-error)
 fs_df %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_spei_std.csv'))
+
+
+site_df <- site_df %>% 
+  mutate(fs_result_nb = map(data, .f = fs_mod_nb),
+         fs_result_ar = map(data, .f = fs_mod_ar),
+         fs_result_temp = map(data, .f = fs_mod_temp),
+         fs_result_re = map(data, .f = fs_mod_re))
 
 
 ## Repeat using results from nb detrended data
