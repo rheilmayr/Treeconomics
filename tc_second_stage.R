@@ -117,29 +117,36 @@ flm_df <- flm_df %>%
            (pet.spstd.spei<pet_spstd_bounds_spei[1]) |
            (pet.spstd.spei>pet_spstd_bounds_spei[2]))
 
-
 flm_df <- flm_df %>%
   mutate(outlier = 
-           (estimate_cwd.an<cwd_est_bounds[1]) |
-           (estimate_cwd.an>cwd_est_bounds[2]) |
-           (estimate_pet.an<pet_est_bounds[1]) |
-           (estimate_pet.an>pet_est_bounds[2]) |
            (estimate_cwd.an.spstd.tc<cwd_est_bounds.tc[1]) |
            (estimate_cwd.an.spstd.tc>cwd_est_bounds.tc[2]) |
            (estimate_pet.an.spstd.tc<pet_est_bounds.tc[1]) |
-           (estimate_pet.an.spstd.tc>pet_est_bounds.tc[2]) |
-           (estimate_cwd.an.spstd.spei<cwd_est_bounds.spei[1]) |
-           (estimate_cwd.an.spstd.spei>cwd_est_bounds.spei[2]) |
-           (estimate_pet.an.spstd.spei<pet_est_bounds.spei[1]) |
-           (estimate_pet.an.spstd.spei>pet_est_bounds.spei[2]) |
-           (cwd.spstd<cwd_spstd_bounds[1]) |
-           (cwd.spstd>cwd_spstd_bounds[2]) |
-           (pet.spstd<pet_spstd_bounds[1]) |
-           (pet.spstd>pet_spstd_bounds[2]) |
-           (cwd.spstd.tc<cwd_spstd_bounds_tc[1]) |
-           (cwd.spstd.tc>cwd_spstd_bounds_tc[2]) |
-           (pet.spstd.tc<pet_spstd_bounds_tc[1]) |
-           (pet.spstd.tc>pet_spstd_bounds_tc[2]))
+           (estimate_pet.an.spstd.tc>pet_est_bounds.tc[2]))
+
+
+# flm_df <- flm_df %>%
+#   mutate(outlier = 
+#            (estimate_cwd.an<cwd_est_bounds[1]) |
+#            (estimate_cwd.an>cwd_est_bounds[2]) |
+#            (estimate_pet.an<pet_est_bounds[1]) |
+#            (estimate_pet.an>pet_est_bounds[2]) |
+#            (estimate_cwd.an.spstd.tc<cwd_est_bounds.tc[1]) |
+#            (estimate_cwd.an.spstd.tc>cwd_est_bounds.tc[2]) |
+#            (estimate_pet.an.spstd.tc<pet_est_bounds.tc[1]) |
+#            (estimate_pet.an.spstd.tc>pet_est_bounds.tc[2]) |
+#            (estimate_cwd.an.spstd.spei<cwd_est_bounds.spei[1]) |
+#            (estimate_cwd.an.spstd.spei>cwd_est_bounds.spei[2]) |
+#            (estimate_pet.an.spstd.spei<pet_est_bounds.spei[1]) |
+#            (estimate_pet.an.spstd.spei>pet_est_bounds.spei[2]) |
+#            (cwd.spstd<cwd_spstd_bounds[1]) |
+#            (cwd.spstd>cwd_spstd_bounds[2]) |
+#            (pet.spstd<pet_spstd_bounds[1]) |
+#            (pet.spstd>pet_spstd_bounds[2]) |
+#            (cwd.spstd.tc<cwd_spstd_bounds_tc[1]) |
+#            (cwd.spstd.tc>cwd_spstd_bounds_tc[2]) |
+#            (pet.spstd.tc<pet_spstd_bounds_tc[1]) |
+#            (pet.spstd.tc>pet_spstd_bounds_tc[2]))
 
 # # Save out full flm_df to simplify downstream scripts and ensure consistency
 # flm_df %>% write.csv(paste0(wdir, "2_output/first_stage/site_pet_cwd_std_augmented.csv"))
@@ -169,11 +176,42 @@ cwd_mod <- feols(formula, data = mod_data, weights = mod_data$cwd_errorweights,
                  vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
 summary(cwd_mod)
 
-formula = as.formula("estimate_cwd.an.tc ~ cwd.spstd.tc + (cwd.spstd.tc^2) + pet.spstd.tc + (pet.spstd.tc^2)")
+formula = as.formula("estimate_cwd.an.spstd.tc ~ cwd.spstd.tc + (cwd.spstd.tc^2) + pet.spstd.tc + (pet.spstd.tc^2)")
 mod_data <- trim_df
-cwd_mod <- feols(formula, data = mod_data, weights = mod_data$cwd_errorweights,
+cwd_mod <- feols(formula, data = mod_data, weights = mod_data$cwd_errorweights_tc,
                  vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
 summary(cwd_mod)
+
+marg_fx_df <- function(mod){
+  inc <- 0.1
+  min <- -2.5
+  max <- 2.5
+  cwd_pred <- predictions(mod, newdata = datagrid(pet.spstd.tc = 0, cwd.spstd.tc = seq(min,max,inc))) %>% 
+    mutate(variation = "cwd")
+  pet_pred <- predictions(mod, newdata = datagrid(pet.spstd.tc = seq(min,max,inc), cwd.spstd.tc = 0)) %>% 
+    mutate(variation = "pet")
+  return(rbind(cwd_pred, pet_pred))
+}
+
+
+preds <- marg_fx_df(cwd_mod)
+
+cwd_mfx_plot <- preds %>% 
+  filter(variation == "cwd") %>% 
+  ggplot(aes(x = cwd.spstd.tc)) + 
+  geom_line(aes(y = estimate)) +
+  geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2) +
+  xlab("Historic standardized CWD") +
+  ylab("Estimated sensitivity to CWD") +
+  theme_bw()
+cwd_mfx_plot
+
+
+
+
+
+
+
 
 formula = as.formula("estimate_cwd.an.spstd.tc ~ cwd.spstd + (cwd.spstd^2) + pet.spstd + (pet.spstd^2)")
 mod_data <- trim_df
