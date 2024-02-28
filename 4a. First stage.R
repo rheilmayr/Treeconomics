@@ -179,7 +179,7 @@ fs_mod <- function(site_data, outcome = "rwi", water_var = "cwd.an", energy_var 
 # Run site-level regressions --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 site_df <- dendro_df %>%
-  filter(year>1957) %>% 
+  # filter(year>1957) %>% 
   # drop_na() %>% 
   rename(cwd.an = cwd.an.spstd,
          pet.an = pet.an.spstd,
