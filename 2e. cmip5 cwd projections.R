@@ -30,13 +30,14 @@ library(parallel)
 library(doParallel)
 library(data.table)
 library(tidyverse)
-source("f_cwd_function.R")
+source("f_cwd_function_new.R")
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Create CWD projections --------------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define path
 wdir <- 'remote\\'
+wdir <- 'G:/.shortcut-targets-by-id/10TtqG9P3BY70rcYp-WACmO38J5zBeflA/Treeconomics/Data/'
 
 tasfiles=list.files(paste0(wdir,"in/CMIP5 Data/tas"),pattern=".nc")
 prfiles=list.files(paste0(wdir,"in/CMIP5 Data/pr"),pattern=".nc")
@@ -130,7 +131,7 @@ for(i in 1:length(tempmodelfiles)){
 
 save(sitedata,pr_correction,tas_correction,file=paste0(wdir,"in/CMIP5 Data/other data for cwd/sitedata_climatologycorrection.Rdat"))
 
-#apply calculated bais based on monthly differences between WorldClim and model runs to climate model projections and calculate cwd and aet
+#apply calculated bias based on monthly differences between WorldClim and model runs to climate model projections and calculate cwd and aet
 datfolder=paste0(wdir, "in/CMIP5 Data/")
 
 period=c("start","mid","end")
