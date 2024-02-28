@@ -47,6 +47,7 @@ n_mc <- 10000
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ### Define path
 wdir <- 'remote/'
+# wdir <- 'G:/.shortcut-targets-by-id/10TtqG9P3BY70rcYp-WACmO38J5zBeflA/Treeconomics/Data/replication - original/'
 
 # 1. Site-level regressions
 flm_df <- read_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_std.csv'))
@@ -104,11 +105,11 @@ flm_df <- flm_df %>%
            (pet.spstd>pet_spstd_bounds[2]))
            
 
-flm_df <- flm_df %>%
-  mutate(outlier = (estimate_cwd.an<cwd_est_bounds[1]) |
-                   (estimate_cwd.an>cwd_est_bounds[2]) |
-                   (estimate_pet.an<pet_est_bounds[1]) |
-                   (estimate_pet.an>pet_est_bounds[2]))
+# flm_df <- flm_df %>%
+#   mutate(outlier = (estimate_cwd.an<cwd_est_bounds[1]) |
+#                    (estimate_cwd.an>cwd_est_bounds[2]) |
+#                    (estimate_pet.an<pet_est_bounds[1]) |
+#                    (estimate_pet.an>pet_est_bounds[2]))
 
 # Save out full flm_df to simplify downstream scripts and ensure consistency
 flm_df %>% write.csv(paste0(wdir, "2_output/first_stage/site_pet_cwd_std_augmented.csv"))
@@ -159,7 +160,10 @@ cwd_mfx_plot <- preds %>%
   filter(variation == "cwd") %>% 
   ggplot(aes(x = cwd.spstd)) + 
   geom_line(aes(y = estimate)) +
-  geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2)
+  geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2) +
+  xlab("Historic standardized CWD") +
+  ylab("Estimated sensitivity to CWD") +
+  theme_bw()
 cwd_mfx_plot
 
 pet_mfx_plot <- preds %>% 
@@ -223,7 +227,7 @@ for (site in site_list){
   block_list[site] <- list(block_sites)
 }
 save(block_list,file=paste0(wdir,"2_output/second_stage/spatial_blocks.Rdat"))
-# load(file=paste0(wdir,"out/second_stage/spatial_blocks.Rdat"))
+# load(file=paste0(wdir,"2_output/second_stage/spatial_blocks.Rdat"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -329,6 +333,7 @@ block_draw_df %>%
   # select(boot_id, collection_id, cwd_coef, pet_coef, int_coef, cwd.spstd, pet.spstd) %>% 
   write_rds(paste0(wdir, "2_output/second_stage/mc_sample.gz"), compress = "gz")
 
+block_draw_df <- read_rds(paste0(wdir, "2_output/second_stage/mc_sample.gz"))
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Run bootstrap estimation of second stage model -------------------------
@@ -348,6 +353,16 @@ run_ss <- function(data, outcome = "cwd_coef"){
   coefs <- mod %>% 
     tidy() %>% 
     pull(estimate) 
+  return(coefs)
+}
+
+run_ss <- function(data, outcome = "cwd_coef"){
+  formula <- as.formula(paste(outcome, " ~ cwd.spstd + I(cwd.spstd^2) + pet.spstd + I(pet.spstd^2)"))
+  mod <- lm(formula, data=data)
+  # mod <- lm(formula, data=data)
+  coefs <- mod %>%
+    tidy() %>%
+    pull(estimate)
   return(coefs)
 }
 
