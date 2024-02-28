@@ -51,6 +51,7 @@ select <- dplyr::select
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ### Define path
 wdir <- 'remote/'
+# wdir <- 'G:/.shortcut-targets-by-id/10TtqG9P3BY70rcYp-WACmO38J5zBeflA/Treeconomics/Data/replication - original/'
 
 # 1. Site-level regressions
 fs_spl <- read_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_std.csv'))
