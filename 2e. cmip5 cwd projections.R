@@ -30,6 +30,7 @@ library(parallel)
 library(doParallel)
 library(data.table)
 library(tidyverse)
+library(zoo)
 source("f_cwd_function_new.R")
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -106,7 +107,7 @@ for(i in 1:12){
 }
 
 precipclim=crop(precipclim,extent(swc));tempclim=crop(tempclim,extent(swc))
-precipclim=aggregate(precipclim,fact=3);tempclim=aggregate(tempclim,fact=3) #match the resolution of the climate model data by taking mean
+precipclim=aggregate(precipclim,fact=3);tempclim=aggregate(tempclim,fact=3) #match the resolution of the terrain data by taking mean
 
 
 #get model-specific correction factors based on 1970-2000 climatology
@@ -124,19 +125,21 @@ for(i in 1:length(tempmodelfiles)){
   tas_months=tas_months-273.15; pr_months=pr_months*60*60*24*30
   
   #get grid-cell level correction based on 1970-2000 climatology
-  pr_correction[[i]]=precipclim-pr_months
+  #can't divide by zero so set any zero precip to minimum value greater than zero
+  pr_months=reclassify(pr_months,rcl=matrix(data=c(0,max(min(cellStats(pr_months,min)),0)),ncol=2,nrow=1))
+  pr_correction[[i]]=precipclim/pr_months
   tas_correction[[i]]=tempclim-tas_months
   print(i)
 }
 
-save(sitedata,pr_correction,tas_correction,file=paste0(wdir,"in/CMIP5 Data/other data for cwd/sitedata_climatologycorrection.Rdat"))
+save(sitedata,pr_correction,tas_correction,file=paste0(wdir,"in/CMIP5 Data/other data for cwd/sitedata_climatologycorrection_Feb2024.Rdat"))
 
 #apply calculated bias based on monthly differences between WorldClim and model runs to climate model projections and calculate cwd and aet
 datfolder=paste0(wdir, "in/CMIP5 Data/")
 
 period=c("start","mid","end")
 
-load(paste0(wdir,"in/CMIP5 Data/other data for cwd/sitedata_climatologycorrection.Rdat"))
+load(paste0(wdir,"in/CMIP5 Data/other data for cwd/sitedata_climatologycorrection_Feb2024.Rdat"))
 sitedata$slope[which(sitedata$slope<0)]=0 # fix a few spurious slope values
 
 cl=makeCluster(20)
@@ -157,7 +160,7 @@ for(i in 1:length(period)){
     tas_months=tas_months-273.15; pr_months=pr_months*60*60*24*30
     
     #apply grid-cell specific bias correction
-    tas_months=tas_months+tas_correction[[j]];pr_months=pr_months+pr_correction[[j]]
+    tas_months=tas_months+tas_correction[[j]];pr_months=pr_months*pr_correction[[j]]
     
     tasdata=as.data.frame(tas_months);prdata=as.data.frame(pr_months)
     colnames(tasdata)=1:12;colnames(prdata)=1:12
@@ -168,9 +171,47 @@ for(i in 1:length(period)){
     
     dat=merge(sitedata,climatedata) #merge climate projections for each raster cell with data frame of site-constants (slope, elevation, aspect, swc)
     dat=dat[complete.cases(dat),]
+    
+    #add single year comlumn since just running pet and cwd functions over baseline climatological averages
+    dat$year=1
+    
+    dat_pet <- pet_function(site=dat$site, year=dat$year, month=dat$month,
+                              slope=dat$slope, latitude=dat$lat, aspect=dat$aspect,
+                              tmean=dat$temp)
+    dat_pet <- dat_pet[,c("site", "month", "year", "petm")]
+    dat <- merge(dat, dat_pet, by = c("site", "month", "year"))
+    
+    dat <- dat %>% 
+      as_tibble() %>% 
+      rename(tmean = temp, latitude = lat) %>% 
+      arrange(site, year, month) %>% 
+      group_by(site) %>% 
+      nest() %>% 
+      mutate(data = map(.x = data, .f = pet_spei_function)) %>% 
+      unnest(data)  %>% 
+      rename(temp = tmean, lat = latitude) %>% 
+      mutate(site = as.character(site)) %>% 
+      as.data.table()
+    
+    dat_cwd <- cwd_function(site=dat$site, year=dat$year, month=dat$month,
+                              petm = dat$petm, tmean=dat$temp,  
+                              ppt = dat$precip, soilawc = dat$swc)
+    
+    dat_cwd <- dat_cwd[,c("site", "month", "year", "cwd")]
+    dat_cwd$month=as.factor(dat_cwd$month)
+    dat <- merge(dat, dat_cwd, by = c("site", "month", "year"))
+    
+    # dat_cwd_spei <- cwd_function(site=dat$site, year=dat$year, month=dat$month,
+    #                                petm = dat$pet_spei, tmean=dat$temp,  
+    #                                ppt = dat$precip, soilawc = dat$swc)
+    # 
+    # dat_cwd_spei <- dat_cwd_spei[,c("site", "month", "year", "cwd")]
+    # names(dat_cwd_spei) <- c("site", "month", "year", "cwd_spei")
+    # dat_cwd_spei$month=as.factor(dat_cwd_spei$month)
+    # dat <- merge(dat, dat_cwd_spei, by = c("site", "month", "year"))
 
-    test=cwd_function(site=as.factor(dat$site),slope=dat$slope,latitude=dat$lat,foldedaspect=dat$aspect,ppt=dat$precip,tmean=dat$temp,month=dat$month,soilawc=dat$swc,year=NULL,type="normal")
-    fwrite(test,file=paste0(datfolder,"cwd calcs/",period[i],"_",j,".csv"))
+    #test=cwd_function(site=as.factor(dat$site),slope=dat$slope,latitude=dat$lat,foldedaspect=dat$aspect,ppt=dat$precip,tmean=dat$temp,month=dat$month,soilawc=dat$swc,year=NULL,type="normal")
+    fwrite(dat,file=paste0(datfolder,"cwd calcs/Feb2024_",period[i],"_",j,".csv"))
     print(j)
   }
 }
