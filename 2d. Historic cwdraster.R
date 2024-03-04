@@ -211,13 +211,18 @@ for(y in 1:length(sitegroups)){
 for(i in 1:length(sitegroups)){
   temp=fread(paste0(wdir,"1_input_processed/climate/cwd_group",sitegroups[i],".csv"))
   #annual totals
-  temp=temp%>%group_by(site,year)%>%summarize(pet=sum(petm),cwd=sum(cwd),ppt = sum(precip), tmean = mean(temp), pet_spei = sum(pet_spei), cwd_spei = sum(cwd_spei))
+  temp[,water_year:=year]
+  temp[(lat>=0) & (month>=10),water_year:=year+1] # Northern hemisphere water year is october through september
+  temp[(lat<0) & (month>=7),water_year:=year+1] # Southern hemisphere water year is July through June
+  
+  temp=temp%>%group_by(site,water_year)%>%summarize(pet=sum(petm),cwd=sum(cwd),ppt = sum(precip), tmean = mean(temp), pet_spei = sum(pet_spei), cwd_spei = sum(cwd_spei))
   temp=left_join(temp,sitedata%>%select(lon,lat,site))
   
   if(i==1) cwdhist=temp
   if(i>1) cwdhist=rbind(cwdhist,temp)
 }
 
+cwdhist <- cwdhist %>% rename(year = water_year)
 
 cwdgrid=pivot_wider(cwdhist[,c("lat", "lon", "year", "cwd")],id_cols=c(lon,lat),names_from=year,values_from=cwd)
 petgrid=pivot_wider(cwdhist[,c("lat", "lon", "year", "pet")],id_cols=c(lon,lat),names_from=year,values_from=pet)
