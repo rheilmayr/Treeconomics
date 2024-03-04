@@ -161,16 +161,17 @@ cwd_function <- function(site, year, month, petm, ppt, tmean, soilawc) {
     for (j in 1:length(sitedat$site)){
       soilmsite<-ifelse(j>1,
                         ## Later periods. Three possible outcomes:
-                        ## a) wm - petm <= 0:      soilm is a decay of previous soilm as a function of scale of potential deficit
+                        ## a) wm - petm <= 0:      soilm is 0 if swc is 0, otherwise soilm is a decay of previous soilm as a function of scale of potential deficit
                         ## b) (wm + soilm[j-1]) - petm < soilawc: soilm adds surplus
-                        ## c) (wm + soilm[j-1]) - petm < soilawc: soilm = soilawc
-                        ifelse((sitedat$wm[j]-sitedat$petm[j])<=0, soilm[j-1]*((exp(-1*(sitedat$petm[j]-sitedat$wm[j])/sitedat$soilawc))),
+                        ## c) (wm + soilm[j-1]) - petm >= soilawc: soilm = soilawc
+                        ifelse((sitedat$wm[j]-sitedat$petm[j])<=0,
+                               ifelse(sitedat$soilawc==0, 0, soilm[j-1]*((exp(-1*(sitedat$petm[j]-sitedat$wm[j])/sitedat$soilawc)))),
                                ifelse((sitedat$wm[j]-sitedat$petm[j]+soilm[j-1])<sitedat$soilawc[j],(sitedat$wm[j]-sitedat$petm[j]+soilm[j-1]),sitedat$soilawc[j])),
 
                         ## First period - looks at single period water balance. Three possible outcomes:
                         ## a) wm - petm <= 0:      soilm = 0
                         ## b) wm - petm < soilawc: soilm = wm - petm
-                        ## c) wm - petm > soilawc: soilm = soilawc
+                        ## c) wm - petm >= soilawc: soilm = soilawc
                         ifelse((sitedat$wm[j]-sitedat$petm[j])<=0,0,
                                ifelse((sitedat$wm[j]-sitedat$petm[j])<sitedat$soilawc[j],(sitedat$wm[j]-sitedat$petm[j]),sitedat$soilawc[j])))
       
