@@ -233,35 +233,66 @@ save(block_list,file=paste0(wdir,"2_output/second_stage/spatial_blocks.Rdat"))
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Create block bootstrap draws  ---------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+freq_table <- stack(lengths(block_list)) %>% 
+  as_tibble() %>% 
+  rename(freq = values,
+         collection_id = ind) %>% 
+  mutate(sample_weight = 1 / freq,
+         sample_weight = sample_weight / sum(sample_weight))
+
 draw_blocks <- function(site_sample){
-  samp <- site_sample %>% pull(samp)
-  blocked_draw <- (block_list[samp] %>% unlist() %>% unname())[1:n_sites]
+  samp <- site_sample %>% 
+    rename(collection_id = samp) %>% 
+    left_join(freq_table, by = "collection_id") %>% 
+    mutate(total_n = cumsum(freq) - freq) %>% 
+    filter(total_n < n_sites) %>%  # Filter down to set of sites sampled that collectively will provide sufficient blocked sites to match n_sites
+    pull(collection_id)
+  blocked_draw <- (block_list[samp] %>% unlist() %>% unname() %>% sample())[1:n_sites]  # Draw blocks, aggregate list, and then shuffle to randomly trim the extra sites off
   return(blocked_draw)  
 }
 
+
 n_obs = n_mc * n_sites
-block_draw_df <- tibble(boot_id = rep(1:n_mc, each = n_sites)) %>% 
-  lazy_dt() %>% 
-  mutate(samp = sample(site_list,size=n_obs,replace=TRUE)) %>%
-  group_by(boot_id) %>% 
+
+## Run without any resampling - works
+# block_draw_df <- tibble(boot_id = rep(1:n_mc, each = n_sites), collection_id = rep(freq_table$collection_id, n_mc)) %>%
+#   group_by(boot_id)
+# 
+# # Run without blocked sampling - works
+# block_draw_df <- tibble(boot_id = rep(1:n_mc, each = n_sites)) %>%
+#   mutate(collection_id = sample(freq_table$collection_id,size=n_obs,replace=TRUE)) %>%
+#   group_by(boot_id)
+  
+
+# Blocked sample
+block_draw_df <- tibble(boot_id = rep(1:n_mc, each = n_sites)) %>%
+  # lazy_dt() %>%
+  # mutate(samp = sample(freq_table$collection_id,size=n_obs,replace=TRUE)) %>%
+  mutate(samp = sample(freq_table$collection_id,size=n_obs,replace=TRUE, prob = freq_table$sample_weight)) %>%
+  group_by(boot_id) %>%
   nest()
 
-block_draw_df <- block_draw_df %>% 
-  mutate(sites = map(.x = data, .f = draw_blocks)) %>% # COULD PARALLELIZE HERE?
-  select(boot_id, sites) %>% 
-  as_tibble() %>% 
-  unnest(sites) 
+site_sample <- block_draw_df[1,2][[1]][[1]]
 
-block_draw_df <- block_draw_df %>% 
+block_draw_df <- block_draw_df %>%
+  mutate(sites = map(.x = data, .f = draw_blocks)) %>% # COULD PARALLELIZE HERE?
+  select(boot_id, sites) %>%
+  as_tibble() %>%
+  unnest(sites)
+
+block_draw_df <- block_draw_df %>%
   rename(collection_id = sites)
 
 ## Identify number of draws needed for each site
-n_draws <- block_draw_df %>% 
-  group_by(collection_id) %>% 
-  tally() %>% 
+n_draws <- block_draw_df %>%
+  group_by(collection_id) %>%
+  tally() %>%
   rename(n_draw = n)
 
-trim_df <- trim_df %>% 
+n_draws %>% summary()
+n_draws$n_draw %>% hist()
+
+mc_df <- trim_df %>% 
   left_join(n_draws, by = "collection_id")
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -292,20 +323,20 @@ draw_coefs <- function(n, cwd_est, pet_est, int_est, cwd_ste, pet_ste, int_ste,
 }
 
 ## Create needed number (n_draw) of random draws of first stage coefficients for each site
-trim_df <- trim_df %>% 
+mc_df <- mc_df %>% 
   drop_na()
 
-mc_df <- trim_df %>%
-  mutate(coef_draws = pmap(list(n = trim_df$n_draw + 1, 
-                                cwd_est = trim_df$estimate_cwd.an, 
-                                pet_est = trim_df$estimate_pet.an,
-                                int_est = trim_df$estimate_intercept, 
-                                cwd_ste = trim_df$std.error_cwd.an,
-                                pet_ste = trim_df$std.error_pet.an, 
-                                int_ste = trim_df$std.error_intercept,
-                                cwd_pet_cov = trim_df$cov_cwd_pet, 
-                                cwd_int_cov = trim_df$cov_int_cwd,
-                                pet_int_cov = trim_df$cov_int_pet), 
+mc_df <- mc_df %>%
+  mutate(coef_draws = pmap(list(n = mc_df$n_draw + 1, 
+                                cwd_est = mc_df$estimate_cwd.an, 
+                                pet_est = mc_df$estimate_pet.an,
+                                int_est = mc_df$estimate_intercept, 
+                                cwd_ste = mc_df$std.error_cwd.an,
+                                pet_ste = mc_df$std.error_pet.an, 
+                                int_ste = mc_df$std.error_intercept,
+                                cwd_pet_cov = mc_df$cov_cwd_pet, 
+                                cwd_int_cov = mc_df$cov_int_cwd,
+                                pet_int_cov = mc_df$cov_int_pet), 
                            draw_coefs))
 
 
@@ -333,7 +364,7 @@ block_draw_df %>%
   # select(boot_id, collection_id, cwd_coef, pet_coef, int_coef, cwd.spstd, pet.spstd) %>% 
   write_rds(paste0(wdir, "2_output/second_stage/mc_sample.gz"), compress = "gz")
 
-block_draw_df <- read_rds(paste0(wdir, "2_output/second_stage/mc_sample.gz"))
+# block_draw_df <- read_rds(paste0(wdir, "2_output/second_stage/mc_sample.gz"))
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Run bootstrap estimation of second stage model -------------------------
@@ -356,15 +387,15 @@ run_ss <- function(data, outcome = "cwd_coef"){
   return(coefs)
 }
 
-run_ss <- function(data, outcome = "cwd_coef"){
-  formula <- as.formula(paste(outcome, " ~ cwd.spstd + I(cwd.spstd^2) + pet.spstd + I(pet.spstd^2)"))
-  mod <- lm(formula, data=data)
-  # mod <- lm(formula, data=data)
-  coefs <- mod %>%
-    tidy() %>%
-    pull(estimate)
-  return(coefs)
-}
+# run_ss <- function(data, outcome = "cwd_coef"){
+#   formula <- as.formula(paste(outcome, " ~ cwd.spstd + I(cwd.spstd^2) + pet.spstd + I(pet.spstd^2)"))
+#   mod <- lm(formula, data=data)
+#   # mod <- lm(formula, data=data)
+#   coefs <- mod %>%
+#     tidy() %>%
+#     pull(estimate)
+#   return(coefs)
+# }
 
 
 ## Function to run second stage model for first stage CWD, 
@@ -428,4 +459,35 @@ boot_df <- boot_df %>%
 
 ## Save out bootstrapped coefficients
 write_rds(boot_df, paste0(wdir, "2_output/second_stage/ss_bootstrap.rds"))
+
+
+
+# # Digging into difference in bootstrap
+# boot_df$cwd_cwd %>% quantile(c(0.025, 0.5, 0.975))
+# boot_df$cwd_cwd %>% summary()
+# 
+# boot_df$cwd_cwd %>% mean()
+# boot_df$cwd_cwd %>% sd()
+# summary(cwd_mod)
+# 
+# 
+# test <- block_draw_df %>% 
+#   group_by(collection_id) %>% 
+#   summarise(estimate_bs = mean(cwd_coef),
+#             cwd.spstd.bs = mean(cwd.spstd))
+# 
+# # Coefficients are similar
+# test_summary <- trim_df %>% 
+#   left_join(test, by = "collection_id") %>% 
+#   select(collection_id, estimate_bs, estimate_cwd.an, cwd.spstd, cwd.spstd.bs)
+# 
+# test_summary
+# 
+# 
+# test <- block_draw_df %>% 
+#   group_by(collection_id) %>% 
+#   summarise(estimate_bs = mean(cwd_coef),
+#             cwd.spstd.bs = mean(cwd.spstd))
+
+
 
