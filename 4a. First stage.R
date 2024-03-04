@@ -179,7 +179,7 @@ fs_mod <- function(site_data, outcome = "rwi", water_var = "cwd.an", energy_var 
 # Run site-level regressions --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 site_df <- dendro_df %>%
-  # filter(year>1957) %>% 
+  # filter(year>1957) %>%
   # drop_na() %>% 
   rename(cwd.an = cwd.an.spstd,
          pet.an = pet.an.spstd,
@@ -202,11 +202,7 @@ fs_mod_temp <- partial(fs_mod, outcome = "rwi", energy_var = "temp.an", mod_type
 fs_mod_re <- partial(fs_mod, outcome = "rwi", energy_var = "pet.an", mod_type = "lme")
 
 site_df <- site_df %>% 
-  mutate(fs_result = map(data, .f = fs_mod_bl),
-         fs_result_ppt = map(data, .f = fs_mod_ppt),
-         fs_result_tc = map(data, .f = fs_mod_tc),
-         fs_result_ppt_tc = map(data, .f = fs_mod_tc_ppt),
-         fs_result_spei = map(data, .f = fs_mod_spei))
+  mutate(fs_result = map(data, .f = fs_mod_bl))
 
 
 data_df <- site_df %>% 
@@ -221,6 +217,13 @@ fs_df <- fs_df %>%
   unnest(mod) %>% 
   select(-error)
 fs_df %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_std.csv'))
+
+
+site_df <- site_df %>% 
+  mutate(fs_result_ppt = map(data, .f = fs_mod_ppt),
+         fs_result_tc = map(data, .f = fs_mod_tc),
+         fs_result_ppt_tc = map(data, .f = fs_mod_tc_ppt),
+         fs_result_spei = map(data, .f = fs_mod_spei))
 
 
 ## Repeat using ppt in place of cwd
