@@ -128,7 +128,7 @@ summary(feols(pet ~ tc_pet | collection_id, data = site_clim_df))
 # 4. Load species information for sites
 site_smry <- read_csv(paste0(wdir, '1_input_processed/dendro/site_summary.csv'))
 site_smry <- site_smry %>%
-  select(collection_id, sp_id) %>% 
+  select(collection_id, sp_id, latitude) %>% 
   mutate(sp_code = tolower(sp_id)) %>% 
   select(-sp_id)
 
@@ -331,6 +331,20 @@ sp_std_future_df <- function(cmip_df, hist_clim_vals, pet_mean, pet_sd, cwd_mean
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # niche_df <- niche_df %>% 
 #   select(sp_code = sp_code, sp_pet_mean = pet_mean, sp_pet_sd = pet_sd, sp_cwd_mean = cwd_mean, sp_cwd_sd = cwd_sd)
+
+
+# Shift to water year
+site_clim_df <- site_clim_df %>% 
+  left_join(site_smry, by = "collection_id") %>% 
+  as.data.table()
+
+site_clim_df[,water_year:=year]
+site_clim_df[(latitude>=0) & (month>=10),water_year:=year+1] # Northern hemisphere water year is october through september
+site_clim_df[(latitude<0) & (month>=7),water_year:=year+1] # Southern hemisphere water year is July through June
+site_clim_df <- site_clim_df %>% 
+  as_tibble() %>% 
+  select(-year) %>% 
+  rename(year = water_year)
 
 
 # Calculate site-level annual climate
