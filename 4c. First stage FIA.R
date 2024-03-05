@@ -47,13 +47,13 @@ wdir <- 'remote/'
 
 
 # 1. Dendrochronologies
-dendro_dir <- paste0(wdir, "out/dendro/")
+dendro_dir <- paste0(wdir, "1_input_processed/dendro/")
 dendro_df <- read.csv(paste0(dendro_dir, "rwi_long_fia.csv"))
 dendro_df <- dendro_df %>% 
   mutate(species_id = tolower(species_id)) 
 
 # 2. Historic site-level climate
-an_site_clim <- read_rds(paste0(wdir, "out/climate/site_an_clim.gz"))
+an_site_clim <- read_rds(paste0(wdir, "2_output/climate/site_an_clim.gz"))
 dendro_df <- dendro_df %>% 
   left_join(an_site_clim, by = c("collection_id", "year"))
 
