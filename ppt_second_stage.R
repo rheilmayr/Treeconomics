@@ -136,7 +136,10 @@ ppt_mfx_plot <- preds %>%
   filter(variation == "ppt") %>% 
   ggplot(aes(x = ppt.spstd)) + 
   geom_line(aes(y = estimate)) +
-  geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2)
+  geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2) +
+  xlab("Historic standardized PPT") +
+  ylab("Estimated sensitivity to PPT") +
+  theme_bw()
 ppt_mfx_plot
 
 pet_mfx_plot <- preds %>% 

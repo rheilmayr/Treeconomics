@@ -211,7 +211,11 @@ cwd_mfx_plot
 
 
 
-
+formula = as.formula("estimate_cwd.an ~ cwd.spstd.tc + (cwd.spstd.tc^2) + pet.spstd.tc + (pet.spstd.tc^2)")
+mod_data <- trim_df
+cwd_mod <- feols(formula, data = mod_data, weights = mod_data$cwd_errorweights,
+                 vcov = conley(cutoff = vg.range/1000, distance = "spherical"))
+summary(cwd_mod)
 
 formula = as.formula("estimate_cwd.an.spstd.tc ~ cwd.spstd + (cwd.spstd^2) + pet.spstd + (pet.spstd^2)")
 mod_data <- trim_df
