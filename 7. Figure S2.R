@@ -101,16 +101,19 @@ fullrange_cwd <- sp_predictions %>%
   select(cwd_hist) 
 fullrange_quantiles <- (fullrange_cwd$cwd_hist) %>% 
   quantile(probs = seq(0, 1, 0.01))
+cwd_min_q <- fullrange_quantiles[2] - 1
+cwd_max_q <- fullrange_quantiles[100] + 1
 
 itrdb_cwd <- flm_df %>% 
-  select(cwd.spstd)
+  select(cwd.spstd) %>% 
+  drop_na()
 itrdb_quantiles <- (itrdb_cwd$cwd.spstd) %>% 
   quantile(probs = seq(0, 1, 0.01))
 
 itrdb_hist <- itrdb_cwd %>% 
   ggplot(aes(x = cwd.spstd)) +
   geom_histogram(bins = 50) +
-  xlim(-3, 5) +
+  xlim(cwd_min_q, cwd_max_q) +
   theme_bw() +
   ggtitle("CWD frequency among ITRDB sites") +
   xlab("Historic CWD (Deviation from species mean)")
@@ -118,7 +121,7 @@ itrdb_hist <- itrdb_cwd %>%
 fullrange_hist <- fullrange_cwd %>% 
   ggplot(aes(x = cwd_hist)) +
   geom_histogram(bins = 50) +
-  xlim(-3, 5) +
+  xlim(cwd_min_q, cwd_max_q) +
   theme_bw() +
   ggtitle("CWD frequency across species ranges") +
   xlab("Historic CWD (Deviation from species mean)")
@@ -128,8 +131,8 @@ quantile_df <- tibble(itrdb = itrdb_quantiles, fullrange = fullrange_quantiles)
 qq_plot <- quantile_df %>%
   ggplot(aes(x = fullrange, y = itrdb)) +
   geom_point() +
-  xlim(c(-3, 5)) +
-  ylim(c(-3, 5)) +
+  xlim(c(cwd_min_q, cwd_max_q)) +
+  ylim(c(cwd_min_q, cwd_max_q)) +
   # xlim(c(-4, 15)) +
   # ylim(c(-4, 15)) +
   geom_abline(intercept = 0, slope = 1) +
@@ -144,9 +147,12 @@ cwd_qqplot <- (itrdb_hist / fullrange_hist) | qq_plot
 
 # PET
 fullrange_pet <- sp_predictions %>% 
-  select(pet_hist) 
+  select(pet_hist) %>% 
+  drop_na
 fullrange_pquantiles <- (fullrange_pet$pet_hist) %>% 
   quantile(probs = seq(0, 1, 0.01))
+pet_min_q <- fullrange_pquantiles[2] - 1
+pet_max_q <- fullrange_pquantiles[100] + 1
 
 itrdb_pet <- flm_df %>% 
   select(pet.spstd)
@@ -156,7 +162,7 @@ itrdb_pquantiles <- (itrdb_pet$pet.spstd) %>%
 itrdb_pet_hist <- itrdb_pet %>% 
   ggplot(aes(x = pet.spstd)) +
   geom_histogram(bins = 50) +
-  xlim(-3, 5) +
+  xlim(pet_min_q, pet_max_q) +
   theme_bw() +
   ggtitle("PET frequency among ITRDB sites") +
   xlab("Historic PET (Deviation from species mean)")
@@ -164,7 +170,7 @@ itrdb_pet_hist <- itrdb_pet %>%
 fullrange_pet_hist <- fullrange_pet %>% 
   ggplot(aes(x = pet_hist)) +
   geom_histogram(bins = 50) +
-  xlim(-3, 5) +
+  xlim(pet_min_q, pet_max_q) +
   theme_bw() +
   ggtitle("PET frequency across species ranges") +
   xlab("Historic PET (Deviation from species mean)")
@@ -174,8 +180,8 @@ pquantile_df <- tibble(itrdb = itrdb_pquantiles, fullrange = fullrange_pquantile
 pet_qq_plot <- pquantile_df %>%
   ggplot(aes(x = fullrange, y = itrdb)) +
   geom_point() +
-  xlim(c(-3, 5)) +
-  ylim(c(-3, 5)) +
+  xlim(c(pet_min_q, pet_max_q)) +
+  ylim(c(pet_min_q, pet_max_q)) +
   # xlim(c(-3.5, 5)) +
   # ylim(c(-3.5, 5)) +
   geom_abline(intercept = 0, slope = 1) +

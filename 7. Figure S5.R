@@ -26,6 +26,7 @@ wdir <- 'remote/'
 # 1. Specification comparisons
 specs <- read_rds(paste0(wdir, "2_output/second_stage/robustness_specs.rds"))
 
+# specs <- specs %>% filter(coef < .10)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Create spec chart --------------------------------------------------------

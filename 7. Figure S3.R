@@ -131,7 +131,7 @@ cwd_est_plot <- long_trim_df %>%
   geom_histogram(bins = 200) +
   # scale_x_continuous(trans="log1p") +
   theme_bw() +
-  xlim(-1.5, 1.5) +
+  xlim(-1.25, 1) +
   scale_fill_manual(values = c("steelblue2", "dodgerblue4")) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "black", size = 1) +
   # geom_vline(xintercept = cwd_median, color = "tomato3", size = 1.5) +
@@ -149,7 +149,7 @@ pet_est_plot <- long_trim_df %>%
   geom_histogram(bins = 200) +
   # scale_x_continuous(trans="log1p") +
   theme_bw() +
-  xlim(-1.5, 1.5) +
+  xlim(-1.25, 1) +
   scale_fill_manual(values = c("steelblue2", "dodgerblue4")) +
   geom_vline(xintercept = 0, linetype = "dashed", color = "black", size = 1) +
   # geom_vline(xintercept = pet_median, color = "tomato3", size = 1.5) +
@@ -180,7 +180,7 @@ cwd_plot <- cwd_median_effect %>%
   geom_hline(yintercept = 0, linetype = 2) +
   geom_ribbon(alpha = 0.2, fill = "dodgerblue4") +
   xlim(0, 10) +
-  ylim(-0.3, 0.1)
+  ylim(-0.2, 0.1)
 cwd_dynamic = cwd_plot +
   xlab("Lag (years)") +
   ylab("Median effect of CWD=1 shock on RWI") +
@@ -200,7 +200,7 @@ pet_plot <- pet_median_effect %>%
   geom_hline(yintercept = 0, linetype = 2) +
   geom_ribbon(alpha = 0.2, fill = "dodgerblue4") +
   xlim(0, 10) +
-  ylim(-0.15, 0.3)
+  ylim(-0.2, 0.25)
 
 pet_dynamic = pet_plot +
   xlab("Lag (years)") +
