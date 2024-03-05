@@ -183,8 +183,8 @@ site_df <- dendro_df %>%
   # drop_na() %>% 
   rename(cwd.an = cwd.an.spstd,
          pet.an = pet.an.spstd,
-         ppt.an = ppt.an.spstd,
-         temp.an = temp.an.spstd) %>%
+         temp.an = temp.an.spstd,
+         ppt.an = ppt.an.spstd) %>%
   group_by(collection_id) %>%
   add_tally(name = 'nobs') %>% 
   # filter(nobs>10) %>% 
