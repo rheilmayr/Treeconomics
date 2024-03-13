@@ -50,9 +50,10 @@ wdir <- "remote/"
 # franspath="C:/Users/fmoore/Box/Davis Stuff/Treeconomics"
 
 ## Load CRU temp and precip data
-cruyears=rep(1901:2019,each=12);crumonths=rep(1:12,length(1901:2019))
-tas=stack(paste0(wdir, "0_raw/CRUData/cru_ts4.04.1901.2019.tmp.dat.nc"))
-pr=stack(paste0(wdir,"0_raw/CRUData/cru_ts4.04.1901.2019.pre.dat.nc"))
+cruyears=rep(1901:2019,each=12);crumonths=rep(1:12,length(1901:2022))
+tas=stack(paste0(wdir, "0_raw/CRUData/v4.07/cru_ts4.07.1901.2022.tmp.dat.nc"))
+pr=stack(paste0(wdir,"0_raw/CRUData/v4.07/cru_ts4.07.1901.2022.pre.dat.nc"))
+pet=stack(paste0(wdir,"0_raw/CRUData/v4.07/cru_ts4.07.1901.2022.pet.dat.nc"))
 
 ## Load soil water capacity raster
 swc=raster(paste0(wdir,"0_raw/other data for cwd/sr_cru_max.asc"))
@@ -73,7 +74,9 @@ baseyears=1901:1980
 basemonths=rep(1:12,length(baseyears))
 years=rep(baseyears,each=12)
 
-tas=tas[[which(cruyears%in%baseyears)]];pr=pr[[which(cruyears%in%baseyears)]]
+tas=tas[[which(cruyears%in%baseyears)]]
+pr=pr[[which(cruyears%in%baseyears)]]
+pet=pet[[which(cruyears%in%baseyears)]]
 
 ## Don't need to run if getting annual cwd values (not normals for baseline period)
 # tas_months=calc(tas[[which(basemonths==1)]],function(x) mean(x, na.rm=T));pr_months=calc(pr[[which(basemonths==1)]],function(x) mean(x, na.rm=T))
@@ -100,15 +103,21 @@ sitedata$slope[which(sitedata$slope<0)]=0
 
 # crop temp and precip data to swc extent
 #tas_months=crop(tas_months,extent(swc));pr_months=crop(pr_months,extent(swc))
-tas=crop(tas,extent(swc));pr=crop(pr,extent(swc))
+tas=crop(tas,extent(swc))
+pr=crop(pr,extent(swc))
+pet=crop(pet,extent(swc))
 
 # # set up parallel processing
 # cl=makeCluster(4)
 # clusterExport(cl,c("data","setorder"))
 # registerDoParallel(cl)
 
-tasdata=as.data.frame(tas);prdata=as.data.frame(pr)
-tasdata$site=1:dim(tasdata)[1];prdata$site=1:dim(tasdata)[1]
+tasdata=as.data.frame(tas)
+prdata=as.data.frame(pr)
+petdata=as.data.frame(pet)
+tasdata$site=1:dim(tasdata)[1]
+prdata$site=1:dim(tasdata)[1]
+petdata$site=1:dim(tasdata)[1]
 # tasdata=melt(tasdata,id.vars="site");prdata=melt(prdata,id.vars="site")
 # climatedata=cbind(tasdata,prdata[,3])
 # colnames(climatedata)=c("site","month","temp","precip")
@@ -145,13 +154,15 @@ tasdata$site=1:dim(tasdata)[1];prdata$site=1:dim(tasdata)[1]
 # 
 # save(cwd_historic,aet_historic,file=paste0(wdir,"1_input_processed/climate/HistoricCWD_AETGrids.Rdat"))
 
-tasdata=reshape2::melt(tasdata,id.vars=c("site"));prdata=reshape2::melt(prdata,id.vars=c("site"))
+tasdata=reshape2::melt(tasdata,id.vars=c("site"))
+prdata=reshape2::melt(prdata,id.vars=c("site"))
+petdata=reshape2::melt(petdata,id.vars=c("site"))
 tasdata$year=as.numeric(substr(tasdata$variable,2,5))
 tasdata$month=as.numeric(substr(tasdata$variable,7,8))
 
-climatedata=cbind(tasdata,prdata[,3])
+climatedata=cbind(tasdata,prdata[,3],petdata[,3])
 climatedata=climatedata[,-which(colnames(climatedata)=="variable")]
-colnames(climatedata)=c("site","temp","year","month","precip")
+colnames(climatedata)=c("site","temp","year","month","precip", "pet")
 
 climatedata <- as_tibble(climatedata)
 sitedata <- as_tibble(sitedata)
@@ -171,6 +182,14 @@ sitegroups=1:61
 
 for(y in 1:length(sitegroups)){
   groupdat=dat%>%filter(sitegroup==sitegroups[y])
+  
+  groupdat=as.data.table(groupdat)
+  groupdat[,site:=as.character(site)]
+  
+  # Shift CRU PET data from mm/day to mm/month
+  groupdat[,days:= days_in_month(as.yearmon(paste(year, month), "%Y %m"))]
+  groupdat[,pet_cru:= days * pet]
+
   group_pet <- pet_function(site=groupdat$site, year=groupdat$year, month=groupdat$month,
                              slope=groupdat$slope, latitude=groupdat$lat, aspect=groupdat$aspect,
                              tmean=groupdat$temp)
@@ -203,7 +222,16 @@ for(y in 1:length(sitegroups)){
   group_cwd_spei <- group_cwd_spei[,c("site", "month", "year", "cwd")]
   names(group_cwd_spei) <- c("site", "month", "year", "cwd_spei")
   groupdat <- merge(groupdat, group_cwd_spei, by = c("site", "month", "year"))
+
+  group_cwd_cru <- cwd_function(site=groupdat$site, year=groupdat$year, month=groupdat$month,
+                                 petm = groupdat$pet_cru, tmean=groupdat$temp,  
+                                 ppt = groupdat$precip, soilawc = groupdat$swc)
   
+  group_cwd_cru <- group_cwd_cru[,c("site", "month", "year", "cwd")]
+  names(group_cwd_cru) <- c("site", "month", "year", "cwd_cru")
+  groupdat <- merge(groupdat, group_cwd_cru, by = c("site", "month", "year"))
+  
+    
   fwrite(groupdat,file=paste0(wdir,"1_input_processed/climate/cwd_group",sitegroups[y],".csv"))
   print(y)
 }
@@ -215,7 +243,9 @@ for(i in 1:length(sitegroups)){
   temp[(lat>=0) & (month>=10),water_year:=year+1] # Northern hemisphere water year is october through september
   temp[(lat<0) & (month>=7),water_year:=year+1] # Southern hemisphere water year is July through June
   
-  temp=temp%>%group_by(site,water_year)%>%summarize(pet=sum(petm),cwd=sum(cwd),ppt = sum(precip), tmean = mean(temp), pet_spei = sum(pet_spei), cwd_spei = sum(cwd_spei))
+  temp=temp%>%group_by(site,water_year)%>%summarize(pet=sum(petm),cwd=sum(cwd),
+                ppt = sum(precip), tmean = mean(temp), pet_spei = sum(pet_spei), 
+                cwd_spei = sum(cwd_spei), pet_cru = sum(pet_cru), cwd_cru = sum(cwd_cru))
   temp=left_join(temp,sitedata%>%select(lon,lat,site))
   
   if(i==1) cwdhist=temp
@@ -230,6 +260,8 @@ pptgrid=pivot_wider(cwdhist[,c("lat", "lon", "year", "ppt")],id_cols=c(lon,lat),
 tmpgrid=pivot_wider(cwdhist[,c("lat", "lon", "year", "tmean")],id_cols=c(lon,lat),names_from=year,values_from=tmean)
 cwdspgrid=pivot_wider(cwdhist[,c("lat", "lon", "year", "cwd_spei")],id_cols=c(lon,lat),names_from=year,values_from=cwd_spei)
 petspgrid=pivot_wider(cwdhist[,c("lat", "lon", "year", "pet_spei")],id_cols=c(lon,lat),names_from=year,values_from=pet_spei)
+cwdcrugrid=pivot_wider(cwdhist[,c("lat", "lon", "year", "cwd_cru")],id_cols=c(lon,lat),names_from=year,values_from=cwd_cru)
+petcrugrid=pivot_wider(cwdhist[,c("lat", "lon", "year", "pet_cru")],id_cols=c(lon,lat),names_from=year,values_from=pet_cru)
 
 
 cwd_historic=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
@@ -238,6 +270,8 @@ ppt_historic=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
 tmp_historic=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
 cwdsp_historic=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
 petsp_historic=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
+cwdcru_historic=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
+petcru_historic=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
 
 
 cwdgrid$cells=cellFromXY(cwd_historic,as.matrix(cwdgrid[,c(1,2)]))
@@ -246,6 +280,9 @@ pptgrid$cells=cellFromXY(ppt_historic,as.matrix(pptgrid[,c(1,2)]))
 tmpgrid$cells=cellFromXY(tmp_historic,as.matrix(tmpgrid[,c(1,2)]))
 cwdspgrid$cells=cellFromXY(cwdsp_historic,as.matrix(cwdspgrid[,c(1,2)]))
 petspgrid$cells=cellFromXY(petsp_historic,as.matrix(petspgrid[,c(1,2)]))
+cwdcrugrid$cells=cellFromXY(cwdcru_historic,as.matrix(cwdcrugrid[,c(1,2)]))
+petcrugrid$cells=cellFromXY(petcru_historic,as.matrix(petcrugrid[,c(1,2)]))
+
 
 cwdgrid=as.data.frame(cwdgrid)
 petgrid=as.data.frame(petgrid)
@@ -253,6 +290,8 @@ pptgrid=as.data.frame(pptgrid)
 tmpgrid=as.data.frame(tmpgrid)
 petspgrid=as.data.frame(petspgrid)
 cwdspgrid=as.data.frame(cwdspgrid)
+petcrugrid=as.data.frame(petcrugrid)
+cwdcrugrid=as.data.frame(cwdcrugrid)
 
 cwd_historic[cwdgrid$cells]=cwdgrid[,grep(baseyears[1],colnames(cwdgrid))]
 pet_historic[petgrid$cells]=petgrid[,grep(baseyears[1],colnames(petgrid))]
@@ -260,6 +299,8 @@ ppt_historic[pptgrid$cells]=pptgrid[,grep(baseyears[1],colnames(pptgrid))]
 tmp_historic[tmpgrid$cells]=tmpgrid[,grep(baseyears[1],colnames(tmpgrid))]
 petsp_historic[petspgrid$cells]=petspgrid[,grep(baseyears[1],colnames(petspgrid))]
 cwdsp_historic[cwdspgrid$cells]=cwdspgrid[,grep(baseyears[1],colnames(cwdspgrid))]
+petcru_historic[petcrugrid$cells]=petcrugrid[,grep(baseyears[1],colnames(petcrugrid))]
+cwdcru_historic[cwdcrugrid$cells]=cwdcrugrid[,grep(baseyears[1],colnames(cwdcrugrid))]
 
 for(i in 2:length(baseyears)){
   cwdtemp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
@@ -268,6 +309,8 @@ for(i in 2:length(baseyears)){
   tmptemp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
   petsptemp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
   cwdsptemp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
+  petcrutemp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
+  cwdcrutemp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
   
   cwdtemp[cwdgrid$cells]=cwdgrid[,grep(baseyears[i],colnames(cwdgrid))]
   pettemp[petgrid$cells]=petgrid[,grep(baseyears[i],colnames(petgrid))]
@@ -275,6 +318,8 @@ for(i in 2:length(baseyears)){
   tmptemp[tmpgrid$cells]=tmpgrid[,grep(baseyears[i],colnames(tmpgrid))]
   petsptemp[petspgrid$cells]=petspgrid[,grep(baseyears[i],colnames(petspgrid))]
   cwdsptemp[cwdspgrid$cells]=cwdspgrid[,grep(baseyears[i],colnames(cwdspgrid))]
+  petcrutemp[petcrugrid$cells]=petcrugrid[,grep(baseyears[i],colnames(petcrugrid))]
+  cwdcrutemp[cwdcrugrid$cells]=cwdcrugrid[,grep(baseyears[i],colnames(cwdcrugrid))]
   
   cwd_historic=addLayer(cwd_historic,cwdtemp)
   pet_historic=addLayer(pet_historic,pettemp)
@@ -282,9 +327,12 @@ for(i in 2:length(baseyears)){
   tmp_historic=addLayer(tmp_historic,tmptemp)
   petsp_historic=addLayer(petsp_historic,petsptemp)
   cwdsp_historic=addLayer(cwdsp_historic,cwdsptemp)
+  petcru_historic=addLayer(petcru_historic,petcrutemp)
+  cwdcru_historic=addLayer(cwdcru_historic,cwdcrutemp)
   
   print(i)
 }
-save(cwd_historic, pet_historic, ppt_historic, tmp_historic, petsp_historic, cwdsp_historic, file=paste0(wdir,"1_input_processed/climate/HistoricCWD_AETGrids_Annual.Rdat"))
+save(cwd_historic, pet_historic, ppt_historic, tmp_historic, petsp_historic, cwdsp_historic, petcru_historic, cwdcru_historic,
+     file=paste0(wdir,"1_input_processed/climate/HistoricCWD_AETGrids_Annual.Rdat"))
 
 
