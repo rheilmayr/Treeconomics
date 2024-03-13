@@ -124,7 +124,7 @@ pet_spei_function <- function(data){
 # }
 
 
-cwd_function <- function(site, year, month, petm, ppt, tmean, soilawc) {
+cwd_function <- function(site, year, month, petm, ppt, tmean, soilawc,normals=FALSE) {
   data<-as.data.table(cbind(as.character(site),year,month,petm,ppt,tmean,soilawc))
   colnames(data)<-c("site","year","month","petm","ppt","tmean","soilawc")
   data$site<-as.character(data$site)
@@ -134,7 +134,14 @@ cwd_function <- function(site, year, month, petm, ppt, tmean, soilawc) {
   data$ppt<-as.numeric(as.character(data$ppt))
   data$tmean<-as.numeric(as.character(data$tmean))
   data$soilawc<-as.numeric(as.character(data$soilawc))
-  
+
+  ### for 30 year normal data only, we'll create iterations so that way the water storage can carry over from one year to the next
+  if (normals==TRUE){
+    year<-c(rep(1,length(data$site)),rep(2,length(data$site)),rep(3,length(data$site)),rep(4,length(data$site)),rep(5,length(data$site)),rep(6,length(data$site)),rep(7,length(data$site)),rep(8,length(data$site)),rep(9,length(data$site)),rep(10,length(data$site)))
+    data<-rbind(data,data,data,data,data,data,data,data,data,data)
+    data$year=year
+    }
+
   data[,fm:=ifelse(tmean<0,0,ifelse(tmean>=6,1,tmean*0.166666666))]
   data[,rainm:=fm*ppt]
   data[,snowm:=(1-fm)*ppt]
@@ -208,6 +215,7 @@ cwd_function <- function(site, year, month, petm, ppt, tmean, soilawc) {
   data[,cwd:=petm-aet]
   data<-setorder(data,site,year,month)
   
+  if(normals==TRUE)data=data[which(data$year==10),]
   
   return(data)
 }

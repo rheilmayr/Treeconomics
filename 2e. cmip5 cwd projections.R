@@ -137,7 +137,7 @@ save(sitedata,pr_correction,tas_correction,file=paste0(wdir,"in/CMIP5 Data/other
 #apply calculated bias based on monthly differences between WorldClim and model runs to climate model projections and calculate cwd and aet
 datfolder=paste0(wdir, "in/CMIP5 Data/")
 
-period=c("start","mid","end")
+period=c("start","end")
 
 load(paste0(wdir,"in/CMIP5 Data/other data for cwd/sitedata_climatologycorrection_Feb2024.Rdat"))
 sitedata$slope[which(sitedata$slope<0)]=0 # fix a few spurious slope values
@@ -172,7 +172,7 @@ for(i in 1:length(period)){
     dat=merge(sitedata,climatedata) #merge climate projections for each raster cell with data frame of site-constants (slope, elevation, aspect, swc)
     dat=dat[complete.cases(dat),]
     
-    #add single year comlumn since just running pet and cwd functions over baseline climatological averages
+    #add single year column since just running pet and cwd functions over baseline climatological averages
     dat$year=1
     
     dat_pet <- pet_function(site=dat$site, year=dat$year, month=dat$month,
@@ -181,21 +181,21 @@ for(i in 1:length(period)){
     dat_pet <- dat_pet[,c("site", "month", "year", "petm")]
     dat <- merge(dat, dat_pet, by = c("site", "month", "year"))
     
-    dat <- dat %>% 
-      as_tibble() %>% 
-      rename(tmean = temp, latitude = lat) %>% 
-      arrange(site, year, month) %>% 
-      group_by(site) %>% 
-      nest() %>% 
-      mutate(data = map(.x = data, .f = pet_spei_function)) %>% 
-      unnest(data)  %>% 
-      rename(temp = tmean, lat = latitude) %>% 
-      mutate(site = as.character(site)) %>% 
-      as.data.table()
+    # dat <- dat %>% 
+    #   as_tibble() %>% 
+    #   rename(tmean = temp, latitude = lat) %>% 
+    #   arrange(site, year, month) %>% 
+    #   group_by(site) %>% 
+    #   nest() %>% 
+    #   mutate(data = map(.x = data, .f = pet_spei_function)) %>% 
+    #   unnest(data)  %>% 
+    #   rename(temp = tmean, lat = latitude) %>% 
+    #   mutate(site = as.character(site)) %>% 
+    #   as.data.table()
     
     dat_cwd <- cwd_function(site=dat$site, year=dat$year, month=dat$month,
                               petm = dat$petm, tmean=dat$temp,  
-                              ppt = dat$precip, soilawc = dat$swc)
+                              ppt = dat$precip, soilawc = dat$swc,normals=TRUE)
     
     dat_cwd <- dat_cwd[,c("site", "month", "year", "cwd")]
     dat_cwd$month=as.factor(dat_cwd$month)
