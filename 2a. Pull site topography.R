@@ -27,10 +27,10 @@ select = dplyr::select
 # Load data --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Set working directory
-wdir <- 'remote//'
+wdir <- 'remote/'
 
 # 1. Load ITRDB site latitude and longitude
-site_itrdb <- read_csv(paste0(wdir, 'out//dendro//site_summary.csv')) %>% 
+site_itrdb <- read_csv(paste0(wdir, '1_input_processed/dendro/site_summary.csv')) %>% 
   drop_na() %>% 
   mutate(plot_cn = collection_id) %>% 
   select(plot_cn, latitude, longitude, datasource)
@@ -39,7 +39,7 @@ site_itrdb <- read_csv(paste0(wdir, 'out//dendro//site_summary.csv')) %>%
 #   rename(elevation_itrdb = elevation)
 
 # 2. Load FIA site latitude and longitude
-site_fia <- read_csv(paste0(wdir, 'out//dendro//site_summary_fia.csv')) %>% 
+site_fia <- read_csv(paste0(wdir, '1_input_processed/dendro/site_summary_fia.csv')) %>% 
   drop_na() %>% 
   mutate(datasource = "klesse_2018") %>% 
   select(plot_cn, latitude, longitude, datasource) %>% 
