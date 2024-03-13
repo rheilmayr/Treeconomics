@@ -43,6 +43,7 @@ library(marginaleffects)
 source("f_spec_chart_function.R")
 library(lme4)
 library(multcomp)
+library(tictoc)
 
 select <- dplyr::select
 
@@ -103,6 +104,8 @@ dendro_df <- dendro_df %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Run model --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+formula = "rwi ~ cwd.an.spstd + pet.an.spstd | collection_id"
+
 formula = "rwi ~ cwd.an.spstd:pet.spstd + cwd.an.spstd:I(pet.spstd**2) +
                cwd.an.spstd:cwd.spstd + cwd.an.spstd:I(cwd.spstd**2) +
                pet.an.spstd:pet.spstd + pet.an.spstd:I(pet.spstd**2) +
@@ -112,8 +115,33 @@ formula = "rwi ~ cwd.an.spstd:pet.spstd + cwd.an.spstd:I(pet.spstd**2) +
 mod_df <- dendro_df
 cwd_median <- mod_df %>% select(cwd.spstd) %>% drop_na() %>% pull(cwd.spstd) %>% median()
 
+formula = "rwi ~ cwd.an.spstd + pet.an.spstd | collection_id"
+mod <- feols(as.formula(formula), data = mod_df)
+summary(mod)
 
-mod <- lmer(formula, data = mod_df, control = lmerControl(optimizer ="Nelder_Mead"))
+formula = "rwi ~ ppt.an.spstd + pet.an.spstd | collection_id"
+mod <- feols(as.formula(formula), data = mod_df)
+summary(mod)
+
+formula = "rwi ~ cwd.an.spstd.cru + pet.an.spstd.cru | collection_id"
+mod <- feols(as.formula(formula), data = mod_df)
+summary(mod)
+
+formula = "rwi ~ cwd.an.spstd.tc + pet.an.spstd.tc | collection_id"
+mod <- feols(as.formula(formula), data = mod_df)
+summary(mod)
+
+formula = "rwi ~ ppt.an.spstd.tc + pet.an.spstd.tc | collection_id"
+mod <- feols(as.formula(formula), data = mod_df)
+summary(mod)
+
+
+
+
+
+
+
+# mod <- lmer(formula, data = mod_df, control = lmerControl(optimizer ="Nelder_Mead"))
 test_str <- paste0("cwd.spstd + (2 * \`I(cwd.spstd^2)\` * ", as.character(cwd_median), ") = 0")
 lincom <- glht(mod, linfct = c(test_str))
 lincom <- summary(lincom)
@@ -192,6 +220,43 @@ slope_df <- marg_fx_df(mod, mod_df)
 slope_df %>% 
   filter(term == "ppt.an.spstd") %>%
   ggplot(aes(x = ppt.an.spstd, group = dry_class, color = dry_class)) + 
+  geom_line(aes(y = estimate)) +
+  geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2)
+
+
+
+
+mod_df <- dendro_df %>% 
+  left_join(site_df %>% select(collection_id, species_id), by = "collection_id") %>% 
+  # filter(species_id == "pipo") %>%
+  # mutate(dry_class = ifelse(ppt.spstd < -0.5, "dry", ifelse(ppt.spstd > 0.5, "wet", "medium"))) %>% 
+  mutate(dry_class = cut(ppt.spstd.tc, quantile(ppt.spstd, 0:4/4, na.rm = TRUE))) %>% 
+  drop_na()
+
+mod <- lm(rwi ~ poly(ppt.an.spstd.tc,2)*dry_class + poly(pet.an.spstd.tc,2)*dry_class, data = mod_df)
+summary(mod)
+
+marg_fx_df <- function(mod, mod_df){
+  classes = mod_df$dry_class %>% unique()
+  inc <- 0.1
+  slope_df = tibble()
+  for (c in classes) {
+    print(c)
+    ppt_range <- mod_df %>% filter(dry_class == c) %>% pull(ppt.an.spstd.tc) %>% range()
+    min <- ppt_range[1]
+    max <- ppt_range[2]
+    class_slopes <- slopes(mod, newdata = datagrid(dry_class = c, pet.an.spstd.tc = 0, ppt.an.spstd.tc = seq(min,max,inc))) %>% 
+      mutate(dry_class = c)
+    slope_df <- rbind(slope_df, class_slopes)
+  }
+  return(slope_df)
+}
+
+slope_df <- marg_fx_df(mod, mod_df)
+
+slope_df %>% 
+  filter(term == "ppt.an.spstd.tc") %>%
+  ggplot(aes(x = ppt.an.spstd.tc, group = dry_class, color = dry_class)) + 
   geom_line(aes(y = estimate)) +
   geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2)
 
