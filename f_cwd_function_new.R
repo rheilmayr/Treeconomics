@@ -112,6 +112,16 @@ pet_spei_function <- function(data){
   return(data)
 }
 
+# pet_cru_function <- function(site, year, month, pet_cru){
+#   # Adjusts daily PET (CRU TS data) into monthly PET
+#   data<-as.data.table(cbind(as.character(site),year,month,pet_cru))
+#   data$month<-as.numeric(as.character(data$month))
+#   data$year<-as.numeric(as.character(year))
+#   data[,yearmonth:= as.yearmon(paste(year, month), "%Y %m")]
+#   data[,days:=days_in_month(yearmonth)]
+#   data[,petm:=pet_cru*days]
+#   return(data)
+# }
 
 
 cwd_function <- function(site, year, month, petm, ppt, tmean, soilawc) {
