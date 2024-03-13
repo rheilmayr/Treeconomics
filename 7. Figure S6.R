@@ -70,22 +70,26 @@ flm_itrdb <- read_csv(paste0(wdir, "2_output/first_stage/site_pet_cwd_std_augmen
 # 2. Site-level regressions from FIA
 flm_fia <- read_csv(paste0(wdir, "2_output/first_stage/fia_pet_cwd_std.csv"))
 
-# 3. Average site climates
-ave_site_clim_df <- read_rds(paste0(wdir, "2_output/climate/site_ave_clim.gz"))
-flm_fia <- flm_fia %>% 
-  left_join(ave_site_clim_df, by = c("collection_id"))
-
 # 3. Site information
-site_df <- read_csv(paste0(wdir, '2_output/dendro/site_summary_fia.csv'))
+site_df <- read_csv(paste0(wdir, '1_input_processed/dendro/site_summary_fia.csv'))
+site_df <- site_df %>% distinct()
 site_df <- site_df %>% 
-  select(collection_id, species_id, latitude, longitude)
+  select(collection_id, plot_cn, species_id, latitude, longitude)
 site_df <- site_df %>% 
   mutate(species_id = str_to_lower(species_id))
 flm_fia <- flm_fia %>% 
   left_join(site_df, by = "collection_id")
 
 
+# 3. Average site climates
+ave_site_clim_df <- read_rds(paste0(wdir, "2_output/climate/site_ave_clim.gz"))
+flm_fia <- flm_fia %>% 
+  mutate(plot_cn = as.character(plot_cn)) %>% 
+  left_join(ave_site_clim_df, by = c("collection_id")) %>% 
+  select(-plot_cn)
 
+flm_fia %>% dim() # Should be 2161
+flm_fia$collection_id %>% unique() %>% length() # Should be 2161
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Prep FIA data --------------------------------------------------------
@@ -98,6 +102,18 @@ flm_fia <- flm_fia %>%
 # Identify and trim extreme outliers
 cwd_est_bounds = quantile(flm_fia$estimate_cwd.an, c(0.01, 0.99),na.rm=T)
 pet_est_bounds = quantile(flm_fia$estimate_pet.an, c(0.01, 0.99),na.rm=T)
+cwd_spstd_bounds = quantile(flm_fia$cwd.spstd, c(0.01, 0.99), na.rm = T)
+pet_spstd_bounds = quantile(flm_fia$pet.spstd, c(0.01, 0.99), na.rm = T)
+
+# flm_fia <- flm_fia %>%
+#   mutate(outlier = (estimate_cwd.an<cwd_est_bounds[1]) |
+#            (estimate_cwd.an>cwd_est_bounds[2]) |
+#            (estimate_pet.an<pet_est_bounds[1]) |
+#            (estimate_pet.an>pet_est_bounds[2]) |
+#            (cwd.spstd<cwd_spstd_bounds[1]) |
+#            (cwd.spstd>cwd_spstd_bounds[2]) |
+#            (pet.spstd<pet_spstd_bounds[1]) |
+#            (pet.spstd>pet_spstd_bounds[2]))
 
 flm_fia <- flm_fia %>%
   mutate(outlier = (estimate_cwd.an<cwd_est_bounds[1]) |
@@ -106,12 +122,14 @@ flm_fia <- flm_fia %>%
            (estimate_pet.an>pet_est_bounds[2]))
 
 test_fia <- flm_fia %>%
+  # filter(species_id %in% c("pipo"),
   filter(species_id %in% c("pipo", "psme", "pied", "pifl"),
          outlier == 0)
 test_fia %>% select(estimate_cwd.an, std.error_cwd.an, ntrees) %>% summary()
 
 
 test_itrdb <- flm_itrdb %>%
+  # filter(species_id %in% c("pipo"),
   filter(species_id %in% c("pipo", "psme", "pied", "pifl"),
          outlier == 0)
 
