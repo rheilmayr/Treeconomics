@@ -46,9 +46,9 @@ wdir <- 'remote/'
 # 1. Dendrochronologies
 dendro_dir <- paste0(wdir, "1_input_processed/dendro/")
 dendro_df <- read_csv(paste0(dendro_dir, "rwi_long.csv"))
-dendro_df <- dendro_df %>% 
-  select(-core_id)
+dendro_df <- dendro_df
 # %>% 
+#   select(-core_id)%>%
 #   filter(year > 1957)
 
 ## Combine multiple cores from the same tree
@@ -196,6 +196,7 @@ fs_mod_ppt <- partial(fs_mod, outcome = "rwi", water_var = "ppt.an", energy_var 
 fs_mod_tc <- partial(fs_mod, outcome = "rwi", water_var = "cwd.an.spstd.tc", energy_var = "pet.an.spstd.tc", mod_type = "lm")
 fs_mod_tc_ppt <- partial(fs_mod, outcome = "rwi", water_var = "ppt.an.spstd.tc", energy_var = "pet.an.spstd.tc", mod_type = "lm")
 fs_mod_spei <- partial(fs_mod, outcome = "rwi", water_var = "cwd.an.spstd.spei", energy_var = "pet.an.spstd.spei", mod_type = "lm")
+fs_mod_cru <- partial(fs_mod, outcome = "rwi", water_var = "cwd.an.spstd.cru", energy_var = "pet.an.spstd.cru", mod_type = "lm")
 fs_mod_nb <- partial(fs_mod, outcome = "rwi_nb", energy_var = "pet.an", mod_type = "lm")
 fs_mod_ar <- partial(fs_mod, outcome = "rwi_ar", energy_var = "pet.an", mod_type = "lm")
 fs_mod_temp <- partial(fs_mod, outcome = "rwi", energy_var = "temp.an", mod_type = "lm")
@@ -216,14 +217,15 @@ fs_df <- fs_df[which(!(fs_df %>% pull(mod) %>% is.na())),]
 fs_df <- fs_df %>% 
   unnest(mod) %>% 
   select(-error)
-fs_df %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_std.csv'))
+fs_df %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_std_58.csv'))
 
 
 site_df <- site_df %>% 
   mutate(fs_result_ppt = map(data, .f = fs_mod_ppt),
          fs_result_tc = map(data, .f = fs_mod_tc),
          fs_result_ppt_tc = map(data, .f = fs_mod_tc_ppt),
-         fs_result_spei = map(data, .f = fs_mod_spei))
+         fs_result_spei = map(data, .f = fs_mod_spei),
+         fs_result_cru = map(data, .f = fs_mod_cru))
 
 
 ## Repeat using ppt in place of cwd
@@ -266,6 +268,18 @@ fs_df <- fs_df %>%
   unnest(mod) %>% 
   select(-error)
 fs_df %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_spei_std.csv'))
+
+## Repeat using cru pet data
+fs_df <- site_df %>% 
+  select(collection_id, fs_result_cru) %>% 
+  unnest(fs_result_cru)
+fs_df <- fs_df[which(!(fs_df %>% pull(mod) %>% is.na())),]
+fs_df <- fs_df %>% 
+  unnest(mod) %>% 
+  select(-error)
+fs_df %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_cru_std.csv'))
+
+
 
 
 site_df <- site_df %>% 
