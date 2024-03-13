@@ -152,9 +152,9 @@ pet_te_count_neg <- flm_df %>%
 # drier-than-average sites experienced a 12.8% decline (-22.3% to -6.0%) in annual growth 
 # in response to a 1 SD increase in CWD (Figure 4, A). 
 cwd_high_fs_bs <- block_draw_df %>% 
-  filter(cwd.spstd > 0) %>% 
+  filter(cwd.spstd > 0) %>%
   group_by(boot_id) %>% 
-  summarise(cwd_coef = mean(cwd_coef))
+  summarise(cwd_coef = weighted.mean(cwd_coef, cwd_errorweights))
 
 cwd_high_fs_bs %>%
   pull(cwd_coef) %>% 
@@ -165,12 +165,17 @@ cwd_high_fs_bs %>%
   quantile(c(0.025, 0.975))
 
 
+# trim_df %>% 
+#   filter(cwd.spstd > 0) %>% 
+#   pull(estimate_cwd.an) %>% 
+#   mean()
+
 # In contrast, wetter-than-average sites experienced a larger 22.1% decline (-32% to -11%) 
 # in growth from a 1 SD increase in CWD. 
 cwd_low_fs_bs <- block_draw_df %>% 
-  filter(cwd.spstd < 0) %>% 
+  filter(cwd.spstd < 0) %>%
   group_by(boot_id) %>% 
-  summarise(cwd_coef = mean(cwd_coef))
+  summarise(cwd_coef = weighted.mean(cwd_coef, cwd_errorweights))
 
 cwd_low_fs_bs %>%
   pull(cwd_coef) %>% 
@@ -179,6 +184,11 @@ cwd_low_fs_bs %>%
 cwd_low_fs_bs %>%
   pull(cwd_coef) %>% 
   quantile(c(0.025, 0.975))
+
+dif_cwd_effect <- (cwd_high_fs_bs$cwd_coef - cwd_low_fs_bs$cwd_coef)
+dif_cwd_effect %>% mean()
+dif_cwd_effect %>% quantile(c(0.025, 0.975))
+# t.test(cwd_low_fs_bs %>% pull(cwd_coef), cwd_high_fs_bs %>% pull(cwd_coef))
 
 # To characterize this variability in CWD sensitivity, we modeled sensitivity as a 
 # quadratic function of historic CWD and PET (Figure 4, Panels B and C). The regression 
@@ -189,6 +199,21 @@ ss_df %>%
             lower_cwd = quantile(cwd_cwd, 0.025),
             upper_cwd = quantile(cwd_cwd, 0.975))
 
+
+
+
+# ss_df %>%
+#   summarise(mean_cwd = mean(cwd_pet),
+#             lower_cwd = quantile(cwd_pet, 0.025),
+#             upper_cwd = quantile(cwd_pet, 0.975))
+# ss_df %>%
+#   summarise(mean_cwd = mean(pet_cwd),
+#             lower_cwd = quantile(pet_cwd, 0.025),
+#             upper_cwd = quantile(pet_cwd, 0.975))
+# ss_df %>%
+#   summarise(mean_cwd = mean(pet_pet),
+#             lower_cwd = quantile(pet_pet, 0.025),
+#             upper_cwd = quantile(pet_pet, 0.975))
 
 
 # Trees also exhibited heterogeneity in their responses to annual increases in 
@@ -206,7 +231,7 @@ pet_q10 <- flm_df$pet.spstd %>%
 pet_low_fs_bs <- block_draw_df %>% 
   filter(pet.spstd < pet_q10) %>%
   group_by(boot_id) %>% 
-  summarise(pet_coef = mean(pet_coef))
+  summarise(pet_coef = weighted.mean(pet_coef, pet_errorweights))
 
 pet_low_fs_bs %>%
   pull(pet_coef) %>% 
