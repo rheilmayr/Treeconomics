@@ -86,6 +86,12 @@ pet_data <- pet_data[,c("site", "month", "year", "petm")]
 data <- merge(data, pet_data, by = c("site", "month", "year"))
 
 
+# Update CRU PET data to be in mm per month 
+data <- data %>% 
+  mutate(days_in_month = days_in_month(as.yearmon(paste(year, month), "%Y %m")),
+         pet_cru = days_in_month * pet_cru)
+
+
 ## Add comparison PET using SPEI package implementation of (non heatload adjusted) thornthwaite equation
 data <- data %>% 
   as_tibble() %>% 
@@ -96,10 +102,6 @@ data <- data %>%
   unnest(data)  %>% 
   as.data.table()
 
-
-lm(petm~pet_spei, data = data) %>% summary()
-lm(petm~pet_cru, data = data) %>% summary()
-lm(pet_spei~pet_cru, data = data) %>% summary()
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -117,7 +119,6 @@ cwd_data <- cwd_data[,c("site", "month", "year", "cwd")]
 data <- merge(data, cwd_data, by = c("site", "month", "year"))
 
 
-## Need to figure out units for cru PET - obviously not correct
 cwd_cru <- cwd_function(site=data$site, year=data$year, month=data$month,
                         petm = data$pet_cru, tmean=data$tmean,  
                         ppt = data$pre_corrected, soilawc = data$swc)
@@ -133,10 +134,6 @@ cwd_spei <- cwd_spei[,c("site", "month", "year", "cwd")]
 names(cwd_spei) <- c("site", "month", "year", "cwd_spei")
 data <- merge(data, cwd_spei, by = c("site", "month", "year"))
 toc()
-
-lm(cwd~cwd_spei, data = data) %>% summary()
-lm(cwd~cwd_cru, data = data) %>% summary()
-lm(cwd_spei~cwd_cru, data = data) %>% summary()
 
 
 
@@ -172,4 +169,14 @@ data <- data %>%
   select(site, year, month, tmean, ppt = pre_corrected, cwd, cwd_cru, cwd_spei, pet = petm, pet_cru, pet_spei)
 
 fwrite(data,file=paste0(wdir,"1_input_processed/climate/essentialcwd_data.csv"))
+
+
+
+lm(pet~pet_spei, data = data) %>% summary()
+lm(pet~pet_cru, data = data) %>% summary()
+lm(pet_spei~pet_cru, data = data) %>% summary()
+
+lm(cwd~cwd_spei, data = data) %>% summary()
+lm(cwd~cwd_cru, data = data) %>% summary()
+lm(cwd_spei~cwd_cru, data = data) %>% summary()
 
