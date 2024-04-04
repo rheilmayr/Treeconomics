@@ -29,8 +29,10 @@ library(tidylog)
 # Load data --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define paths
-wdir <- 'remote/'
-out_dir <- paste0(wdir, 'out/dendro/')
+# wdir <- 'remote/'
+wdir <- 'G:/.shortcut-targets-by-id/10TtqG9P3BY70rcYp-WACmO38J5zBeflA/Treeconomics/Data/'
+
+out_dir <- paste0('remote/1_input_processed/dendro/')
 
 # Read in Klesse metadata
 meta <- read_csv(paste0(wdir, "in/klesse_2018/FIA_TreeRingMeta_Klesse2018.txt"), col_types = cols(.default = "d", CN = "character", PLT_CN = "character"))
@@ -146,7 +148,8 @@ rwi_df <- rwi_df %>%
   filter(year > 1900)
 
 fia_site_smry <- meta %>% 
-  select(collection_id, plot_cn = PLT_CN, species_id, latitude = LAT, longitude = LON)
+  select(collection_id, plot_cn = PLT_CN, species_id, latitude = LAT, longitude = LON) %>% 
+  unique()
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
