@@ -199,8 +199,8 @@ for(i in 1:length(period)){
     
     dat_cwd <- dat_cwd[,c("site", "month", "year", "cwd")]
     dat_cwd$month=as.factor(dat_cwd$month)
+    dat_cwd$year=1
     dat <- merge(dat, dat_cwd, by = c("site", "month", "year"))
-    
     # dat_cwd_spei <- cwd_function(site=dat$site, year=dat$year, month=dat$month,
     #                                petm = dat$pet_spei, tmean=dat$temp,  
     #                                ppt = dat$precip, soilawc = dat$swc)
@@ -222,6 +222,7 @@ for(i in 1:length(period)){
 
 cwddir=datfolder
 cwdfiles=list.files(paste0(cwddir,"/cwd calcs/"),full.names=TRUE)
+cwdfiles=cwdfiles[grep("Feb2024",cwdfiles)]
 
 load(file=paste0(datfolder, "other data for cwd/sitedata_climatologycorrection.Rdat"))
 
@@ -258,7 +259,7 @@ for(i in 1:length(period)){
     }
   }
   print(period[i])
-  save(aet_raster,cwd_raster,file=paste0(wdir,"/in/CMIP5 CWD/cmip5_cwdaet_",period[i],".Rdat"))
+  save(aet_raster,cwd_raster,file=paste0(wdir,"/in/CMIP5 CWD/cmip5_cwdaet_Feb2024_",period[i],".Rdat"))
 }
 
 
