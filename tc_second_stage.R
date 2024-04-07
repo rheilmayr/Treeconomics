@@ -124,15 +124,15 @@ pet_spstd_bounds_spei = quantile(flm_df$pet.spstd.spei, c(0.01, 0.99), na.rm = T
 cwd_spstd_bounds_cru = quantile(flm_df$cwd.spstd.cru, c(0.01, 0.99), na.rm = T)
 pet_spstd_bounds_cru = quantile(flm_df$pet.spstd.cru, c(0.01, 0.99), na.rm = T)
 
-# flm_df <- flm_df %>%
-#   mutate(outlier = (estimate_cwd.an<cwd_est_bounds[1]) |
-#            (estimate_cwd.an>cwd_est_bounds[2]) |
-#            (estimate_pet.an<pet_est_bounds[1]) |
-#            (estimate_pet.an>pet_est_bounds[2]) |
-#            (cwd.spstd<cwd_spstd_bounds[1]) |
-#            (cwd.spstd>cwd_spstd_bounds[2]) |
-#            (pet.spstd<pet_spstd_bounds[1]) |
-#            (pet.spstd>pet_spstd_bounds[2]))
+flm_df <- flm_df %>%
+  mutate(outlier = (estimate_cwd.an<cwd_est_bounds[1]) |
+           (estimate_cwd.an>cwd_est_bounds[2]) |
+           (estimate_pet.an<pet_est_bounds[1]) |
+           (estimate_pet.an>pet_est_bounds[2]) |
+           (cwd.spstd<cwd_spstd_bounds[1]) |
+           (cwd.spstd>cwd_spstd_bounds[2]) |
+           (pet.spstd<pet_spstd_bounds[1]) |
+           (pet.spstd>pet_spstd_bounds[2]))
 # 
 # flm_df <- flm_df %>%
 #   mutate(outlier = 
@@ -181,10 +181,10 @@ pet_spstd_bounds_cru = quantile(flm_df$pet.spstd.cru, c(0.01, 0.99), na.rm = T)
 # # Save out full flm_df to simplify downstream scripts and ensure consistency
 # flm_df %>% write.csv(paste0(wdir, "2_output/first_stage/site_pet_cwd_std_augmented.csv"))
 # 
-# # Trim outliers
-# trim_df <- flm_df %>% 
-#   filter(outlier==0) %>% 
-#   drop_na()
+# Trim outliers
+trim_df <- flm_df %>%
+  filter(outlier==0) %>%
+  drop_na()
 
 site_points=st_as_sf(trim_df,coords=c("longitude","latitude"),crs="+init=epsg:4326 +proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs +towgs84=0,0,0")
 
