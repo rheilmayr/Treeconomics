@@ -474,10 +474,9 @@ spstd_site_clim_df <- spstd_site_clim_df %>%
          cwd.spstd.cru, pet.spstd.cru)
 
 spstd_site_clim_df <- spstd_site_clim_df %>% 
-  left_join(ave_site_clim_df %>% select(location_id, cwd.ave, pet.ave, temp.ave, ppt.ave, tc_cwd.ave, tc_pet.ave, tc_ppt.ave, spei_pet.ave, spei_cwd.ave, cru_pet.ave, cru_cwd.ave), by = "location_id") %>% 
+  left_join(ave_site_clim_df %>% select(collection_id, cwd.ave, pet.ave, temp.ave, ppt.ave, tc_cwd.ave, tc_pet.ave, tc_ppt.ave, spei_pet.ave, spei_cwd.ave, cru_pet.ave, cru_cwd.ave), by = "collection_id") %>% 
   rename(cwd.ave.tc = tc_cwd.ave, pet.ave.tc = tc_pet.ave, ppt.ave.tc = tc_ppt.ave, cwd.ave.spei = spei_cwd.ave, pet.ave.spei = spei_pet.ave,
-         cwd.ave.cru = cru_cwd.ave, pet.ave.cru = cru_pet.ave) %>% 
-  select(-location_id)
+         cwd.ave.cru = cru_cwd.ave, pet.ave.cru = cru_pet.ave)
 
 write_rds(spstd_site_clim_df, 
           paste0(wdir, "2_output/climate/site_ave_clim.", compress = "gz"))
