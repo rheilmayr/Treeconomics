@@ -239,27 +239,27 @@ for(i in 1:length(period)){
   periodfiles=cwdfiles[grep(period[i],cwdfiles)]
   for(j in 1:length(periodfiles)){
     cwd_raster_temp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
-    aet_raster_temp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
+    petm_raster_temp=raster(nrow=nrow(swc),ncol=ncol(swc),ext=extent(swc))
     
     cwddat=fread(periodfiles[j])
     cwddat=cwddat%>%
-      select(site,month,aet,cwd)%>%
+      select(site,month,petm,cwd)%>%
       group_by(site)%>%
-      summarize(aet=sum(aet),cwd=sum(cwd))
+      summarize(petm=sum(petm),cwd=sum(cwd))
     
-    cwddat=merge(cwddat,sitecrosswalk)
-    cwddat=merge(cwddat,sitedata[,c(1,5,6)],by.x="site_grid",by.y="site")
-    cwddat$cells=cellFromXY(cwd_raster_temp,cwddat[,c(5,6)])
+    #cwddat=merge(cwddat,sitecrosswalk)
+    cwddat=merge(cwddat,sitedata[,c(1,5,6)],by.x="site",by.y="site")
+    cwddat$cells=cellFromXY(cwd_raster_temp,cwddat[,c(4,5)])
     
-    cwd_raster_temp[cwddat$cells]=cwddat$cwd;aet_raster_temp[cwddat$cells]=cwddat$aet
-    if(j==1){cwd_raster=cwd_raster_temp;aet_raster=aet_raster_temp}
+    cwd_raster_temp[cwddat$cells]=cwddat$cwd;petm_raster_temp[cwddat$cells]=cwddat$petm
+    if(j==1){cwd_raster=cwd_raster_temp;petm_raster=petm_raster_temp}
     if(j>1){
       cwd_raster=stack(cwd_raster,cwd_raster_temp)
-      aet_raster=stack(aet_raster,aet_raster_temp)
+      petm_raster=stack(petm_raster,petm_raster_temp)
     }
   }
   print(period[i])
-  save(aet_raster,cwd_raster,file=paste0(wdir,"/in/CMIP5 CWD/cmip5_cwdaet_Feb2024_",period[i],".Rdat"))
+  save(petm_raster,cwd_raster,file=paste0(wdir,"/in/CMIP5 CWD/cmip5_cwdpetm_Feb2024_",period[i],".Rdat"))
 }
 
 
