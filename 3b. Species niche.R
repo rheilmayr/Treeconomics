@@ -162,17 +162,19 @@ range_file <- paste0(wdir, '1_input_processed/species_ranges/merged_ranges_disso
 range_sf <- st_read(range_file)
 
 # 6. Climate projections from CMIP5
-cmip_end <- load(paste0(wdir, '1_input_processed/climate/cmip5_cwdaet_end.Rdat'))
-pet_cmip_end <- aet_raster + cwd_raster
+cmip_end <- load(paste0(wdir, '1_input_processed/climate/cmip5_cwdpetm_Feb2024_end.Rdat'))
+pet_cmip_end <- petm_raster
 cwd_cmip_end <- cwd_raster
 names(cwd_cmip_end) <- NULL # Resetting this due to strange names in file from CMIP processing
+names(pet_cmip_end) <- NULL # Resetting this due to strange names in file from CMIP processing
 rm(cwd_raster)
-rm(aet_raster)
+rm(petm_raster)
 
-cmip_start <- load(paste0(wdir, '1_input_processed/climate/cmip5_cwdaet_start.Rdat'))
-pet_cmip_start <- aet_raster + cwd_raster
+cmip_start <- load(paste0(wdir, '1_input_processed/climate/cmip5_cwdpetm_Feb2024_start.Rdat'))
+pet_cmip_start <- petm_raster
 cwd_cmip_start <- cwd_raster
 names(cwd_cmip_start) <- NULL # Resetting this due to strange names in file from CMIP processing
+names(pet_cmip_start) <- NULL # Resetting this due to strange names in file from CMIP processing
 rm(cwd_raster)
 rm(aet_raster)
 
@@ -317,7 +319,7 @@ sp_std_historic_df <- function(hist_clim_vals, pet_mean, pet_sd, cwd_mean, cwd_s
 }
 
 
-sp_std_future_df <- function(cmip_df, hist_clim_vals, pet_mean, pet_sd, cwd_mean, cwd_sd, temp_mean, temp_sd, ppt_mean, ppt_sd){
+sp_std_future_df <- function(cmip_df, hist_clim_vals, pet_mean, pet_sd, cwd_mean, cwd_sd){
   valid_locations <- hist_clim_vals %>% select(x,y)
   cmip_df <- valid_locations %>% 
     left_join(cmip_df, by = c("x", "y"))
@@ -326,10 +328,10 @@ sp_std_future_df <- function(cmip_df, hist_clim_vals, pet_mean, pet_sd, cwd_mean
               ~sp_standardize(.x, cwd_mean, cwd_sd)) %>% 
     mutate_at(vars(starts_with("pet")), 
               ~sp_standardize(.x, pet_mean, pet_sd)) %>% 
-    mutate_at(vars(starts_with("temp")), 
-              ~sp_standardize(.x, temp_mean, temp_sd)) %>% 
-    mutate_at(vars(starts_with("ppt")), 
-              ~sp_standardize(.x, ppt_mean, ppt_sd))
+    # mutate_at(vars(starts_with("temp")), 
+    #           ~sp_standardize(.x, temp_mean, temp_sd)) %>% 
+    # mutate_at(vars(starts_with("ppt")), 
+    #           ~sp_standardize(.x, ppt_mean, ppt_sd))
   return(cmip_df)
 }
 
@@ -409,7 +411,7 @@ site_clim_df <- site_smry %>%
 
 ave_site_clim_df <- site_clim_df %>% 
   filter(year>1901, year < 1980) %>% 
-  group_by(location_id) %>% 
+  group_by(collection_id) %>% 
   summarise(cwd.ave = mean(cwd.an),
             pet.ave = mean(pet.an),
             temp.ave = mean(temp.an),
@@ -424,7 +426,7 @@ ave_site_clim_df <- site_clim_df %>%
   ungroup()
 
 spstd_site_clim_df <- site_smry %>% 
-  left_join(ave_site_clim_df, by = "location_id") %>% 
+  left_join(ave_site_clim_df, by = "collection_id") %>% 
   group_by(sp_code) %>% 
   nest(data = c(collection_id, cwd.ave, pet.ave, temp.ave, ppt.ave, 
                 tc_cwd.ave, tc_pet.ave, tc_ppt.ave, spei_cwd.ave, 
@@ -602,9 +604,9 @@ cwd_start_df <- cwd_cmip_start %>%
 
 ## Combine PET and CWD projections
 cmip_df <- cwd_end_df %>% 
-  full_join(pet_end_df, by = c("x", "y")) %>% 
-  full_join(cwd_start_df, by = c("x", "y")) %>% 
-  full_join(pet_start_df, by = c("x", "y"))
+  left_join(pet_end_df, by = c("x", "y")) %>% 
+  left_join(cwd_start_df, by = c("x", "y")) %>% 
+  left_join(pet_start_df, by = c("x", "y"))
 
 ## Nest CMIP data
 cmip_df <- cmip_df %>%
@@ -619,14 +621,14 @@ cmip_df <- cmip_df %>%
 # Summarize cmip climate for each species ------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ## Cross species list with nested cmip data
-sp_cmip_clim <- clim_df %>% 
+sp_cmip_clim <- niche_df %>% 
   mutate(cmip_df = cmip_df$data)
 
 
 
 sp_cmip_clim <- sp_cmip_clim %>% 
   mutate(clim_cmip_sp = future_pmap(list(cmip_df = cmip_df,
-                                         hist_clim_vals = clim_vals,
+                                         hist_clim_vals = cmip_df,
                                          pet_mean = pet_mean,
                                          pet_sd = pet_sd,
                                          cwd_mean = cwd_mean,
