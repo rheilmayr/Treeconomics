@@ -225,7 +225,7 @@ ss_df %>%
 # annual PET declined across a gradient of historic PET (Figure 3, F). 
 # In sites with above-average PET, tree growth was not significantly associated with changes in PET.
 pet_q10 <- flm_df$pet.spstd %>% 
-  quantile(c(0.1)) %>% 
+  quantile(c(0.1), na.rm = TRUE) %>% 
   print()
 
 pet_low_fs_bs <- block_draw_df %>% 
