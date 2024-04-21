@@ -336,21 +336,6 @@ sp_std_future_df <- function(cmip_df, hist_clim_vals, pet_mean, pet_sd, cwd_mean
 }
 
 
-# clim_df <- clim_df %>% 
-#   left_join(niche_df, by = "sp_code")
-# 
-# clim_df <- clim_df %>% 
-#   mutate(clim_historic_sp = future_pmap(list(hist_clim_vals = clim_vals,
-#                                              pet_mean = pet_mean,
-#                                              pet_sd = pet_sd,
-#                                              cwd_mean = cwd_mean,
-#                                              cwd_sd = cwd_sd,
-#                                              temp_mean = temp_mean,
-#                                              temp_sd = temp_sd),
-#                                         .f = sp_std_historic_df,
-#                                         .options = furrr_options(packages = c( "dplyr"))))
-# NOTE: May no longer need this dataframe???
-
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Apply species standardization to site-level data -----------------------
@@ -619,8 +604,25 @@ cmip_df <- cmip_df %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Summarize cmip climate for each species ------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+clim_df <- clim_df %>%
+  left_join(niche_df, by = "sp_code")
+
+clim_df <- clim_df %>%
+  mutate(clim_historic_sp = future_pmap(list(hist_clim_vals = clim_vals,
+                                             pet_mean = pet_mean,
+                                             pet_sd = pet_sd,
+                                             cwd_mean = cwd_mean,
+                                             cwd_sd = cwd_sd,
+                                             temp_mean = temp_mean,
+                                             temp_sd = temp_sd,
+                                             ppt_mean = ppt_mean,
+                                             ppt_sd = ppt_sd),
+                                        .f = sp_std_historic_df,
+                                        .options = furrr_options(packages = c( "dplyr"))))
+
+
 ## Cross species list with nested cmip data
-sp_cmip_clim <- niche_df %>% 
+sp_cmip_clim <- clim_df %>% 
   mutate(cmip_df = cmip_df$data)
 
 
