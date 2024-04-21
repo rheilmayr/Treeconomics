@@ -92,23 +92,34 @@ sp_predictions <- sp_predictions %>%
   mutate(cwd_change = cwd_cmip_end_mean - cwd_cmip_start_mean,
          pet_change = pet_cmip_end_mean - pet_cmip_start_mean)
 
-plot_dat <- sp_predictions %>%
-  filter(((abs(cwd_hist)<2.5) & (abs(pet_hist<2.5)))) %>%
-  drop_na()
+sp_predictions$cwd_hist %>% quantile(c(0.01, 0.99))
+sp_predictions$pet_hist %>% quantile(c(0.01, 0.99))
+
 
 seq_inc <- 0.25
 cwd_seq_min <- -2.125
-cwd_seq_max <- 2.375
+# cwd_seq_max <- 2.375
+cwd_seq_max <- 3.625
 
 cwd_sequence <- seq(cwd_seq_min, cwd_seq_max, seq_inc)
 
 
 pet_seq_min <- -2.125
-pet_seq_max <- 2.375
+pet_seq_max <- 3.625
+# pet_seq_min <- -2.125
+# pet_seq_max <- 2.375
 pet_sequence <- seq(pet_seq_min, pet_seq_max, seq_inc)
 convert_bin <- function(n){
   cwd_sequence[n] + 0.125
 }
+
+plot_dat <- sp_predictions %>%
+  filter(cwd_hist<cwd_seq_max,
+         cwd_hist > cwd_seq_min,
+         pet_hist < pet_seq_max,
+         pet_hist > pet_seq_min) %>%
+  drop_na()
+
 plot_dat <- plot_dat %>% 
   mutate(cwd.q = cut(cwd_hist, breaks = cwd_sequence, labels = FALSE),
          cwd.q = convert_bin(cwd.q),
@@ -167,8 +178,8 @@ cwd_sens_bin
 pet_sens_bin <- plot_dat %>% 
   ggplot(aes(x = cwd.q, y = pet.q, fill = pet_sens)) +
   geom_tile() +
-  xlim(c(-2.5, 2.5)) +
-  ylim(c(-2.5, 2.5)) +
+  xlim(c(cwd_seq_min, cwd_seq_max)) +
+  ylim(c(pet_seq_min, pet_seq_max)) +
   scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
   # scale_fill_viridis_c(direction = -1, option = "viridis") +
   theme(legend.position = c(.21,.82),
@@ -186,8 +197,8 @@ pet_sens_bin
 cwd_change_bin <- plot_dat %>% 
   ggplot(aes(x = cwd.q, y = pet.q, fill = cwd_change)) +
   geom_tile() +
-  xlim(c(-2.5, 2.5)) +
-  ylim(c(-2.5, 2.5)) +
+  xlim(c(cwd_seq_min, cwd_seq_max)) +
+  ylim(c(pet_seq_min, pet_seq_max)) +
   scale_fill_viridis_c(direction = 1, option = "magma") +
   theme(legend.position = c(.19,.83),
         legend.text = element_text(size=8),
@@ -205,8 +216,8 @@ cwd_change_bin
 pet_change_bin <- plot_dat %>% 
   ggplot(aes(x = cwd.q, y = pet.q, fill = pet_change)) +
   geom_tile() +
-  xlim(c(-2.5, 2.5)) +
-  ylim(c(-2.5, 2.5)) +
+  xlim(c(cwd_seq_min, cwd_seq_max)) +
+  ylim(c(pet_seq_min, pet_seq_max)) +
   scale_fill_viridis_c(direction = 1, option = "magma") +
   theme(legend.position = c(.19,.83),
         legend.text = element_text(size=8),
@@ -224,8 +235,8 @@ pet_change_bin
 rwi_bin <- plot_dat %>% 
   ggplot(aes(x = cwd.q, y = pet.q, fill = rwi_change)) +
   geom_tile() +
-  xlim(c(-2.5, 2.5)) +
-  ylim(c(-2.5, 2.5)) +
+  xlim(c(cwd_seq_min, cwd_seq_max)) +
+  ylim(c(pet_seq_min, pet_seq_max)) +
   scale_fill_viridis_c(direction = -1, option = "viridis") +
   # scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
   theme(legend.position = c(.15,.83),
