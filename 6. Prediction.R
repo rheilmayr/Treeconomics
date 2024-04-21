@@ -36,12 +36,13 @@ library(profvis)
 library(tmap)
 library(tidylog)
 
-n_cores <- availableCores() - 12
+# n_cores <- availableCores() - 12
+n_cores = 6
 future::plan(multisession, workers = n_cores)
 
 my_seed <- 5597
 
-n_mc <- 10000
+n_mc <- 1000
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -109,7 +110,7 @@ predict_sens <- function(sppp_code,
     mutate(cwd_sens = cwd_int + (cwd_cwd * cwd_hist) + (cwd_cwd2 * cwd_hist * cwd_hist) + (cwd_pet * pet_hist) + (cwd_pet2 * pet_hist * pet_hist),
            pet_sens = pet_int + (pet_cwd * cwd_hist) + (pet_cwd2 * cwd_hist * cwd_hist) + (pet_pet * pet_hist) + (pet_pet2 * pet_hist * pet_hist),
            intercept = int_int + (int_cwd * cwd_hist) + (int_cwd2 * cwd_hist * cwd_hist) + (int_pet * pet_hist) + (int_pet2 * pet_hist * pet_hist)) %>% 
-    select(-cwd_hist, -pet_hist) %>% 
+    select(x, y, cwd_sens, pet_sens, intercept) %>% 
     as_tibble()
   
   return(sp_df)
@@ -147,7 +148,8 @@ calc_rwi_partials <- function(sppp_code, cmip_id, sensitivity, cwd_const_sens, p
            rwi_pred_start,
            rwi_pclim_end,
            rwi_pclim_start) %>% 
-    as_tibble()
+    as_tibble() %>% 
+    drop_na()
   
   return(sp_fut_clim)
 }
@@ -417,7 +419,7 @@ mc_nests_small <- mc_nests %>%
   # filter(!(sp_code %in% large_range_sp)) %>% 
   mutate(predictions = pmap(list(spp_code = sp_code,
                                  mc_data = data,
-                                 parallel = TRUE),
+                                 parallel = FALSE),
                               .f = calc_rwi_quantiles)) 
 
 agg_stats <- mc_nests_small %>% 
