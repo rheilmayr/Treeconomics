@@ -1,4 +1,7 @@
-# Original source: Redmond, MD. 2022. CWD and AET function (Version V1.0.3). Zenodo. https://doi.org/10.5281/zenodo.6416352
+# Source code: Redmond, MD. 2022. CWD and AET function (Version V1.0.3). Zenodo. https://doi.org/10.5281/zenodo.6416352
+# Original code provided by the Great Basin Landscape Ecology Lab: https://naes.unr.edu/weisberg/old_site/downloads/
+# Probably relied upon the appendix from https://onlinelibrary.wiley.com/doi/10.1111/j.1365-2699.2009.02268.x#b45
+
 
 # THIS FUNCTION CALCULATES CLIMATIC WATER DEFICIT USING EITHER MONTHLY ANNUAL DATA oR MEAN MONTHLY DATA
 
