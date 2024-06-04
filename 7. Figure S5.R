@@ -21,10 +21,12 @@ source("f_spec_chart_function.R")
 # Load data --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 wdir <- 'remote/'
+# wdir <- 'G:/.shortcut-targets-by-id/10TtqG9P3BY70rcYp-WACmO38J5zBeflA/Treeconomics/Data/replication - original/'
 
 # 1. Specification comparisons
 specs <- read_rds(paste0(wdir, "2_output/second_stage/robustness_specs.rds"))
 
+# specs <- specs %>% filter(coef < .10)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Create spec chart --------------------------------------------------------

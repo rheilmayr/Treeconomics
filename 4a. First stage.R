@@ -46,8 +46,10 @@ wdir <- 'remote/'
 # 1. Dendrochronologies
 dendro_dir <- paste0(wdir, "1_input_processed/dendro/")
 dendro_df <- read_csv(paste0(dendro_dir, "rwi_long.csv"))
-dendro_df <- dendro_df %>% 
-  select(-core_id)
+dendro_df <- dendro_df
+# %>% 
+#   select(-core_id)%>%
+#   filter(year > 1957)
 
 ## Combine multiple cores from the same tree
 dendro_df <- dendro_df %>% 
@@ -78,14 +80,27 @@ dendro_df <- dendro_df %>%
 
 
 # 4. Drop data from species without range maps and resulting climatic niche data
-niche_df <- read.csv(paste0(wdir, "2_output/climate/clim_niche.csv")) %>%
-  select(-X)
+niche_df <- read.csv(paste0(wdir, "2_output/climate/clim_niche.csv"))
 niche_species <- niche_df %>% pull(sp_code) %>% unique()
 dendro_species <- dendro_df %>% pull(species_id) %>% unique()
 dendro_df <- dendro_df %>% 
   filter(species_id %in% niche_species)
 
 
+# count <- dendro_df %>% 
+#   select(collection_id, year, cwd.an.spstd, pet.an.spstd) %>% 
+#   drop_na() %>% 
+#   group_by(collection_id) %>% 
+#   summarize(count = n_distinct(year))
+# count %>% summary()
+# 
+# count <- dendro_df %>% 
+#   select(collection_id, year, cwd.an.spstd.tc, pet.an.spstd.tc) %>% 
+#   drop_na() %>% 
+#   group_by(collection_id) %>% 
+#   summarize(count = n_distinct(year))
+# count %>% summary()
+# (count$count < 10) %>% sum()
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Export example sites for presentations  ------------------------------
@@ -100,22 +115,22 @@ dendro_df %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Define regression model  -------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-fs_mod <- function(site_data, outcome = "rwi", energy_var = "pet.an", mod_type = "lm"){
+fs_mod <- function(site_data, outcome = "rwi", water_var = "cwd.an", energy_var = "pet.an", mod_type = "lm"){
   failed <- F
   reg_error <- NA
   nobs <- NA
   ntrees <- site_data %>% select(tree) %>%  n_distinct()
-  no_cwd_var <- (site_data %>% select(cwd.an) %>% n_distinct() == 1)
-  no_pet_var <- (site_data %>% select(energy_var) %>% n_distinct() == 1)
+  no_cwd_var <- (site_data %>% select(all_of(water_var)) %>% n_distinct() == 1)
+  no_pet_var <- (site_data %>% select(all_of(energy_var)) %>% n_distinct() == 1)
   
   if (no_cwd_var | no_pet_var) {
-    message(paste0("Site has no variation in cwd.an or ", energy_var))
+    message(paste0("Site has no variation in ", water_var, " or ", energy_var))
     failed <- T
   } else{
     # Try to run felm. Typically fails if missing cwd / pet data 
     tryCatch(
       expr = {
-        formula <- as.formula(paste0(outcome, " ~ ", energy_var, " + cwd.an"))
+        formula <- as.formula(paste0(outcome, " ~ ", energy_var, " + ", water_var))
         if (mod_type == "lm"){
           mod <- lm(formula, data = site_data)
         }
@@ -134,15 +149,16 @@ fs_mod <- function(site_data, outcome = "rwi", energy_var = "pet.an", mod_type =
         nobs <- nobs(mod)
         mod <- tidy(mod) %>%
           mutate(term = term %>% str_replace("\\(Intercept\\)", "intercept")) %>% 
-          filter(term %in% c('intercept', 'cwd.an', energy_var)) %>% 
+          filter(term %in% c('intercept', water_var, energy_var)) %>% 
           pivot_wider(names_from = "term", values_from = c("estimate", "std.error", "statistic", "p.value"))
         # mod <- mod %>% 
         #   rename_all(funs(stringr::str_replace_all(., energy_var, 'energy.an')))
-        mod$cov_int_cwd = mod_vcov[c("(Intercept)"), c("cwd.an")]
+        cov_var_name <- paste0("cov_int_", water_var %>% str_replace(".an", ""))
+        mod[[cov_var_name]] = mod_vcov[c("(Intercept)"), c(water_var)]
         cov_var_name <- paste0("cov_int_", energy_var %>% str_replace(".an", ""))
         mod[[cov_var_name]] = mod_vcov[c("(Intercept)"), c(energy_var)]
-        cov_var_name <- paste0("cov_cwd_", energy_var %>% str_replace(".an", ""))
-        mod[[cov_var_name]] = mod_vcov[c("cwd.an"), c(energy_var)]
+        cov_var_name <- paste0("cov_", water_var %>% str_replace(".an", ""), "_", energy_var %>% str_replace(".an", ""))
+        mod[[cov_var_name]] = mod_vcov[c(water_var), c(energy_var)]
         mod$r2 = mod_sum$r.squared
       },
       error = function(e){ 
@@ -162,46 +178,115 @@ fs_mod <- function(site_data, outcome = "rwi", energy_var = "pet.an", mod_type =
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Run site-level regressions --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-site_df <- dendro_df %>% 
+site_df <- dendro_df %>%
+  # filter(year>1957) %>%
   # drop_na() %>% 
   rename(cwd.an = cwd.an.spstd,
          pet.an = pet.an.spstd,
-         temp.an = temp.an.spstd) %>% 
+         temp.an = temp.an.spstd,
+         ppt.an = ppt.an.spstd) %>%
   group_by(collection_id) %>%
   add_tally(name = 'nobs') %>% 
   # filter(nobs>10) %>% 
   nest()
 
 
-fs_mod_bl <- partial(fs_mod, outcome = "rwi", energy_var = "pet.an", mod_type = "lm")
+fs_mod_bl <- partial(fs_mod, outcome = "rwi", water_var = "cwd.an", energy_var = "pet.an", mod_type = "lm")
+fs_mod_ppt <- partial(fs_mod, outcome = "rwi", water_var = "ppt.an", energy_var = "pet.an", mod_type = "lm")
+fs_mod_tc <- partial(fs_mod, outcome = "rwi", water_var = "cwd.an.spstd.tc", energy_var = "pet.an.spstd.tc", mod_type = "lm")
+fs_mod_tc_ppt <- partial(fs_mod, outcome = "rwi", water_var = "ppt.an.spstd.tc", energy_var = "pet.an.spstd.tc", mod_type = "lm")
+fs_mod_spei <- partial(fs_mod, outcome = "rwi", water_var = "cwd.an.spstd.spei", energy_var = "pet.an.spstd.spei", mod_type = "lm")
+fs_mod_cru <- partial(fs_mod, outcome = "rwi", water_var = "cwd.an.spstd.cru", energy_var = "pet.an.spstd.cru", mod_type = "lm")
 fs_mod_nb <- partial(fs_mod, outcome = "rwi_nb", energy_var = "pet.an", mod_type = "lm")
 fs_mod_ar <- partial(fs_mod, outcome = "rwi_ar", energy_var = "pet.an", mod_type = "lm")
 fs_mod_temp <- partial(fs_mod, outcome = "rwi", energy_var = "temp.an", mod_type = "lm")
 fs_mod_re <- partial(fs_mod, outcome = "rwi", energy_var = "pet.an", mod_type = "lme")
 
 site_df <- site_df %>% 
-  mutate(fs_result = map(data, .f = fs_mod_bl),
-         fs_result_nb = map(data, .f = fs_mod_nb),
-         fs_result_ar = map(data, .f = fs_mod_ar),
-         fs_result_temp = map(data, .f = fs_mod_temp),
-         fs_result_re = map(data, .f = fs_mod_re))
+  mutate(fs_result = map(data, .f = fs_mod_bl))
 
 
 data_df <- site_df %>% 
   select(collection_id,data)
 
+## Primary first stage results using CWD and PET
 fs_df <- site_df %>% 
   select(collection_id, fs_result) %>% 
   unnest(fs_result)
-
 fs_df <- fs_df[which(!(fs_df %>% pull(mod) %>% is.na())),]
 fs_df <- fs_df %>% 
-  unnest(mod)
-
-fs_df <- fs_df %>% 
+  unnest(mod) %>% 
   select(-error)
+fs_df %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_std_58.csv'))
 
-fs_df %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_std.csv'))
+
+site_df <- site_df %>% 
+  mutate(fs_result_ppt = map(data, .f = fs_mod_ppt),
+         fs_result_tc = map(data, .f = fs_mod_tc),
+         fs_result_ppt_tc = map(data, .f = fs_mod_tc_ppt),
+         fs_result_spei = map(data, .f = fs_mod_spei),
+         fs_result_cru = map(data, .f = fs_mod_cru))
+
+
+## Repeat using ppt in place of cwd
+fs_df <- site_df %>% 
+  select(collection_id, fs_result_ppt) %>% 
+  unnest(fs_result_ppt)
+fs_df <- fs_df[which(!(fs_df %>% pull(mod) %>% is.na())),]
+fs_df <- fs_df %>% 
+  unnest(mod) %>% 
+  select(-error)
+fs_df %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_ppt_std.csv'))
+
+
+## Repeat using terraclimate data
+fs_df <- site_df %>% 
+  select(collection_id, fs_result_tc) %>% 
+  unnest(fs_result_tc)
+fs_df <- fs_df[which(!(fs_df %>% pull(mod) %>% is.na())),]
+fs_df <- fs_df %>% 
+  unnest(mod) %>% 
+  select(-error)
+fs_df %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_tc_std.csv'))
+
+## Repeat using terraclimate precip data
+fs_df <- site_df %>% 
+  select(collection_id, fs_result_ppt_tc) %>% 
+  unnest(fs_result_ppt_tc)
+fs_df <- fs_df[which(!(fs_df %>% pull(mod) %>% is.na())),]
+fs_df <- fs_df %>% 
+  unnest(mod) %>% 
+  select(-error)
+fs_df %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_ppt_tc_std.csv'))
+
+## Repeat using spei pet data
+fs_df <- site_df %>% 
+  select(collection_id, fs_result_spei) %>% 
+  unnest(fs_result_spei)
+fs_df <- fs_df[which(!(fs_df %>% pull(mod) %>% is.na())),]
+fs_df <- fs_df %>% 
+  unnest(mod) %>% 
+  select(-error)
+fs_df %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_spei_std.csv'))
+
+## Repeat using cru pet data
+fs_df <- site_df %>% 
+  select(collection_id, fs_result_cru) %>% 
+  unnest(fs_result_cru)
+fs_df <- fs_df[which(!(fs_df %>% pull(mod) %>% is.na())),]
+fs_df <- fs_df %>% 
+  unnest(mod) %>% 
+  select(-error)
+fs_df %>% write_csv(paste0(wdir, '2_output/first_stage/site_pet_cwd_cru_std.csv'))
+
+
+
+
+site_df <- site_df %>% 
+  mutate(fs_result_nb = map(data, .f = fs_mod_nb),
+         fs_result_ar = map(data, .f = fs_mod_ar),
+         fs_result_temp = map(data, .f = fs_mod_temp),
+         fs_result_re = map(data, .f = fs_mod_re))
 
 
 ## Repeat using results from nb detrended data

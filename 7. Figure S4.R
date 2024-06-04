@@ -58,6 +58,7 @@ options(scipen=999)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ### Define path
 wdir <- 'remote/'
+# wdir <- 'G:/.shortcut-targets-by-id/10TtqG9P3BY70rcYp-WACmO38J5zBeflA/Treeconomics/Data/replication - original/'
 
 # 1. Genus second stage model
 genus_models <- readRDS(paste0(wdir, "2_output/second_stage/ss_conley_genus.rds"))

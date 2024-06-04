@@ -6,9 +6,11 @@
 #
 # Input files:
 #   site_summary_slopeaspect.csv: Site-level topography. Created by "2a. Pull site topography.R"
-#   cru_ts4.04.1901.2019.pre: Monthly precipitation data from CRU. Accessed from https://crudata.uea.ac.uk/cru/data/hrg/.
-#   cru_ts4.04.1901.2019.tmin: Monthly min temperature data from CRU. Accessed from https://crudata.uea.ac.uk/cru/data/hrg/.
-#   cru_ts4.04.1901.2019.tmax: Monthly max temperature data from CRU. Accessed from https://crudata.uea.ac.uk/cru/data/hrg/.
+#   cru_ts4.07.1901.2022.pre: Monthly precipitation data from CRU. Accessed from https://crudata.uea.ac.uk/cru/data/hrg/.
+#   cru_ts4.07.1901.2022.tmin: Monthly min temperature data from CRU. Accessed from https://crudata.uea.ac.uk/cru/data/hrg/.
+#   cru_ts4.07.1901.2022.tmax: Monthly max temperature data from CRU. Accessed from https://crudata.uea.ac.uk/cru/data/hrg/.
+#   cru_ts4.07.1901.2022.tmin: Monthly min temperature data from CRU. Accessed from https://crudata.uea.ac.uk/cru/data/hrg/.
+#   cru_ts4.07.1901.2022.tmax: Monthly max temperature data from CRU. Accessed from https://crudata.uea.ac.uk/cru/data/hrg/.
 #   WorldClim directory: Data files for WorldClim climate data. Accessed from https://www.worldclim.org/.
 #   sr_cru_max.asc: Soil water capacity raster. Accessed from Wang-Erlandsson et al., 2016.
 # 
@@ -41,7 +43,7 @@ library(seegSDM)
 wdir <- 'remote/'
 
 # 1. Load site topography 
-sites=fread(paste0(wdir, 'out/dendro/site_summary_slopeaspect.csv')) %>% 
+sites=fread(paste0(wdir, '1_input_processed/dendro/site_summary_slopeaspect.csv')) %>% 
   dplyr::select(-V1)
 
 # sites <- sites %>% 
@@ -50,21 +52,21 @@ plots=unique(data.frame(latitude=sites$latitude,longitude=sites$longitude,site_i
 plots=SpatialPointsDataFrame(coords=plots[,c(2,1)],data=as.data.frame(plots[,3]))
 
 # 2. Define directories for CRU and WorldClim data 
-cru_dir <- paste0(wdir,"in/CRUData/")
-wclim_dir <- paste0(wdir,"in/WorldClim/")
+cru_dir <- paste0(wdir,"0_raw/CRUData/v4.07/")
+wclim_dir <- paste0(wdir,"0_raw/WorldClim/")
 
 # 3. Load soil water capacity data
-swc <- raster(paste0(wdir,"in/wang_swc/sr_cru_max.asc"))
+swc <- raster(paste0(wdir,"0_raw/wang_swc/sr_cru_max.asc"))
 
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Get CRU tmin, tmax and precip --------------------------------------------------------
+# Get CRU tmin, tmax, tmp, pet and precip --------------------------------------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-monthyears=data.frame(year=rep(1901:2019,each=12),month=rep(1:12,length(1901:2019)))
+monthyears=data.frame(year=rep(1901:2022,each=12),month=rep(1:12,length(1901:2022)))
 
-vars=c("pre","tmn", 'tmx')
+vars=c("pre","tmn", 'tmx', 'tmp', 'pet')
 for(i in 1:length(vars)){
-  crudat=stack(paste0(cru_dir, "cru_ts4.04.1901.2019.",vars[i],".dat.nc"))
+  crudat=stack(paste0(cru_dir, "cru_ts4.07.1901.2022.",vars[i],".dat.nc"))
   NAvalue(crudat)=-999
   tempdat=extract(crudat,plots)
   nas=which(is.na(tempdat[,1]));napoints=nearestLand(plots@coords[nas,],crudat[[1]],max_distance = 100000)
@@ -77,7 +79,7 @@ for(i in 1:length(vars)){
   print(i)
 }
 
-colnames(climdat)[5:6]=vars[2:3]
+colnames(climdat)[5:8]=vars[2:5]
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Add downscaling correction ---------------------------------------------
@@ -108,14 +110,15 @@ for(i in 1:length(vars)){
   downscaled[[i]]=data.frame(downscaled[[i]])
   colnames(downscaled[[i]])=c(1:12)
   downscaled[[i]]=as.data.frame(downscaled[[i]]);downscaled[[i]]$site_id=plots@data[,1]
-} 
+}
 
 dsdata=melt(downscaled[[1]],id.vars="site_id",variable.name="month",value.name=vars[1])
 for(i in 2:3) dsdata=cbind(dsdata,melt(downscaled[[i]],id.vars="site_id",variable.name="month",value.name=vars[i])[,3])
 colnames(dsdata)=c("site_id","month",vars)
 
 baselines=merge(baselines,dsdata)
-baselines$pre_correction=baselines$prec-baselines$pre_baseline
+baselines$pre_baseline[which(baselines$pre_baseline==0)]<-1 #you can’t divide by 0
+baselines$pre_correction=baselines$prec/baselines$pre_baseline
 baselines$tmax_correction=baselines$tmax-baselines$tmx_baseline
 baselines$tmin_correction=baselines$tmin-baselines$tmn_baseline
 
@@ -141,6 +144,6 @@ sites <- sites %>%
 # Save combined topography, weather, and swc data ------------------------
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # save(sites,file=paste0(wdir,"out/climate/sitedataforcwd.Rdat"))
-fwrite(sites,file=paste0(wdir,"out/climate/sitedataforcwd.csv"))
+fwrite(sites,file=paste0(wdir,"1_input_processed/climate/sitedataforcwd.csv"))
 
        

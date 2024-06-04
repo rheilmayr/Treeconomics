@@ -61,6 +61,7 @@ options(scipen=999)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ### Define path
 wdir <- 'remote/'
+wdir <- 'G:/.shortcut-targets-by-id/10TtqG9P3BY70rcYp-WACmO38J5zBeflA/Treeconomics/Data/replication - original/'
 
 # 1. Site-level regressions
 flm_df <- read_csv(paste0(wdir, "2_output/first_stage/site_pet_cwd_std_augmented.csv"))
@@ -243,8 +244,8 @@ hex_raw <- flm_df %>% ggplot(aes(x = cwd.ave, y = pet.ave)) +
   geom_vline(xintercept = 0, size = 1, linetype = 2) +
   geom_point(alpha=.0)+
   geom_hex(bins = 50) +
-  xlim(-100, 2500) +
-  ylim(-100, 2500) +
+  # xlim(-100, 2500) +
+  # ylim(-100, 2500) +
   labs(fill = "Number of sites") +
   ylab(bquote("Historic PET (mm"*H[2]*"O)")) +
   xlab(bquote("Historic CWD (mm"*H[2]*"O)")) +

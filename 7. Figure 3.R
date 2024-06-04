@@ -66,6 +66,8 @@ options(scipen=999)
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 ### Define path
 wdir <- 'remote/'
+# wdir <- 'G:/.shortcut-targets-by-id/10TtqG9P3BY70rcYp-WACmO38J5zBeflA/Treeconomics/Data/replication - original/'
+
 
 # 1. Site-level regressions
 flm_df <- read_csv(paste0(wdir, "2_output/first_stage/site_pet_cwd_std_augmented.csv"))
@@ -107,10 +109,15 @@ cwd_pred_max <- 2
 pet_pred_min <- -2
 pet_pred_max <- 2
 
-cwd_min <- flm_df$cwd.spstd %>% quantile(0.01) %>% print()
-cwd_max <- flm_df$cwd.spstd %>% quantile(0.99) %>% print()
-pet_min <- flm_df$pet.spstd %>% quantile(0.01) %>% print()
-pet_max <- flm_df$pet.spstd %>% quantile(0.99) %>% print()
+cwd_pred_min <- -2
+cwd_pred_max <- 4
+pet_pred_min <- -3
+pet_pred_max <- 3
+
+cwd_min <- flm_df$cwd.spstd %>% quantile(0.01, na.rm = TRUE) %>% print()
+cwd_max <- flm_df$cwd.spstd %>% quantile(0.99, na.rm = TRUE) %>% print()
+pet_min <- flm_df$pet.spstd %>% quantile(0.01, na.rm = TRUE) %>% print()
+pet_max <- flm_df$pet.spstd %>% quantile(0.99, na.rm = TRUE) %>% print()
 
 
 
@@ -152,9 +159,11 @@ plot_dat_b <- plot_dat_a %>%
 
 cwd_binned_margins <- plot_dat_b %>%
   ggplot(aes(x = cwd.q, y = pet.q, z = cwd_sens)) +
-  stat_summary_hex(fun = function(x) mean(x), bins=12)+
+  stat_summary_hex(fun = function(z) mean(z), bins=12)+
+  # scale_fill_continuous_diverging(rev = TRUE, mid = 0,
+  #                                 limits = c(-.33, .05),
+  #                                 oob = scales::squish) +
   scale_fill_continuous_diverging(rev = TRUE, mid = 0,
-                                  limits = c(-.33, .05),
                                   oob = scales::squish) +
   labs(fill = "Marginal effect\nof CWD") +
   ylab("Historic PET\n(Deviation from species mean)") +
@@ -165,11 +174,56 @@ cwd_binned_margins <- plot_dat_b %>%
     legend.key.size = unit(10, "pt"),
     legend.title=element_text(size= 8),
     legend.text = element_text(size = 8))+
-  coord_fixed() +
   geom_hline(yintercept = 0, size = 1, linetype = 2) +
   geom_vline(xintercept = 0, size = 1, linetype = 2) +
-  xlim(c(cwd_pred_min, cwd_pred_max)) +
-  ylim(c(pet_pred_min, pet_pred_max))
+  coord_fixed()
+
+cwd_binned_margins <- plot_dat_b %>%
+  ggplot(aes(x = cwd.q, y = pet.q, z = cwd_sens)) +
+  stat_summary_hex(fun = function(z) mean(z), bins=12)+
+  # scale_fill_continuous_diverging(rev = TRUE, mid = 0,
+  #                                 limits = c(-.33, .05),
+  #                                 oob = scales::squish) +
+  scale_fill_continuous_diverging(rev = TRUE, mid = 0,
+                                  oob = scales::squish) +
+  labs(fill = "Marginal effect\nof CWD") +
+  ylab("Historic PET\n(Deviation from species mean)") +
+  xlab("Historic CWD\n(Deviation from species mean)") +
+  theme(legend.position = c(0.18, 0.78),
+    legend.key = element_blank(),
+    legend.background = element_blank(),
+    legend.key.size = unit(10, "pt"),
+    legend.title=element_text(size= 8),
+    legend.text = element_text(size = 8))+
+  geom_hline(yintercept = 0, size = 1, linetype = 2) +
+  geom_vline(xintercept = 0, size = 1, linetype = 2) +
+  coord_fixed()
+#   xlim(c(cwd_pred_min, cwd_pred_max)) +
+#   ylim(c(pet_pred_min, pet_pred_max))
+
+
+cwd_binned_margins <- plot_dat_a %>%
+  ggplot(aes(x = cwd.spstd, y = pet.spstd, z = estimate_cwd.an)) +
+  stat_summary_hex(fun = function(z) mean(z), bins=10)+
+  # scale_fill_continuous_diverging(rev = TRUE, mid = 0,
+  #                                 limits = c(-.33, .05),
+  #                                 oob = scales::squish) +
+  scale_fill_continuous_diverging(rev = TRUE, mid = 0,
+                                  oob = scales::squish) +
+  labs(fill = "Marginal effect\nof CWD") +
+  ylab("Historic PET\n(Deviation from species mean)") +
+  xlab("Historic CWD\n(Deviation from species mean)") +
+  theme(legend.position = c(0.18, 0.78),
+        legend.key = element_blank(),
+        legend.background = element_blank(),
+        legend.key.size = unit(10, "pt"),
+        legend.title=element_text(size= 8),
+        legend.text = element_text(size = 8))+
+  geom_hline(yintercept = 0, size = 1, linetype = 2) +
+  geom_vline(xintercept = 0, size = 1, linetype = 2) +
+  coord_fixed()
+#   xlim(c(cwd_pred_min, cwd_pred_max)) +
+#   ylim(c(pet_pred_min, pet_pred_max))
 
 
 cwd_binned_margins
@@ -222,8 +276,9 @@ cwd_cwd_margins_plot <- ggplot(cwd_me_df, aes(x = at_cwd)) +
   geom_line(aes(y = cwd_ci_min), linetype = 3) +
   geom_hline(yintercept = 0, size = 1, linetype = 2) +
   xlab("Historic CWD\n(Deviation from species mean)") + 
-  ylab("Pred. sensitivity to CWD") + 
-  xlim(c(cwd_pred_min, cwd_pred_max))
+  ylab("Pred. sensitivity to CWD")
+# + 
+#   xlim(c(-2.5, 2.5))
 
 cwd_cwd_margins_plot
 
@@ -235,12 +290,11 @@ pet_cwd_margins_plot <- ggplot(pet_me_df, aes(x = at_pet)) +
   geom_line(aes(y = cwd_ci_min), linetype = 3) +
   geom_hline(yintercept = 0, size = 1, linetype = 2) +
   xlab("Historic PET\n(Deviation from species mean)") + 
-  ylab("Pred. sensitivity to CWD") + 
-  xlim(c(pet_pred_min, pet_pred_max))
+  ylab("Pred. sensitivity to CWD")
+# + 
+#   xlim(c(pet_pred_min, pet_pred_max))
 
 pet_cwd_margins_plot
-
-
 
 
 cwd_full_margins <- cwd_binned_margins / cwd_cwd_margins_plot  / pet_cwd_margins_plot
@@ -276,6 +330,28 @@ pet_binned_margins <- plot_dat_b %>%
   xlim(c(cwd_pred_min, cwd_pred_max)) +
   ylim(c(pet_pred_min, pet_pred_max))
 
+pet_binned_margins <- plot_dat_a %>%
+  ggplot(aes(x = cwd.spstd, y = pet.spstd, z = estimate_pet.an)) +
+  stat_summary_hex(fun = function(x) mean(x), bins=10)+
+  # scale_fill_gradient2(low = "#401552", mid = "grey93", high = "#82bead", midpoint = .98, 
+  #                      na.value = NA, name="Mean RWI")+
+  scale_fill_continuous_diverging(rev = TRUE, mid = 0) +
+  labs(fill = "Marginal effect\nof PET") +
+  ylab("Historic PET\n(Deviation from species mean)") +
+  xlab("Historic CWD\n(Deviation from species mean)") +
+  coord_fixed() +
+  theme(legend.position = c(0.18, 0.78),
+        legend.key = element_blank(),
+        legend.background = element_blank(),
+        legend.key.size = unit(10, "pt"),
+        legend.title=element_text(size= 8),
+        legend.text = element_text(size = 8))+
+  geom_hline(yintercept = 0, size = 1, linetype = 2) +
+  geom_vline(xintercept = 0, size = 1, linetype = 2)
+# +
+#   xlim(c(cwd_pred_min, cwd_pred_max)) +
+#   ylim(c(pet_pred_min, pet_pred_max))
+
 
 pet_binned_margins
 
@@ -288,9 +364,10 @@ pet_pet_margins_plot <- ggplot(pet_me_df, aes(x = at_pet)) +
   geom_line(aes(y = pet_ci_min), linetype = 3) +
   geom_hline(yintercept = 0, size = 1, linetype = 2) +
   xlab("Historic PET\n(Deviation from species mean)") + 
-  ylab("Pred. sensitivity to PET") + 
-  xlim(c(pet_pred_min, pet_pred_max)) +
-  ylim(c(-0.4, 0.3))
+  ylab("Pred. sensitivity to PET")
+# + 
+  # xlim(c(pet_pred_min, pet_pred_max)) +
+#   ylim(c(-0.4, 0.3))
 
 pet_pet_margins_plot
 
@@ -301,9 +378,11 @@ cwd_pet_margins_plot <- ggplot(cwd_me_df, aes(x = at_cwd)) +
   geom_line(aes(y = pet_ci_min), linetype = 3) +
   geom_hline(yintercept = 0, size = 1, linetype = 2) +
   xlab("Historic CWD\n(Deviation from species mean)") + 
-  ylab("Pred. sensitivity to PET") + 
-  xlim(c(cwd_pred_min, cwd_pred_max)) +
-  ylim(c(-0.6, 0.1))
+  ylab("Pred. sensitivity to PET")
+# + 
+#   xlim(c(cwd_pred_min, cwd_pred_max))
+# +
+#   ylim(c(-0.6, 0.1))
 
 cwd_pet_margins_plot
 
