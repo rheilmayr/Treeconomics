@@ -21,12 +21,13 @@ renv::restore()
 library(R.utils)
 
 # Define the path to your local code directory
-code_dir <- "D:/dev/Treeconomics/"
+code_dir <- "/Users/rheilmayr/dev/ecology/Treeconomics/"
 
 # Define the root directory where you've unzipped the replication dataset.
 # The replication dataset can be downloaded from XX.
 # After unzipping, the root directory should contain the "1_input_processed" directory.
-data_dir <- "G:/.shortcut-targets-by-id/10TtqG9P3BY70rcYp-WACmO38J5zBeflA/Treeconomics/Data/replication - wateryear/"
+data_dir <- '/Users/rheilmayr/Library/CloudStorage/GoogleDrive-rheilmayr@gmail.com/.shortcut-targets-by-id/10TtqG9P3BY70rcYp-WACmO38J5zBeflA/Treeconomics/Data/replication - wateryear/'
+# data_dir <- "G:/.shortcut-targets-by-id/10TtqG9P3BY70rcYp-WACmO38J5zBeflA/Treeconomics/Data/replication - wateryear/"
 
 createLink(paste0(code_dir, 'remote'), data_dir, overwrite = FALSE)
 
