@@ -2,7 +2,7 @@
 # Author: Robert Heilmayr, Frances Moore, Joan Dudney
 # Project: Treeconomics
 # Date: 7/3/2023
-# Purpose: Process and detrend FIA ring widths from Klesse et al. 2008
+# Purpose: Process and detrend FIA ring widths from Klesse et al. 2018
 #
 # Input files:
 #   FIA_TreeRingMeta_Klesse2018.txt: Core metadata from Klesse et al 2018. Shared by John Shaw.

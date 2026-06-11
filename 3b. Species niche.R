@@ -32,7 +32,7 @@ library(dbplyr)
 library(RSQLite)
 library(ggplot2)
 library(sf)
-library(rgeos)
+# library(rgeos)
 library(stringr)
 library(raster)
 library(terra)
@@ -176,7 +176,6 @@ cwd_cmip_start <- cwd_raster
 names(cwd_cmip_start) <- NULL # Resetting this due to strange names in file from CMIP processing
 names(pet_cmip_start) <- NULL # Resetting this due to strange names in file from CMIP processing
 rm(cwd_raster)
-rm(aet_raster)
 
 
 
@@ -375,6 +374,8 @@ site_clim_df = site_clim_df %>%
             cru_cwd.an = sum(cwd_cru),
             .groups = "drop")
 
+write_rds(site_clim_df, 
+          paste0(wdir, "2_output/climate/site_an_clim_nospstd.", compress = "gz"))
 
 ### Calculate site-level, average, historic, relative climate (for second stage)
 ## TODO: Note - dropping CANA323 because it has null climate data for a few months each year. might want to dig into this
