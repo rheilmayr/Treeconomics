@@ -131,9 +131,9 @@ rwl_nested <- rwl_nested %>%
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 rwi_df <- rwl_nested %>% 
   mutate(rwi = map(rwi, reformat_long)) %>% 
-  select(-rwl, -data) %>% 
+  select(-data) %>% 
   unnest(rwi) %>% 
-  select(core_cn, plot_cn = PLT_CN, species_id, year, rwi)
+  select(core_cn, plot_cn = PLT_CN, species_id, year, rwi, rwl)
 
 meta <- meta %>% 
   mutate(tree_id = paste(PLT_CN, as.character(SUBP), as.character(TREE), sep = '_'),
@@ -144,7 +144,7 @@ tree_ids <- meta %>%
   
 rwi_df <- rwi_df %>% 
   left_join(tree_ids, by = "core_cn") %>% 
-  select(core_cn, plot_cn, collection_id, tree_id, species_id, year, rwi) %>% 
+  select(core_cn, plot_cn, collection_id, tree_id, species_id, year, rwi, rwl) %>% 
   filter(year > 1900)
 
 fia_site_smry <- meta %>% 
