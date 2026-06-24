@@ -119,6 +119,66 @@ formula = "rwi ~ cwd.an.spstd + pet.an.spstd | collection_id"
 mod <- feols(as.formula(formula), data = mod_df)
 summary(mod)
 
+
+# Look at interaction with historic climate
+formula = "rwi ~ cwd.an.spstd + cwd.an.spstd:pet.spstd + cwd.an.spstd:cwd.spstd +
+                 pet.an.spstd + pet.an.spstd:pet.spstd + pet.an.spstd:cwd.spstd | collection_id"
+mod <- feols(as.formula(formula), data = mod_df)
+summary(mod)
+plot_predictions(mod, condition = list("cwd.an.spstd" = -8:8, "cwd.spstd" = "threenum"), vcov = FALSE)
+plot_slopes(mod, 
+            variables = "cwd.an.spstd",
+            condition = list("cwd.an.spstd" = -8:8, "cwd.spstd" = "threenum"),
+            vcov = FALSE)
+
+
+# Look at non-linear responses
+formula = "rwi ~ cwd.an.spstd + cwd.an.spstd:I(cwd.an.spstd**2) + 
+                 pet.an.spstd + pet.an.spstd:I(pet.an.spstd**2) | collection_id"
+mod <- feols(as.formula(formula), data = mod_df)
+summary(mod)
+plot_predictions(mod, condition = list("cwd.an.spstd" = -8:8, "cwd.spstd" = "threenum"), vcov = FALSE)
+plot_slopes(mod, 
+            variables = "cwd.an.spstd",
+            condition = list("cwd.an.spstd" = -8:8, "cwd.spstd" = "threenum"),
+            vcov = FALSE)
+
+
+formula = "rwi ~ poly(cwd.an.spstd, 4, raw = TRUE) | collection_id"
+mod <- feols(as.formula(formula), data = mod_df)
+summary(mod)
+plot_predictions(mod, condition = list("cwd.an.spstd" = -8:8, "cwd.spstd" = "threenum"), vcov = FALSE)
+plot_slopes(mod, 
+            variables = "cwd.an.spstd",
+            condition = list("cwd.an.spstd"),
+            vcov = FALSE)
+
+
+formula = "rwi ~ poly(pet.an.spstd, 4, raw = TRUE) | collection_id"
+mod <- feols(as.formula(formula), data = mod_df)
+summary(mod)
+plot_predictions(mod, condition = list("pet.an.spstd"), vcov = FALSE)
+
+
+# Look at interaction of non-linear response and historic climate
+formula = "rwi ~ cwd.an.spstd + cwd.an.spstd:I(cwd.an.spstd**2) + 
+                 cwd.spstd:cwd.an.spstd + cwd.spstd:cwd.an.spstd:I(cwd.an.spstd**2) + 
+                 pet.spstd:cwd.an.spstd + pet.spstd:cwd.an.spstd:I(cwd.an.spstd**2) + 
+                 pet.an.spstd + pet.an.spstd:I(pet.an.spstd**2) + 
+                 pet.spstd:pet.an.spstd + pet.spstd:pet.an.spstd:I(pet.an.spstd**2) +
+                 cwd.spstd:pet.an.spstd + cwd.spstd:pet.an.spstd:I(pet.an.spstd**2) | collection_id"
+mod <- feols(as.formula(formula), data = mod_df)
+summary(mod)
+
+plot_predictions(mod, condition = list("cwd.an.spstd" = -8:8, "cwd.spstd" = "threenum"), vcov = FALSE)
+
+plot_slopes(mod, 
+            variables = "cwd.an.spstd",
+            condition = list("cwd.an.spstd" = -8:8, "cwd.spstd" = "threenum"),
+            vcov = FALSE)
+
+
+
 formula = "rwi ~ ppt.an.spstd + pet.an.spstd | collection_id"
 mod <- feols(as.formula(formula), data = mod_df)
 summary(mod)
@@ -141,67 +201,92 @@ summary(mod)
 
 
 
+# # mod <- lmer(formula, data = mod_df, control = lmerControl(optimizer ="Nelder_Mead"))
+# test_str <- paste0("cwd.spstd + (2 * \`I(cwd.spstd^2)\` * ", as.character(cwd_median), ") = 0")
+# lincom <- glht(mod, linfct = c(test_str))
+# lincom <- summary(lincom)
+
+
 # mod <- lmer(formula, data = mod_df, control = lmerControl(optimizer ="Nelder_Mead"))
-test_str <- paste0("cwd.spstd + (2 * \`I(cwd.spstd^2)\` * ", as.character(cwd_median), ") = 0")
-lincom <- glht(mod, linfct = c(test_str))
-lincom <- summary(lincom)
-
-
-mod <- lmer(formula, data = mod_df, control = lmerControl(optimizer ="Nelder_Mead"))
-test_str <- paste0("cwd.spstd + (2 * \`I(cwd.spstd^2)\` * ", as.character(cwd_median), ") = 0")
-lincom <- glht(mod, linfct = c(test_str))
-lincom <- summary(lincom)
+# test_str <- paste0("cwd.spstd + (2 * \`I(cwd.spstd^2)\` * ", as.character(cwd_median), ") = 0")
+# lincom <- glht(mod, linfct = c(test_str))
+# lincom <- summary(lincom)
 
 
 
 
-mod <- feols(rwi ~ pet.an.spstd + cwd.an.spstd | collection_id, data = dendro_df %>% filter(year > 1958))
-mod %>% summary()
-mod <- feols(rwi ~ pet.an.spstd + ppt.an.spstd | collection_id, data = dendro_df %>% filter(year > 1958))
-mod %>% summary()
-mod <- feols(rwi ~ pet.an.spstd.tc + cwd.an.spstd.tc | collection_id, data = dendro_df %>% filter(year > 1958))
-mod %>% summary()
-mod <- feols(rwi ~ pet.an.spstd.tc + ppt.an.spstd.tc | collection_id, data = dendro_df %>% filter(year > 1958))
-mod %>% summary()
+# mod <- feols(rwi ~ pet.an.spstd + cwd.an.spstd | collection_id, data = dendro_df %>% filter(year > 1958))
+# mod %>% summary()
+# mod <- feols(rwi ~ pet.an.spstd + ppt.an.spstd | collection_id, data = dendro_df %>% filter(year > 1958))
+# mod %>% summary()
+# mod <- feols(rwi ~ pet.an.spstd.tc + cwd.an.spstd.tc | collection_id, data = dendro_df %>% filter(year > 1958))
+# mod %>% summary()
+# mod <- feols(rwi ~ pet.an.spstd.tc + ppt.an.spstd.tc | collection_id, data = dendro_df %>% filter(year > 1958))
+# mod %>% summary()
 
 
-formula = as.formula("rwi ~ cwd.an.spstd + pet.an.spstd + 
-               cwd.an.spstd:pet.spstd + cwd.an.spstd:I(pet.spstd**2) +
-               cwd.an.spstd:cwd.spstd + cwd.an.spstd:I(cwd.spstd**2) +
-               pet.an.spstd:pet.spstd + pet.an.spstd:I(pet.spstd**2) +
-               pet.an.spstd:cwd.spstd + pet.an.spstd:I(cwd.spstd**2)")
-mod <- lm(formula, data = dendro_df %>% filter(year > 1958))
-mod %>% summary()
+# formula = as.formula("rwi ~ cwd.an.spstd + pet.an.spstd + 
+#                cwd.an.spstd:pet.spstd + cwd.an.spstd:I(pet.spstd**2) +
+#                cwd.an.spstd:cwd.spstd + cwd.an.spstd:I(cwd.spstd**2) +
+#                pet.an.spstd:pet.spstd + pet.an.spstd:I(pet.spstd**2) +
+#                pet.an.spstd:cwd.spstd + pet.an.spstd:I(cwd.spstd**2)")
+# mod <- lm(formula, data = dendro_df %>% filter(year > 1958))
+# mod %>% summary()
 
 
-formula = as.formula("rwi ~ cwd.an.spstd.tc + pet.an.spstd.tc + 
-               cwd.an.spstd.tc:pet.spstd.tc + cwd.an.spstd.tc:I(pet.spstd.tc**2) +
-               cwd.an.spstd.tc:cwd.spstd.tc + cwd.an.spstd.tc:I(cwd.spstd.tc**2) +
-               pet.an.spstd.tc:pet.spstd.tc + pet.an.spstd.tc:I(pet.spstd.tc**2) +
-               pet.an.spstd.tc:cwd.spstd.tc + pet.an.spstd.tc:I(cwd.spstd.tc**2)")
-mod <- lm(formula, data = dendro_df %>% filter(year > 1958))
-mod %>% summary()
+# formula = as.formula("rwi ~ cwd.an.spstd.tc + pet.an.spstd.tc + 
+#                cwd.an.spstd.tc:pet.spstd.tc + cwd.an.spstd.tc:I(pet.spstd.tc**2) +
+#                cwd.an.spstd.tc:cwd.spstd.tc + cwd.an.spstd.tc:I(cwd.spstd.tc**2) +
+#                pet.an.spstd.tc:pet.spstd.tc + pet.an.spstd.tc:I(pet.spstd.tc**2) +
+#                pet.an.spstd.tc:cwd.spstd.tc + pet.an.spstd.tc:I(cwd.spstd.tc**2)")
+# mod <- lm(formula, data = dendro_df %>% filter(year > 1958))
+# mod %>% summary()
 
 
 
 
 
 
-mod_df <- dendro_df %>% 
-  left_join(site_df %>% select(collection_id, species_id), by = "collection_id") %>% 
-  # filter(species_id == "pipo") %>%
-  # mutate(dry_class = ifelse(ppt.spstd < -0.5, "dry", ifelse(ppt.spstd > 0.5, "wet", "medium"))) %>% 
-  mutate(dry_class = cut(ppt.spstd, quantile(ppt.spstd, 0:3/3, na.rm = TRUE))) %>%
-  drop_na()
+# mod_df <- dendro_df %>% 
+#   left_join(site_df %>% select(collection_id, species_id), by = "collection_id") %>% 
+#   # filter(species_id == "pipo") %>%
+#   # mutate(dry_class = ifelse(ppt.spstd < -0.5, "dry", ifelse(ppt.spstd > 0.5, "wet", "medium"))) %>% 
+#   mutate(dry_class = cut(ppt.spstd, quantile(ppt.spstd, 0:3/3, na.rm = TRUE))) %>%
+#   drop_na()
   
-mod <- lm(rwi ~ poly(ppt.an.spstd,2)*dry_class + poly(pet.an.spstd,2)*dry_class, data = mod_df)
-summary(mod)
-
-# mod <- feols(rwi ~ poly(ppt.an.spstd,4)*dry_class + poly(pet.an.spstd,2)*dry_class | collection_id, data = mod_df)
+# mod <- lm(rwi ~ poly(ppt.an.spstd,2)*dry_class + poly(pet.an.spstd,2)*dry_class, data = mod_df)
 # summary(mod)
 
-# mod <- lm(rwi ~ ppt.an.spstd*dry_class + pet.an.spstd*dry_class, data = mod_df)
-# summary(mod)
+# # mod <- feols(rwi ~ poly(ppt.an.spstd,4)*dry_class + poly(pet.an.spstd,2)*dry_class | collection_id, data = mod_df)
+# # summary(mod)
+
+# # mod <- lm(rwi ~ ppt.an.spstd*dry_class + pet.an.spstd*dry_class, data = mod_df)
+# # summary(mod)
+
+# # marg_fx_df <- function(mod, mod_df){
+# #   classes = mod_df$dry_class %>% unique()
+# #   inc <- 0.1
+# #   slope_df = tibble()
+# #   for (c in classes) {
+# #     print(c)
+# #     ppt_range <- mod_df %>% filter(dry_class == c) %>% pull(ppt.an.spstd) %>% range()
+# #     min <- ppt_range[1]
+# #     max <- ppt_range[2]
+# #     class_slopes <- slopes(mod, newdata = datagrid(dry_class = c, pet.an.spstd = 0, ppt.an.spstd = seq(min,max,inc))) %>% 
+# #       mutate(dry_class = c)
+# #     slope_df <- rbind(slope_df, class_slopes)
+# #   }
+# #   return(slope_df)
+# # }
+# # 
+# # slope_df <- marg_fx_df(mod, mod_df)
+# # 
+# # slope_df %>% 
+# #   filter(term == "ppt.an.spstd") %>%
+# #   ggplot(aes(x = ppt.an.spstd, group = dry_class, color = dry_class)) + 
+# #   geom_line(aes(y = estimate)) +
+# #   geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2)
+
 
 # marg_fx_df <- function(mod, mod_df){
 #   classes = mod_df$dry_class %>% unique()
@@ -212,98 +297,73 @@ summary(mod)
 #     ppt_range <- mod_df %>% filter(dry_class == c) %>% pull(ppt.an.spstd) %>% range()
 #     min <- ppt_range[1]
 #     max <- ppt_range[2]
-#     class_slopes <- slopes(mod, newdata = datagrid(dry_class = c, pet.an.spstd = 0, ppt.an.spstd = seq(min,max,inc))) %>% 
+#     class_slopes <- predictions(mod, newdata = datagrid(dry_class = c, pet.an.spstd = 0, ppt.an.spstd = seq(min,max,inc))) %>% 
 #       mutate(dry_class = c)
 #     slope_df <- rbind(slope_df, class_slopes)
 #   }
 #   return(slope_df)
 # }
-# 
-# slope_df <- marg_fx_df(mod, mod_df)
-# 
-# slope_df %>% 
-#   filter(term == "ppt.an.spstd") %>%
+
+# pred_df <- marg_fx_df(mod, mod_df)
+
+# pred_df %>% 
+#   # filter(term == "ppt.an.spstd") %>%
 #   ggplot(aes(x = ppt.an.spstd, group = dry_class, color = dry_class)) + 
 #   geom_line(aes(y = estimate)) +
 #   geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2)
 
 
-marg_fx_df <- function(mod, mod_df){
-  classes = mod_df$dry_class %>% unique()
-  inc <- 0.1
-  slope_df = tibble()
-  for (c in classes) {
-    print(c)
-    ppt_range <- mod_df %>% filter(dry_class == c) %>% pull(ppt.an.spstd) %>% range()
-    min <- ppt_range[1]
-    max <- ppt_range[2]
-    class_slopes <- predictions(mod, newdata = datagrid(dry_class = c, pet.an.spstd = 0, ppt.an.spstd = seq(min,max,inc))) %>% 
-      mutate(dry_class = c)
-    slope_df <- rbind(slope_df, class_slopes)
-  }
-  return(slope_df)
-}
+# dry_classes = list("(-3.64,-0.538]", "(-0.538,0.263]", "(0.263,8.9]")
+# slope_df = tibble()
+# for (c in dry_classes) {
+#   c_df <- mod_df %>% filter(dry_class == c)
+#   mod <- gam(rwi ~ s(ppt.an.spstd, bs = "cs"), data = c_df)
+#   pred_df <- marg_fx_df(mod, c_df) %>% 
+#     mutate(dry_class = c)
+#   slope_df <- rbind(slope_df, pred_df)
+# }
 
-pred_df <- marg_fx_df(mod, mod_df)
-
-pred_df %>% 
-  # filter(term == "ppt.an.spstd") %>%
-  ggplot(aes(x = ppt.an.spstd, group = dry_class, color = dry_class)) + 
-  geom_line(aes(y = estimate)) +
-  geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2)
-
-
-dry_classes = list("(-3.64,-0.538]", "(-0.538,0.263]", "(0.263,8.9]")
-slope_df = tibble()
-for (c in dry_classes) {
-  c_df <- mod_df %>% filter(dry_class == c)
-  mod <- gam(rwi ~ s(ppt.an.spstd, bs = "cs"), data = c_df)
-  pred_df <- marg_fx_df(mod, c_df) %>% 
-    mutate(dry_class = c)
-  slope_df <- rbind(slope_df, pred_df)
-}
-
-slope_df %>% 
-  # filter(term == "ppt.an.spstd") %>%
-  ggplot(aes(x = ppt.an.spstd, group = dry_class, color = dry_class)) + 
-  geom_line(aes(y = estimate)) +
-  geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2)
+# slope_df %>% 
+#   # filter(term == "ppt.an.spstd") %>%
+#   ggplot(aes(x = ppt.an.spstd, group = dry_class, color = dry_class)) + 
+#   geom_line(aes(y = estimate)) +
+#   geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2)
 
 
 
-mod_df <- dendro_df %>% 
-  left_join(site_df %>% select(collection_id, species_id), by = "collection_id") %>% 
-  # filter(species_id == "pipo") %>%
-  # mutate(dry_class = ifelse(ppt.spstd < -0.5, "dry", ifelse(ppt.spstd > 0.5, "wet", "medium"))) %>% 
-  mutate(dry_class = cut(ppt.spstd.tc, quantile(ppt.spstd, 0:4/4, na.rm = TRUE))) %>% 
-  drop_na()
+# mod_df <- dendro_df %>% 
+#   left_join(site_df %>% select(collection_id, species_id), by = "collection_id") %>% 
+#   # filter(species_id == "pipo") %>%
+#   # mutate(dry_class = ifelse(ppt.spstd < -0.5, "dry", ifelse(ppt.spstd > 0.5, "wet", "medium"))) %>% 
+#   mutate(dry_class = cut(ppt.spstd.tc, quantile(ppt.spstd, 0:4/4, na.rm = TRUE))) %>% 
+#   drop_na()
 
-mod <- lm(rwi ~ poly(ppt.an.spstd.tc,2)*dry_class + poly(pet.an.spstd.tc,2)*dry_class, data = mod_df)
-summary(mod)
+# mod <- lm(rwi ~ poly(ppt.an.spstd.tc,2)*dry_class + poly(pet.an.spstd.tc,2)*dry_class, data = mod_df)
+# summary(mod)
 
-marg_fx_df <- function(mod, mod_df){
-  classes = mod_df$dry_class %>% unique()
-  inc <- 0.1
-  slope_df = tibble()
-  for (c in classes) {
-    print(c)
-    ppt_range <- mod_df %>% filter(dry_class == c) %>% pull(ppt.an.spstd.tc) %>% range()
-    min <- ppt_range[1]
-    max <- ppt_range[2]
-    class_slopes <- slopes(mod, newdata = datagrid(dry_class = c, pet.an.spstd.tc = 0, ppt.an.spstd.tc = seq(min,max,inc))) %>% 
-      mutate(dry_class = c)
-    slope_df <- rbind(slope_df, class_slopes)
-  }
-  return(slope_df)
-}
+# marg_fx_df <- function(mod, mod_df){
+#   classes = mod_df$dry_class %>% unique()
+#   inc <- 0.1
+#   slope_df = tibble()
+#   for (c in classes) {
+#     print(c)
+#     ppt_range <- mod_df %>% filter(dry_class == c) %>% pull(ppt.an.spstd.tc) %>% range()
+#     min <- ppt_range[1]
+#     max <- ppt_range[2]
+#     class_slopes <- slopes(mod, newdata = datagrid(dry_class = c, pet.an.spstd.tc = 0, ppt.an.spstd.tc = seq(min,max,inc))) %>% 
+#       mutate(dry_class = c)
+#     slope_df <- rbind(slope_df, class_slopes)
+#   }
+#   return(slope_df)
+# }
 
-slope_df <- marg_fx_df(mod, mod_df)
+# slope_df <- marg_fx_df(mod, mod_df)
 
-slope_df %>% 
-  filter(term == "ppt.an.spstd.tc") %>%
-  ggplot(aes(x = ppt.an.spstd.tc, group = dry_class, color = dry_class)) + 
-  geom_line(aes(y = estimate)) +
-  geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2)
+# slope_df %>% 
+#   filter(term == "ppt.an.spstd.tc") %>%
+#   ggplot(aes(x = ppt.an.spstd.tc, group = dry_class, color = dry_class)) + 
+#   geom_line(aes(y = estimate)) +
+#   geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2)
 
 
 
@@ -311,37 +371,37 @@ slope_df %>%
 
 
 
-mod_df <- dendro_df %>% 
-  left_join(site_df %>% select(collection_id, species_id), by = "collection_id") %>% 
-  filter(species_id == "pipo") %>%
-  mutate(dry_class = ifelse(cwd.spstd < -0.5, "wet", ifelse(cwd.spstd > 0.5, "dry", "medium"))) %>% 
-  drop_na()
+# mod_df <- dendro_df %>% 
+#   left_join(site_df %>% select(collection_id, species_id), by = "collection_id") %>% 
+#   filter(species_id == "pipo") %>%
+#   mutate(dry_class = ifelse(cwd.spstd < -0.5, "wet", ifelse(cwd.spstd > 0.5, "dry", "medium"))) %>% 
+#   drop_na()
 
-mod <- lm(rwi ~ poly(cwd.an.spstd.tc,2)*dry_class + poly(pet.an.spstd,2)*dry_class, data = mod_df)
-
-
-marg_fx_df <- function(mod, mod_df){
-  classes = mod_df$dry_class %>% unique()
-  inc <- 0.1
-  slope_df = tibble()
-  for (c in classes) {
-    print(c)
-    cwd_range <- mod_df %>% filter(dry_class == c) %>% pull(cwd.an.spstd.tc) %>% range()
-    min <- cwd_range[1]
-    max <- cwd_range[2]
-    class_slopes <- slopes(mod, newdata = datagrid(dry_class = c, pet.an.spstd = 0, cwd.an.spstd.tc = seq(min,max,inc))) %>% 
-      mutate(dry_class = c)
-    slope_df <- rbind(slope_df, class_slopes)
-  }
-  return(slope_df)
-}
-
-slope_df <- marg_fx_df(mod, mod_df)
+# mod <- lm(rwi ~ poly(cwd.an.spstd.tc,2)*dry_class + poly(pet.an.spstd,2)*dry_class, data = mod_df)
 
 
-slope_df %>% 
-  filter(term == "cwd.an.spstd.tc") %>%
-  ggplot(aes(x = cwd.an.spstd.tc, group = dry_class, color = dry_class)) + 
-  geom_line(aes(y = estimate)) +
-  geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2)
+# marg_fx_df <- function(mod, mod_df){
+#   classes = mod_df$dry_class %>% unique()
+#   inc <- 0.1
+#   slope_df = tibble()
+#   for (c in classes) {
+#     print(c)
+#     cwd_range <- mod_df %>% filter(dry_class == c) %>% pull(cwd.an.spstd.tc) %>% range()
+#     min <- cwd_range[1]
+#     max <- cwd_range[2]
+#     class_slopes <- slopes(mod, newdata = datagrid(dry_class = c, pet.an.spstd = 0, cwd.an.spstd.tc = seq(min,max,inc))) %>% 
+#       mutate(dry_class = c)
+#     slope_df <- rbind(slope_df, class_slopes)
+#   }
+#   return(slope_df)
+# }
+
+# slope_df <- marg_fx_df(mod, mod_df)
+
+
+# slope_df %>% 
+#   filter(term == "cwd.an.spstd.tc") %>%
+#   ggplot(aes(x = cwd.an.spstd.tc, group = dry_class, color = dry_class)) + 
+#   geom_line(aes(y = estimate)) +
+#   geom_ribbon(aes(ymin=conf.low, ymax=conf.high), alpha=0.2)
 
