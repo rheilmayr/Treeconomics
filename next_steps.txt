@@ -1,0 +1,6 @@
+- Confirm that terraclim is being pulled correctly (get code from joan)
+- Add FIA to binned analysis
+- Fully flesh out binned analysis - how would we implement this in the paper?
+- Future climate: Add histograms illustrating how climate change would shift distribution of CWD for different historic bins
+- further explore heterogeneity across species
+- is there a way to reproduce prior main figures using this new approach to binning?
